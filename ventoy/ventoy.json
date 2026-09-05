@@ -1,0 +1,10 @@
+{
+  "auto_install": [
+    {
+      "image": "/win11.iso",
+      "template": "/ventoy/autounattend.xml",
+      "autosel": 1,
+      "timeout": 5
+    }
+  ]
+}

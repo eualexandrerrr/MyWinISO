@@ -1,0 +1,56 @@
+{
+  "$schema": "https://aka.ms/winget-packages.schema.2.0.json",
+  "CreationDate": "2026-09-05T00:00:00.000-03:00",
+  "Sources": [
+    {
+      "Packages": [
+        { "PackageIdentifier": "Microsoft.VCRedist.2015+.x64" },
+        { "PackageIdentifier": "Microsoft.DotNet.DesktopRuntime.8" },
+        { "PackageIdentifier": "7zip.7zip" },
+        { "PackageIdentifier": "Google.Chrome" },
+        { "PackageIdentifier": "Google.GoogleDrive" },
+        { "PackageIdentifier": "Discord.Discord" },
+        { "PackageIdentifier": "Spotify.Spotify" },
+        { "PackageIdentifier": "Obsidian.Obsidian" },
+        { "PackageIdentifier": "Valve.Steam" },
+
+        { "PackageIdentifier": "Microsoft.PowerShell" },
+        { "PackageIdentifier": "Microsoft.WindowsTerminal" },
+        { "PackageIdentifier": "DEVCOM.JetBrainsMonoNerdFont" },
+        { "PackageIdentifier": "Starship.Starship" },
+        { "PackageIdentifier": "ajeetdsouza.zoxide" },
+        { "PackageIdentifier": "junegunn.fzf" },
+        { "PackageIdentifier": "sharkdp.bat" },
+        { "PackageIdentifier": "sharkdp.fd" },
+        { "PackageIdentifier": "BurntSushi.ripgrep.MSVC" },
+        { "PackageIdentifier": "eza-community.eza" },
+        { "PackageIdentifier": "jqlang.jq" },
+        { "PackageIdentifier": "Gyan.FFmpeg" },
+        { "PackageIdentifier": "Rclone.Rclone" },
+
+        { "PackageIdentifier": "Git.Git" },
+        { "PackageIdentifier": "GitHub.cli" },
+        { "PackageIdentifier": "Microsoft.VisualStudioCode" },
+        { "PackageIdentifier": "Anthropic.ClaudeCode" },
+        { "PackageIdentifier": "OpenJS.NodeJS" },
+        { "PackageIdentifier": "Oven-sh.Bun" },
+        { "PackageIdentifier": "Python.Python.3.13" },
+        { "PackageIdentifier": "astral-sh.uv" },
+        { "PackageIdentifier": "Docker.DockerDesktop" },
+        { "PackageIdentifier": "Cloudflare.cloudflared" },
+
+        { "PackageIdentifier": "EclipseAdoptium.Temurin.17.JDK" },
+        { "PackageIdentifier": "Google.AndroidStudio" },
+        { "PackageIdentifier": "Google.PlatformTools" },
+        { "PackageIdentifier": "Genymobile.scrcpy" }
+      ],
+      "SourceDetails": {
+        "Argument": "https://cdn.winget.microsoft.com/cache",
+        "Identifier": "Microsoft.Winget.Source_8wekyb3d8bbwe",
+        "Name": "winget",
+        "Type": "Microsoft.PreIndexed.Package"
+      }
+    }
+  ],
+  "WinGetVersion": "1.10.0"
+}

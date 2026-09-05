@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  mywiniso: instalação automática do Windows 11 (pt-BR) no PC do Alexandre.
+  https://github.com/eualexandrerrr/mywiniso
+
+  O Setup lê este arquivo e executa, nesta ordem:
+
+    windowsPE    pula a checagem de TPM/CPU/RAM/Secure Boot, acha o disco pelo serial
+                 e particiona (disco.ps1). Se não achar exatamente um disco, aborta sem tocar em nada.
+    specialize   nome do PC, fuso, remove bloatware, OneDrive, Copilot e telemetria (especializar.ps1)
+    oobeSystem   conta local "alexandre" sem senha, login automático, sem conta Microsoft.
+                 No primeiro logon, primeiro-logon.ps1 baixa o setup.ps1 deste repositório e roda,
+                 que instala os programas do apps.json.
+
+  Os scripts ficam embutidos no fim do arquivo (<Extensions>), assim o pendrive precisa de um XML só.
+  Chave de produto: é a chave genérica pública da Microsoft, que só escolhe a edição (Pro).
+  A ativação vem da licença digital gravada na placa-mãe. Para Home, troque por YTMG3-N6DKC-DKB77-7M9GH-8HVX7.
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+
+  <settings pass="windowsPE">
+    <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <SetupUILanguage>
+        <UILanguage>pt-BR</UILanguage>
+      </SetupUILanguage>
+      <InputLocale>0416:00010416</InputLocale>
+      <SystemLocale>pt-BR</SystemLocale>
+      <UILanguage>pt-BR</UILanguage>
+      <UserLocale>pt-BR</UserLocale>
+    </component>
+    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <RunSynchronous>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <Description>Pular checagem de TPM</Description>
+          <Path>reg.exe add HKLM\SYSTEM\Setup\LabConfig /v BypassTPMCheck /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>2</Order>
+          <Description>Pular checagem de Secure Boot</Description>
+          <Path>reg.exe add HKLM\SYSTEM\Setup\LabConfig /v BypassSecureBootCheck /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>3</Order>
+          <Description>Pular checagem de RAM</Description>
+          <Path>reg.exe add HKLM\SYSTEM\Setup\LabConfig /v BypassRAMCheck /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>4</Order>
+          <Description>Pular checagem de CPU</Description>
+          <Path>reg.exe add HKLM\SYSTEM\Setup\LabConfig /v BypassCPUCheck /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>5</Order>
+          <Description>Extrair os scripts embutidos neste XML para X:\mywiniso</Description>
+          <Path>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$p = (Get-ItemProperty -LiteralPath 'Registry::HKLM\System\Setup' -Name 'UnattendFile' -ErrorAction SilentlyContinue).UnattendFile; if (-not $p -or -not (Test-Path -LiteralPath $p)) { $p = @('X:\Unattend.xml', 'X:\autounattend.xml') + @([char[]](65..90) | ForEach-Object { [string]$_ + ':\autounattend.xml' }) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1 }; $x = [xml]::new(); $x.Load($p); Invoke-Command -ScriptBlock ([scriptblock]::Create($x.GetElementsByTagName('ExtractScript')[0].InnerText)) -ArgumentList $x, 'windowsPE'"</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>6</Order>
+          <Description>Achar o disco pelo serial e particionar</Description>
+          <Path>powershell.exe -NoProfile -ExecutionPolicy Bypass -File X:\mywiniso\disco.ps1</Path>
+        </RunSynchronousCommand>
+      </RunSynchronous>
+      <ImageInstall>
+        <OSImage>
+          <!-- Instala na primeira partição NTFS vazia e grande o bastante: a "Windows" que o disco.ps1 criou.
+               O pendrive é removível e exFAT, então nunca é candidato. -->
+          <InstallToAvailablePartition>true</InstallToAvailablePartition>
+          <WillShowUI>OnError</WillShowUI>
+        </OSImage>
+      </ImageInstall>
+      <UserData>
+        <ProductKey>
+          <Key>VK7JG-NPHTM-C97JM-9MPGT-3V66T</Key>
+          <WillShowUI>OnError</WillShowUI>
+        </ProductKey>
+        <AcceptEula>true</AcceptEula>
+      </UserData>
+    </component>
+  </settings>
+
+  <settings pass="specialize">
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <ComputerName>RRR</ComputerName>
+      <TimeZone>E. South America Standard Time</TimeZone>
+    </component>
+    <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <RunSynchronous>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <Description>Extrair os scripts embutidos para C:\Windows\Setup\Scripts</Description>
+          <Path>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$x = [xml]::new(); $x.Load('C:\Windows\Panther\unattend.xml'); Invoke-Command -ScriptBlock ([scriptblock]::Create($x.GetElementsByTagName('ExtractScript')[0].InnerText)) -ArgumentList $x, 'specialize'"</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>2</Order>
+          <Description>Bloatware, OneDrive, telemetria, energia</Description>
+          <Path>powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Setup\Scripts\especializar.ps1</Path>
+        </RunSynchronousCommand>
+      </RunSynchronous>
+    </component>
+  </settings>
+
+  <settings pass="oobeSystem">
+    <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <InputLocale>0416:00010416</InputLocale>
+      <SystemLocale>pt-BR</SystemLocale>
+      <UILanguage>pt-BR</UILanguage>
+      <UserLocale>pt-BR</UserLocale>
+    </component>
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <OOBE>
+        <HideEULAPage>true</HideEULAPage>
+        <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <ProtectYourPC>3</ProtectYourPC>
+      </OOBE>
+      <UserAccounts>
+        <LocalAccounts>
+          <LocalAccount wcm:action="add">
+            <Name>alexandre</Name>
+            <DisplayName>Alexandre</DisplayName>
+            <Group>Administrators</Group>
+            <Password>
+              <Value></Value>
+              <PlainText>true</PlainText>
+            </Password>
+          </LocalAccount>
+        </LocalAccounts>
+      </UserAccounts>
+      <AutoLogon>
+        <Username>alexandre</Username>
+        <Enabled>true</Enabled>
+        <LogonCount>1</LogonCount>
+        <Password>
+          <Value></Value>
+          <PlainText>true</PlainText>
+        </Password>
+      </AutoLogon>
+      <FirstLogonCommands>
+        <SynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <Description>Login automático permanente e setup.ps1 do repositório</Description>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Setup\Scripts\primeiro-logon.ps1</CommandLine>
+        </SynchronousCommand>
+      </FirstLogonCommands>
+    </component>
+  </settings>
+
+  <!-- Scripts embutidos. O Setup ignora este elemento; quem lê é o ExtractScript, chamado nos RunSynchronous acima. -->
+  <Extensions xmlns="https://github.com/eualexandrerrr/mywiniso">
+
+    <ExtractScript><![CDATA[
+param([xml] $Document, [string] $Pass)
+$utf8bom = [System.Text.UTF8Encoding]::new($true)
+foreach ($file in $Document.GetElementsByTagName('File')) {
+    if ($file.GetAttribute('pass') -ne $Pass) { continue }
+    $path = [System.Environment]::ExpandEnvironmentVariables($file.GetAttribute('path'))
+    New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force -ErrorAction SilentlyContinue | Out-Null
+    [System.IO.File]::WriteAllText($path, $file.InnerText.Trim(), $utf8bom)
+}
+]]></ExtractScript>
+
+    <File path="X:\mywiniso\disco.ps1" pass="windowsPE"><![CDATA[
+# Roda no WinPE, antes de qualquer coisa ser gravada.
+# Procura o disco alvo pelo serial ou pelo modelo. Só particiona se achar EXATAMENTE um; senão aborta
+# e o Setup para com erro, sem ter apagado nada. Pendrives nunca são candidatos.
+
+$Serial = 'AA09B5211012T9'      # lsblk -o MODEL,SERIAL no Linux, Get-Disk no Windows
+$Modelo = 'MP700 ELITE'
+
+$log = 'X:\mywiniso\disco.log'
+function Log($m) { Write-Output $m; Add-Content -Path $log -Value $m }
+
+$discos = @(Get-CimInstance -ClassName Win32_DiskDrive)
+Log "Discos vistos pelo WinPE:"
+foreach ($d in $discos) { Log ("  [{0}] {1} | serial={2} | {3} GB | {4}" -f $d.Index, $d.Model, $d.SerialNumber, [math]::Round($d.Size / 1GB), $d.InterfaceType) }
+
+$alvo = @($discos | Where-Object {
+    $serialLimpo = ($_.SerialNumber -replace '[^A-Za-z0-9]', '')
+    ($serialLimpo -like "*$Serial*" -or $_.Model -like "*$Modelo*") -and
+    $_.InterfaceType -ne 'USB' -and $_.PNPDeviceID -notlike 'USBSTOR*'
+})
+
+if ($alvo.Count -ne 1) {
+    Log "ERRO: esperava 1 disco com serial '$Serial' ou modelo '$Modelo', achei $($alvo.Count). Nada foi apagado."
+    Start-Process notepad.exe -ArgumentList $log -Wait
+    exit 1
+}
+
+$n = $alvo[0].Index
+Log "Alvo: disco $n ($($alvo[0].Model)). Apagando e particionando (GPT: EFI 300 MB, MSR 16 MB, Windows, Recovery 1 GB)."
+
+$script = @"
+select disk $n
+clean
+convert gpt
+create partition efi size=300
+format quick fs=fat32 label="System"
+create partition msr size=16
+create partition primary
+shrink minimum=1024
+format quick fs=ntfs label="Windows"
+create partition primary
+format quick fs=ntfs label="Recovery"
+set id="de94bba4-06d1-4d40-a16a-bfd50179d6ac"
+gpt attributes=0x8000000000000001
+list partition
+"@
+$script | Set-Content -Path 'X:\mywiniso\diskpart.txt' -Encoding ASCII
+$saida = diskpart.exe /s 'X:\mywiniso\diskpart.txt' 2>&1
+$saida | ForEach-Object { Log ([string]$_) }
+if ($LASTEXITCODE -ne 0) {
+    Log "ERRO: diskpart saiu com código $LASTEXITCODE."
+    Start-Process notepad.exe -ArgumentList $log -Wait
+    exit $LASTEXITCODE
+}
+Log "Disco pronto."
+exit 0
+]]></File>
+
+    <File path="C:\Windows\Setup\Scripts\especializar.ps1" pass="specialize"><![CDATA[
+# Roda no passo "specialize", como SYSTEM, antes do primeiro boot na área de trabalho.
+# Só coisas de sistema. Preferências de usuário (tema, barra, mouse) ficam no setup.ps1 do repositório.
+
+$ErrorActionPreference = 'Continue'
+Start-Transcript -Path 'C:\Windows\Setup\Scripts\especializar.log' -Force | Out-Null
+
+function Set-Reg([string] $Path, [string] $Name, $Value, [string] $Type = 'DWord') {
+    if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force | Out-Null }
+    Set-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -Type $Type -Force
+}
+
+# --- Bloatware (pacotes provisionados: nunca chegam a ser instalados para o usuário) ---
+# Ficam: Loja e App Installer (o winget depende deles), Calculadora, Fotos, Bloco de Notas, Paint,
+# Ferramenta de Captura, Terminal, Xbox Identity Provider (login em jogos da Loja).
+$bloat = @(
+    'Clipchamp.Clipchamp', 'Microsoft.549981C3F5F10', 'Microsoft.BingNews', 'Microsoft.BingSearch',
+    'Microsoft.BingWeather', 'Microsoft.Copilot', 'Microsoft.Edge.GameAssist', 'Microsoft.GamingApp',
+    'Microsoft.GetHelp', 'Microsoft.Getstarted', 'Microsoft.MicrosoftOfficeHub',
+    'Microsoft.MicrosoftSolitaireCollection', 'Microsoft.MicrosoftStickyNotes', 'Microsoft.OutlookForWindows',
+    'Microsoft.People', 'Microsoft.PowerAutomateDesktop', 'Microsoft.Todos', 'Microsoft.Windows.DevHome',
+    'Microsoft.WindowsAlarms', 'Microsoft.WindowsCamera', 'Microsoft.WindowsFeedbackHub', 'Microsoft.WindowsMaps',
+    'Microsoft.WindowsSoundRecorder', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxGamingOverlay',
+    'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone', 'Microsoft.ZuneMusic', 'Microsoft.ZuneVideo',
+    'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist', 'MSTeams',
+    'microsoft.windowscommunicationsapps'
+)
+Get-AppxProvisionedPackage -Online | Where-Object { $bloat -contains $_.DisplayName } | ForEach-Object {
+    Write-Output "removendo $($_.DisplayName)"
+    Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName | Out-Null
+}
+
+# Outlook e Dev Home ficam agendados para instalar depois do OOBE; tirar o agendamento.
+foreach ($k in 'OutlookUpdate', 'DevHomeUpdate') {
+    Remove-Item -LiteralPath "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\$k" -Force -ErrorAction SilentlyContinue
+}
+
+# Recall (só existe em Copilot+ PC; inofensivo aqui)
+Disable-WindowsOptionalFeature -Online -FeatureName 'Recall' -NoRestart -ErrorAction SilentlyContinue | Out-Null
+
+# --- OneDrive: desinstala e tira do autostart do perfil padrão ---
+foreach ($exe in "$env:SystemRoot\System32\OneDriveSetup.exe", "$env:SystemRoot\SysWOW64\OneDriveSetup.exe") {
+    if (Test-Path -LiteralPath $exe) { Start-Process -FilePath $exe -ArgumentList '/uninstall' -Wait }
+}
+reg.exe load HKU\DefaultUser C:\Users\Default\NTUSER.DAT | Out-Null
+reg.exe delete "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Run" /v OneDriveSetup /f 2>$null
+reg.exe unload HKU\DefaultUser | Out-Null
+
+# --- Políticas: telemetria, sugestões, Copilot, widgets, anúncios, Edge ---
+Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE'            'BypassNRO'                      1
+Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection'         'AllowTelemetry'                 0
+Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent'           'DisableWindowsConsumerFeatures' 1
+Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent'           'DisableCloudOptimizedContent'   1
+Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot'         'TurnOffWindowsCopilot'          1
+Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh'                            'AllowNewsAndInterests'          0
+Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo'        'DisabledByGroupPolicy'          1
+Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'                           'HideFirstRunExperience'         1
+Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'       'NoAutoRebootWithLoggedOnUsers'  1
+
+# --- Sistema ---
+Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power'     'HiberbootEnabled'               0   # inicialização rápida desligada
+Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'                'LongPathsEnabled'               1
+
+# Plano de energia "Alto desempenho" (equivalente ao power-profiles-daemon em performance)
+$alto = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
+powercfg.exe /setactive $alto 2>$null
+if ($LASTEXITCODE -ne 0) {
+    $saida = powercfg.exe /duplicatescheme $alto
+    if ($saida -match '([0-9a-f-]{36})') { powercfg.exe /setactive $Matches[1] }
+}
+
+Stop-Transcript | Out-Null
+exit 0
+]]></File>
+
+    <File path="C:\Windows\Setup\Scripts\primeiro-logon.ps1" pass="specialize"><![CDATA[
+# Roda uma vez, no primeiro logon do alexandre, elevado.
+# 1. deixa o login automático permanente (o do autounattend vale para um logon só)
+# 2. cria mywiniso-setup.cmd na área de trabalho, para rodar o setup de novo quando quiser
+# 3. baixa o setup.ps1 do repositório e roda: é ele que instala os programas
+
+$ErrorActionPreference = 'Continue'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Start-Transcript -Path (Join-Path $env:USERPROFILE 'mywiniso.log') -Append | Out-Null
+
+$raw = 'https://raw.githubusercontent.com/eualexandrerrr/mywiniso/main'
+
+$wl = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+Set-ItemProperty -LiteralPath $wl -Name 'AutoAdminLogon'  -Value '1'           -Type String
+Set-ItemProperty -LiteralPath $wl -Name 'DefaultUserName' -Value $env:USERNAME -Type String
+Set-ItemProperty -LiteralPath $wl -Name 'DefaultPassword' -Value ''            -Type String
+Remove-ItemProperty -LiteralPath $wl -Name 'AutoLogonCount' -ErrorAction SilentlyContinue
+
+$desktop = [Environment]::GetFolderPath('Desktop')
+$cmd = "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -Command `"irm $raw/setup.ps1 | iex`"`r`npause`r`n"
+[System.IO.File]::WriteAllText((Join-Path $desktop 'mywiniso-setup.cmd'), $cmd, [System.Text.Encoding]::ASCII)
+
+$destino = Join-Path $env:TEMP 'mywiniso-setup.ps1'
+$ok = $false
+for ($i = 0; $i -lt 60 -and -not $ok; $i++) {          # até 5 minutos esperando a rede
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri "$raw/setup.ps1" -OutFile $destino -TimeoutSec 15
+        $ok = $true
+    } catch { Start-Sleep -Seconds 5 }
+}
+if (-not $ok) {
+    Write-Warning "Sem internet: não baixei o setup.ps1. Quando tiver rede, rode mywiniso-setup.cmd na área de trabalho."
+    Stop-Transcript | Out-Null
+    exit 0
+}
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $destino
+Stop-Transcript | Out-Null
+exit 0
+]]></File>
+
+  </Extensions>
+</unattend>
