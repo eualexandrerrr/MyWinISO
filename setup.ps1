@@ -16,7 +16,7 @@
   treze minutos. Em uns cinco minutos a máquina já está na cara certa e o resto instala por baixo.
 
    1. ponto de restauração antes de mexer    15. Chrome: senhas só no Proton Pass
-   2. garante que o winget funciona          16. RedM instalado e fixado na barra
+   2. garante que o winget funciona          16. Jogos: RedM e biblioteca do Steam em D:
    3. Git e clone em ~\Projetos\mywiniso     17. git config
    4. Claude Code (CLI)                      18. Office
    5. driver de vídeo, direto da NVIDIA      19. Área de Trabalho Remota e política de senha
@@ -55,6 +55,27 @@ $ProgressPreference = 'SilentlyContinue'
 try { $Host.UI.RawUI.WindowTitle = 'mywiniso: setup' } catch { }
 
 $Repo = 'https://github.com/eualexandrerrr/mywiniso'
+# Disco de dados. O instala.vbs cria uma partição "Dados" no fim do disco que sobrevive à formatação, e é
+# nela que mora o que é seu: jogos, Documentos, Downloads, Imagens, Vídeos e Música. Projetos não: essa
+# pasta o Alexandre monta na mão depois, e este clone continua em ~\Projetos no C:. Aqui só se garante a
+# letra D: (no primeiro boot o Windows pode ter dado D: ao pendrive Ventoy). Num Windows sem essa
+# partição, o setup roda em qualquer Windows 11, tudo fica nas pastas de sempre no C:.
+$Dados = $null
+try {
+    $volDados = @(Get-Volume -FileSystemLabel 'Dados' -ErrorAction Ignore | Where-Object DriveType -eq 'Fixed')[0]
+    if ($volDados) {
+        if ($volDados.DriveLetter -ne 'D') {
+            if (Get-Volume -DriveLetter D -ErrorAction Ignore) {
+                # quem estiver em D: vai para a última letra livre, de Z para trás
+                $livre = @([char[]](90..69) | Where-Object { -not (Get-Volume -DriveLetter $_ -ErrorAction Ignore) })[0]
+                Get-Partition -DriveLetter D | Set-Partition -NewDriveLetter $livre
+            }
+            $volDados | Get-Partition | Set-Partition -NewDriveLetter D
+        }
+        $Dados = 'D:\'
+        Write-Host ("disco de dados: D: (rótulo Dados, {0:n0} GB)" -f ($volDados.Size / 1GB))
+    } else { Write-Host 'sem partição "Dados": projetos e pastas do usuário ficam no C:' }
+} catch { Write-Host "disco de dados: não consegui deixar em D: ($($_.Exception.Message)); seguindo sem" -ForegroundColor Yellow }
 $Dir  = Join-Path $env:USERPROFILE 'Projetos\mywiniso'
 $Log  = Join-Path $env:USERPROFILE 'mywiniso-setup.log'
 $desktop = [Environment]::GetFolderPath('Desktop')     # usado pela etapa de preferências (ícone do Edge) e pela do RedM
@@ -432,6 +453,28 @@ Etapa 'Monitores (resolução, Hz, posição)' {
 
 # --- 7. Preferências do usuário ----------------------------------------------------------------------
 Etapa 'Preferências do usuário' {
+    if ($Dados) {
+        Passo 'Documentos, Downloads, Imagens, Vídeos e Música em D:, onde a formatação não chega'
+        # SHSetKnownFolderPath é o caminho oficial: ele mesmo grava as duas entradas de User Shell Folders
+        # (nome antigo e GUID) e avisa o Explorer. Sem mover conteúdo (flag 0): num Windows recém-instalado
+        # as pastas estão vazias. A Área de Trabalho fica no C: de propósito, não foi pedida.
+        if (-not ('Win32.KnownFolders' -as [type])) {
+            Add-Type -Namespace Win32 -Name KnownFolders -MemberDefinition '[DllImport("shell32.dll", CharSet = CharSet.Unicode)] public static extern int SHSetKnownFolderPath(ref Guid rfid, uint dwFlags, IntPtr hToken, string pszPath);'
+        }
+        foreach ($kf in @(
+            @{ pasta = 'Documentos'; id = 'FDD39AD0-238F-46AF-ADB4-6C85480369C7' },
+            @{ pasta = 'Downloads';  id = '374DE290-123F-4565-9164-39C4925E467B' },
+            @{ pasta = 'Imagens';    id = '33E28130-4E1E-4676-835A-98395C3BC3BB' },
+            @{ pasta = 'Vídeos';     id = '18989B1D-99B5-455B-841C-AB7C74E4DDFC' },
+            @{ pasta = 'Músicas';    id = '4BD8D571-6D19-48D3-BE97-422220080E43' })) {
+            $alvo = Join-Path $Dados $kf.pasta
+            New-Item -ItemType Directory -Path $alvo -Force | Out-Null
+            $g = [Guid]$kf.id
+            $hr = [Win32.KnownFolders]::SHSetKnownFolderPath([ref]$g, 0, [IntPtr]::Zero, $alvo)
+            if ($hr -ne 0) { Falha ("pasta {0} -> {1}: SHSetKnownFolderPath devolveu 0x{2:X8}" -f $kf.pasta, $alvo, $hr) }
+        }
+        New-Item -ItemType Directory -Path (Join-Path $Dados 'Jogos') -Force | Out-Null   # Projetos em D: é o Alexandre quem cria
+    }
     Passo 'Explorer: extensões, Este Computador, menu de contexto clássico'
     $adv = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
     Set-Reg $adv 'HideFileExt'        0
@@ -828,9 +871,8 @@ Etapa 'Windhawk: tema Translucent' {
             } },
         @{ id = 'windows-11-start-menu-styler';          settings = @{ theme = 'TranslucentStartMenu' } },
         @{ id = 'windows-11-notification-center-styler'; settings = @{ theme = 'TranslucentShell' } },
-        # o painel do relógio e a central de notificações são desenhados pelo ShellExperienceHost, e o
-        # Explorer tem o styler próprio: sem ele o Iniciar fica translúcido mas as janelas de pasta não
-        @{ id = 'windows-11-file-explorer-styler';       settings = @{ theme = 'Translucent Explorer11' } },
+        # sem styler para o Explorer, de propósito: o Translucent Explorer11 deixa as janelas de pasta num
+        # cinza lavado por cima do wallpaper. O escuro padrão do Windows fica.
         @{ id = 'taskbar-thumbnail-reorder';             settings = @{} },   # arrastar a miniatura da barra com o botão esquerdo
         @{ id = 'dark-menus';                            settings = @{} },
         @{ id = 'invisible-borders';                     settings = @{} }
@@ -1032,8 +1074,9 @@ Etapa 'Chrome: senhas no Proton Pass e extensões' {
 # dá para fazer sozinho: põe o executável numa casa definitiva (não na área de trabalho, que desde a
 # etapa 7 não mostra ícone nenhum) e cria o atalho no menu Iniciar, que é o caminho estável que a etapa
 # 24 fixa na barra. O que sobra para você é um clique.
-Etapa 'RedM' {
-    $dir = Join-Path $env:LOCALAPPDATA 'RedM'
+Etapa 'Jogos: RedM e biblioteca do Steam' {
+    # com a partição Dados, o RedM (e o RedM.app que ele cria ao lado) vive em D:\Jogos e sobrevive à formatação
+    $dir = if ($Dados) { Join-Path $Dados 'Jogos\RedM' } else { Join-Path $env:LOCALAPPDATA 'RedM' }
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
     $exe = Join-Path $dir 'RedM.exe'
     Baixar 'https://runtime.fivem.net/redm/RedM.exe' $exe
@@ -1048,6 +1091,30 @@ Etapa 'RedM' {
     # a versão anterior deixava o instalador na área de trabalho; sai, que agora não aparece mesmo
     Remove-Item -LiteralPath (Join-Path $desktop 'RedM.exe') -Force -ErrorAction Ignore
     Passo 'sem modo silencioso: o primeiro clique baixa o jogo numa janela própria'
+
+    if ($Dados) {
+        # Biblioteca do Steam em D:\Jogos\Steam. O Steam só cria o steamapps\libraryfolders.vdf na primeira
+        # abertura; se ele ainda não existe, este esqueleto entra antes e o Steam o completa (contentid,
+        # totalsize, apps) sozinho ao abrir. Se já existe, o Steam já rodou e mexer por fora corrompe: aí a
+        # pasta é adicionada à mão, em Configurações > Armazenamento. Marcar como padrão é um clique lá.
+        # Depois de uma formatação a biblioteca em D: volta inteira: o Steam relê e não baixa de novo.
+        $biblio = Join-Path $Dados 'Jogos\Steam'
+        New-Item -ItemType Directory -Path (Join-Path $biblio 'steamapps') -Force | Out-Null
+        $steam = 'C:\Program Files (x86)\Steam'
+        $vdf   = Join-Path $steam 'steamapps\libraryfolders.vdf'
+        if (-not (Test-Path -LiteralPath $steam)) { Passo 'Steam não está instalado; a biblioteca em D: fica para a próxima rodada' }
+        elseif (Test-Path -LiteralPath $vdf) { Passo "o Steam já rodou; adicione $biblio em Configurações > Armazenamento e marque como padrão" }
+        else {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $vdf) -Force | Out-Null
+            $q = [char]34
+            $linhas = @('"libraryfolders"', '{',
+                        "`t`"0`"", "`t{", "`t`t`"path`"`t`t`"$($steam -replace '\\', '\\')`"", "`t`t`"label`"`t`t`"`"", "`t}",
+                        "`t`"1`"", "`t{", "`t`t`"path`"`t`t`"$($biblio -replace '\\', '\\')`"", "`t`t`"label`"`t`t`"`"", "`t}",
+                        '}')
+            [IO.File]::WriteAllLines($vdf, $linhas, [Text.Encoding]::ASCII)
+            Passo "biblioteca do Steam semeada em $biblio; em Configurações > Armazenamento, marque-a como padrão"
+        }
+    }
 }
 
 # --- 17. Git -----------------------------------------------------------------------------------------

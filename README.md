@@ -15,7 +15,10 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 
 ---
 
-> **Apaga o disco inteiro.** O alvo é o Corsair MP700 ELITE (serial `6479A7AABAC014A3`).
+> **Apaga o Windows, não os seus arquivos.** O alvo é o Corsair MP700 ELITE (serial `6479A7AABAC014A3`).
+> Na primeira instalação o disco inteiro é apagado e nasce a partição **Dados** no fim dele; em toda
+> reinstalação só as quatro partições do Windows (EFI, MSR, Windows, Recovery) são apagadas e recriadas no
+> mesmo espaço, e Dados não é tocada. Veja "Disco" abaixo.
 > O script só particiona se achar exatamente esse disco; qualquer outro cenário aborta antes
 > de gravar. Mesmo assim: backup antes.
 
@@ -24,7 +27,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | Passo | Quem faz | O quê |
 |:--|:--|:--|
 | 1 | Ventoy | mostra a ISO; em 5 s aplica o `autounattend.xml` sozinho |
-| 2 | `instala.vbs` (WinPE) | faz a fase inteira no lugar do Setup: pula TPM/CPU/RAM, procura o disco pelo serial ou modelo via WMI, apaga e cria GPT (EFI 300 MB, MSR, Windows, Recovery 1 GB), aplica a imagem `Windows 11 Pro` com o DISM, grava o boot, copia o XML completo para `C:\Windows\Panther` e reinicia pelo disco |
+| 2 | `instala.vbs` (WinPE) | faz a fase inteira no lugar do Setup: pula TPM/CPU/RAM, procura o disco pelo serial ou modelo via WMI, particiona (EFI 300 MB, MSR, Windows 256 GB, Recovery 1 GB e Dados com o resto; numa reinstalação recria só as quatro primeiras e deixa Dados em paz), aplica a imagem `Windows 11 Pro` com o DISM, grava o boot, copia o XML completo para `C:\Windows\Panther` e reinicia pelo disco |
 | 3 | Windows | primeiro boot pelo disco; o Setup novo da ISO nunca chega a instalar |
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
@@ -82,16 +85,16 @@ perde a imagem dele; com ela, sobrevive. Medido nesta máquina, não suposto.
 | 4 | **Claude Code (CLI)** pelo winget, antes de tudo que é longo |
 | 5 | **driver de vídeo da NVIDIA**, o mais novo, baixado da própria NVIDIA pela API que a página de download usa; instalado em silêncio com `-s -clean -noreboot` |
 | 6 | **monitores**: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`); tenta três vezes, porque o driver acabou de assumir |
-| 7 | **preferências do usuário**: tema escuro, barra centralizada e só no monitor principal, **área de trabalho sem ícone nenhum**, **notificações desligadas**, Explorer, teclado, mouse, privacidade (tabela abaixo) |
+| 7 | **preferências do usuário**: tema escuro, barra centralizada e só no monitor principal, **área de trabalho sem ícone nenhum**, **notificações desligadas**, **Documentos, Downloads, Imagens, Vídeos e Música em D:** quando a partição Dados existe, Explorer, teclado, mouse, privacidade (tabela abaixo) |
 | 8 | **wallpaper, um por monitor**: paisagem na ASUS, `Real_Dimez_portrait.jpg` na LG em pé, pela `IDesktopWallpaper`; mais a tela de bloqueio. Termina esperando o Explorer persistir a escolha (veja acima) |
 | 9 | **foto do perfil** da conta (`perfil/avatar.png`) no Iniciar e na tela de login |
 | 10 | **Explorer em Detalhes** em todas as pastas, com as colunas do Alexandre, pelo WinSetView (`explorer/WinSetView/`); reinicia o Explorer, e é aqui que tema e barra passam a valer |
-| 11 | **Windhawk** com os temas Translucent do Undisputed00x na barra (escurecida), no Iniciar, na central de notificações e no Explorer, mais reordenar miniaturas da barra, menus escuros e janelas sem borda; tudo por registro, sem abrir o Windhawk. No fim reinicia o `ShellExperienceHost` e o `StartMenuExperienceHost`, senão eles ficam sem tema |
+| 11 | **Windhawk** com os temas Translucent do Undisputed00x na barra (escurecida), no Iniciar e na central de notificações (o Explorer fica no escuro padrão: o Translucent Explorer11 deixava as pastas num cinza lavado), mais reordenar miniaturas da barra, menus escuros e janelas sem borda; tudo por registro, sem abrir o Windhawk. No fim reinicia o `ShellExperienceHost` e o `StartMenuExperienceHost`, senão eles ficam sem tema |
 | 12 | **energia**: plano Desempenho Máximo, nunca suspende nem hiberna, tela apaga em 5 minutos |
 | 13 | programas do `apps.json`, um a um, com resultado na tela: 44 do winget, e WhatsApp e Bloco de Notas da Loja. Instalador que recusa administrador (o do Spotify) vai por tarefa agendada sem elevação |
 | 14 | **Lightshot**: um atalho só, `Shift+PrintScreen`, os outros dois desligados |
 | 15 | **Chrome**: gerenciador de senhas desligado (fica só o Proton Pass), e Proton Pass e Enhancer for YouTube instalados por política |
-| 16 | **RedM** em `%LOCALAPPDATA%\RedM` com atalho no menu Iniciar, que é o que a barra fixa. O bootstrapper não tem modo silencioso (só entende `-ctracpkm`), então o primeiro clique ainda baixa o jogo numa janela própria |
+| 16 | **Jogos**: RedM em `D:\Jogos\RedM` (ou `%LOCALAPPDATA%\RedM` sem a partição Dados) com atalho no menu Iniciar, que é o que a barra fixa; e a biblioteca do Steam semeada em `D:\Jogos\Steam`, que depois de uma formatação volta inteira sem baixar nada. O bootstrapper não tem modo silencioso (só entende `-ctracpkm`), então o primeiro clique ainda baixa o jogo numa janela própria |
 | 17 | `git config` com nome e e-mail |
 | 18 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`) |
 | 19 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
@@ -113,7 +116,7 @@ perde a imagem dele; com ela, sobrevive. Medido nesta máquina, não suposto.
 |:--|:--|
 | Dia a dia | Chrome, Google Drive, Discord, WhatsApp, Spotify, Obsidian, VLC, Lightshot, Proton Pass, WinRAR, 7-Zip, Bloco de Notas |
 | Jogos | Steam, Radmin VPN, OBS Studio, RedM (área de trabalho), NVIDIA App |
-| Visual | Windhawk com Taskbar, Start Menu, Notification Center e File Explorer Styler (m417z) nos temas Translucent, Taskbar Thumbnail Reorder, Dark mode context menus, Invisible Window Borders |
+| Visual | Windhawk com Taskbar, Start Menu e Notification Center Styler (m417z) nos temas Translucent, Taskbar Thumbnail Reorder, Dark mode context menus, Invisible Window Borders |
 | Dev | Git, GitHub CLI, VS Code, Claude Code, PowerShell 7, Node.js, Bun, Python 3.13, uv, cloudflared, MariaDB, HeidiSQL, WinSCP |
 | CLI | Windows Terminal, starship, zoxide, fzf, bat, fd, ripgrep, eza, jq, ffmpeg, rclone, JetBrainsMono Nerd Font |
 | Android | Temurin JDK 17, Android Studio, Platform Tools, scrcpy |
@@ -184,7 +187,7 @@ disk*, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). Ou desligue o Secure Boot na UEFI s
 
 | | Valor | Onde mudar |
 |:--|:--|:--|
-| Disco | serial `6479A7AABAC014A3` ou modelo `MP700 ELITE` | `SERIAL` e `MODELO` no `instala.vbs`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
+| Disco | serial `6479A7AABAC014A3` ou modelo `MP700 ELITE`; Windows com 256 GB (`WINDOWS_MB`) e o resto vira a partição `Dados` (`DADOS`), que nunca é apagada | `SERIAL` e `MODELO` no `instala.vbs`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
 | Edição | `Windows 11 Pro`, pelo nome da imagem dentro do `install.wim` | `EDICAO` no `instala.vbs`; `dism /Get-WimInfo` lista os nomes |
 | Ativação | licença digital gravada na placa-mãe | |
 | ISO | Windows 11 em Português (Brasil), da Microsoft | |
@@ -222,7 +225,8 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 |:--|:--|
 | Explorer | extensões visíveis, abre em Este Computador, menu de contexto clássico; Detalhes em todas as pastas com Nome, Caminho, Data de modificação, Tipo e Tamanho (WinSetView) |
 | Barra e Iniciar | ícones centralizados e só no monitor principal (a LG de pé fica sem barra), sem busca, Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito; pinos fixos |
-| Tema | escuro desde o primeiro boot, cor de destaque puxada do wallpaper; barra, Iniciar, central de notificações e Explorer translúcidos pelo Windhawk (TranslucentTaskbar, TranslucentStartMenu, TranslucentShell, Translucent Explorer11), menus escuros, janelas sem borda. A barra leva um `controlStyles` por cima do tema com `TintColor #CC101010`, senão ela fica clara demais sobre wallpaper claro |
+| Tema | escuro desde o primeiro boot, cor de destaque puxada do wallpaper; barra, Iniciar e central de notificações translúcidos pelo Windhawk (TranslucentTaskbar, TranslucentStartMenu, TranslucentShell), Explorer no escuro padrão do Windows, menus escuros, janelas sem borda. A barra leva um `controlStyles` por cima do tema com `TintColor #CC101010`, senão ela fica clara demais sobre wallpaper claro |
+| Disco | duas partições que importam: `C:` com o Windows e os programas (256 GB) e `D:` **Dados** com o resto. Em D: moram os jogos (`D:\Jogos`: biblioteca do Steam e RedM) e as pastas Documentos, Downloads, Imagens, Vídeos e Músicas, redirecionadas pelo caminho oficial (`SHSetKnownFolderPath`). Projetos em D: é o Alexandre quem cria; este clone segue em `~\Projetos`. A instalação nunca toca em D:: o `instala.vbs` só apaga as partições do Windows, confere a numeração pelo próprio diskpart (o WMI não lista a MSR), recusa qualquer layout que não reconheça e para antes do DISM se Dados sumir |
 | Área de trabalho | **sem ícone nenhum** (`HideIcons`). Os arquivos continuam lá, o `RedM.exe` inclusive; para chegar neles, Win+E e ir na pasta Área de Trabalho |
 | Notificações | os avisos que aparecem no canto ficam **desligados**. A central de notificações em si continua de pé, de propósito: no Windows 11 o calendário mora dentro dela, e clicar no relógio abre esse painel. A política `DisableNotificationCenter` levaria o calendário junto, então ela fica de fora |
 | Print Screen | `Shift+PrintScreen` chama o Lightshot para selecionar área, e é o único atalho dele ligado; os de "salvar tela toda" e "enviar tela toda" ficam desligados |
