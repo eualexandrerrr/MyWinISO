@@ -259,6 +259,7 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 | Privacidade | sem experiências personalizadas, ID de anúncio, dados de digitação, fala online, localização, Encontrar meu dispositivo |
 | Região | Brasil, pt-BR |
 | Sons | esquema "Sem sons" |
+| Do Sophia Script | o que faltava do preset do farag2, cruzado função por função: relatório de erros e feedback off, AutoPlay off, Acesso Rápido sem recentes/frequentes, diálogo de cópia detalhado, conflitos de merge visíveis, Edge sem criar atalho, sem animação do primeiro logon, atalhos sem o sufixo "- Atalho", sites sem ler a lista de idiomas, BSoD com os parâmetros, F1 sem abrir o Edge, Painel de Controle em ícones grandes, Iniciar sem "mais usados"/"adicionados recentemente"/avisos de conta, sem "procurar na Loja", sem destaques da busca, sem impressora padrão automática, sem anúncio do OneDrive, placa de rede sem economia de energia, Microsoft Update junto do Windows Update. Fora de propósito: DNS over HTTPS (troca o DNS do roteador) e os itens de segurança (sandbox do Defender, PUA, proteção de rede) |
 | Energia | Desempenho Máximo, nunca suspende nem hiberna; a tela apaga depois de 5 minutos parada |
 | RDP | ligado como host com autenticação de rede; precisa da senha da conta |
 | WSL | Debian com usuário `alexandre` usando zsh, sudo sem senha, systemd; precisa de um reinício na primeira vez |
