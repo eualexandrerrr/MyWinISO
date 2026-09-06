@@ -551,7 +551,18 @@ $env:MYWINISO_SENHA = $Senha
 Write-Host ("senha da conta: {0}" -f $(if ($Senha) { 'definida (vai para o root do MariaDB)' } else { 'nenhuma' }))
 
 $desktop = [Environment]::GetFolderPath('Desktop')
-$cmd = "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -Command `"irm $raw/setup.ps1 | iex`"`r`npause`r`n"
+# o .cmd se eleva sozinho: sem isso o setup roda com token filtrado e morre em "Acesso negado"
+$linhas = @(
+    '@echo off',
+    'net session >nul 2>&1',
+    'if errorlevel 1 (',
+    '    powershell.exe -NoProfile -Command "Start-Process -FilePath ''%~f0'' -Verb RunAs"',
+    '    exit /b',
+    ')',
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ""irm $raw/setup.ps1 | iex""",
+    'pause'
+)
+$cmd = ($linhas -join "`r`n") + "`r`n"
 [System.IO.File]::WriteAllText((Join-Path $desktop 'mywiniso-setup.cmd'), $cmd, [System.Text.Encoding]::ASCII)
 Write-Host "criado $desktop\mywiniso-setup.cmd (roda o setup de novo quando quiser)"
 
