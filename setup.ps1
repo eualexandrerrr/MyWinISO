@@ -146,6 +146,8 @@ $global:TotalEtapas = 28
 $global:NumEtapa    = 0
 $global:Resultado   = New-Object System.Collections.Generic.List[object]
 $global:Falhas      = New-Object System.Collections.Generic.List[string]
+# Qualquer etapa que perceba que o Windows precisa reiniciar liga isto; quem trata é o fim do arquivo.
+$global:PedeReinicio = $false
 
 function Passo([string] $m) { Write-Host "  - $m" -ForegroundColor Gray }
 function Falha([string] $m) { Write-Host "  FALHOU: $m" -ForegroundColor Red; $global:Falhas.Add($m) }
@@ -1287,11 +1289,14 @@ Etapa 'Programas (apps.json)' {
         # programa (o Android Studio se atualiza sozinho e o winget diz isso). Nenhum dos dois é falha,
         # e repetir não muda nada: o winget já respondeu sobre o pacote, não sobre a rede.
         $JaInstalado = -1978335189, -1978334956
+        # 0x8A150101/02/03: instalou, mas só fica pronto depois de reiniciar (ou o próprio winget já
+        # reiniciaria). Não é falha e repetir não adianta -- o que falta é o reinício, tratado no fim.
+        $ReiniciaDepois = -1978334975, -1978334974, -1978334973
         # Uma segunda tentativa antes de desistir, só para o que sobra. Falha de download não diz nada
         # sobre o pacote: o Proton Pass saiu com 0x80D05011 (a Delivery Optimization largou o download no
         # meio) numa rodada e instalou de primeira na seguinte, sem nada ter mudado. O winget install é
         # idempotente, então repetir não estraga nada. Só uma vez: erro que persiste é erro de verdade.
-        if ($codigo -ne 0 -and $JaInstalado -notcontains $codigo -and $SemElevacao -notcontains $p.Id) {
+        if ($codigo -ne 0 -and $JaInstalado -notcontains $codigo -and $ReiniciaDepois -notcontains $codigo -and $SemElevacao -notcontains $p.Id) {
             Passo ("saiu com 0x{0:X8}; tentando mais uma vez" -f $codigo)
             Start-Sleep -Seconds 5
             winget.exe install --id $p.Id --exact --source $p.Fonte --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
@@ -1301,6 +1306,7 @@ Etapa 'Programas (apps.json)' {
         if ($codigo -eq 0)                    { Write-Host '        OK' -ForegroundColor Green }
         elseif ($codigo -eq -1978335189)      { Write-Host '        já instalado, sem atualização' -ForegroundColor DarkGray }
         elseif ($codigo -eq -1978334956)      { Write-Host '        já instalado; a atualização é pelo próprio programa' -ForegroundColor DarkGray }
+        elseif ($ReiniciaDepois -contains $codigo) { Write-Host '        instalado; termina depois do reinício' -ForegroundColor DarkGray; $global:PedeReinicio = $true }
         else                                  { Falha ("{0}: winget saiu com código {1} (0x{2:X8})" -f $p.Id, $codigo, $codigo) }
     }
     Refresh-Path
@@ -1724,13 +1730,15 @@ Etapa 'WSL com Debian e zsh' {
     Silencioso { wsl.exe --status 2>&1 | Out-Null }
     if ($LASTEXITCODE -ne 0) {
         if ($faltam) {
-            Passo 'componentes ligados; reinicie e rode mywiniso-setup.cmd de novo para instalar o Debian'
+            Passo 'componentes ligados; o Debian entra depois do reinício'
+            $global:PedeReinicio = $true
         } else {
             # componentes já ligados e o wsl.exe ainda não responde: o que falta é o app do WSL
             Passo 'componentes já ligados; instalando o app do WSL'
             Silencioso { wsl.exe --install --no-distribution 2>&1 | Out-Host }
-            if ($LASTEXITCODE -ne 0) { Passo "wsl --install saiu com código $LASTEXITCODE; reinicie e rode mywiniso-setup.cmd de novo" }
-            else { Passo 'app do WSL instalado; reinicie e rode mywiniso-setup.cmd de novo para o Debian' }
+            if ($LASTEXITCODE -ne 0) { Passo "wsl --install saiu com código $LASTEXITCODE; o Debian entra depois do reinício" }
+            else { Passo 'app do WSL instalado; o Debian entra depois do reinício' }
+            $global:PedeReinicio = $true
         }
     } else {
         $distros = ((wsl.exe --list --quiet 2>$null) -join "`n") -replace "`0", ''
@@ -1930,7 +1938,68 @@ $erros  = @($Resultado | Where-Object Estado -eq 'ERRO').Count
 $avisos = @($Resultado | Where-Object Estado -eq 'AVISO').Count
 Write-Host ''
 Write-Host ("  {0} etapas: {1} OK, {2} com aviso, {3} com erro. Log: {4}" -f $Resultado.Count, ($Resultado.Count - $erros - $avisos), $avisos, $erros, $Log) -ForegroundColor $(if ($erros) { 'Red' } elseif ($avisos) { 'Yellow' } else { 'Green' })
-Write-Host '  Reinicie. Depois: abra o RedM.exe da área de trabalho.' -ForegroundColor Cyan
+
+# --- Reinício e retomada ------------------------------------------------------------------------------
+# Se o Windows precisar reiniciar durante a instalação, ele reinicia -- e volta continuando. Não se
+# reinicia no meio das etapas: a rodada termina, e só então, havendo reinício pendente, o setup arma a
+# tarefa 'mywiniso-retomar' e reinicia. No logon seguinte ela chama manutencao\retomar.ps1, que roda o
+# setup de novo; o cabeçalho de lá explica por que repetir a rodada inteira é a forma segura de continuar.
+# Sem reinício pendente a tarefa é removida: ela não sobrevive ao fim da instalação.
+$ChaveMy = 'HKLM:\SOFTWARE\mywiniso'
+$Retomar = 'mywiniso-retomar'
+# Só os dois sinais fortes do Windows. O PendingFileRenameOperations fica ligado por qualquer instalador
+# e atravessa rodadas inteiras (26 entradas nesta máquina agora): incluí-lo daria um reinício em toda
+# formatação sem nada a ganhar.
+$pendente = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or
+            (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired')
+$querReiniciar = $global:PedeReinicio -or $pendente
+if (-not (Test-Path -LiteralPath $ChaveMy)) { New-Item -Path $ChaveMy -Force | Out-Null }
+$jaFoi = [int](Get-ItemProperty -LiteralPath $ChaveMy -Name Retomadas -ErrorAction Ignore).Retomadas
+$armou = $false
+
+if ($querReiniciar -and $jaFoi -lt 3) {
+    $retomarPs1 = Join-Path $aqui 'manutencao\retomar.ps1'
+    if (-not (Test-Path -LiteralPath $retomarPs1)) {
+        Write-Host "  não achei $retomarPs1; sem retomada automática." -ForegroundColor Yellow
+    } else {
+        try {
+            $acao      = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$retomarPs1`""
+            $gatilho   = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+            $gatilho.Delay = 'PT30S'
+            $config    = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+            $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Highest
+            Register-ScheduledTask -TaskName $Retomar -Action $acao -Trigger $gatilho -Settings $config -Principal $principal -Force | Out-Null
+            Set-ItemProperty -LiteralPath $ChaveMy -Name Retomadas -Value ($jaFoi + 1) -Type DWord -Force
+            $armou = $true
+        } catch {
+            Write-Host "  não consegui armar a retomada: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+}
+
+if ($armou) {
+    Write-Host ''
+    Write-Host ("  O Windows pediu reinício. Retomada {0} de 3 armada: ao entrar de novo, o setup continua sozinho." -f ($jaFoi + 1)) -ForegroundColor Cyan
+    Write-Host '  Reiniciando em 60 s. Para cancelar: shutdown /a' -ForegroundColor Cyan
+    $Pulso.Ligado = $false
+    if ($PulsoPS) { try { $PulsoPS.Runspace.Close() } catch { } }
+    try { Stop-Transcript | Out-Null } catch { }
+    shutdown.exe /r /t 60 /c "mywiniso: reiniciando para continuar a instalacao" | Out-Null
+    exit $erros
+}
+
+if ($querReiniciar) {
+    Write-Host ''
+    if ($jaFoi -ge 3) {
+        Write-Host '  Ainda há reinício pendente depois de 3 retomadas; parei de reiniciar sozinho para não virar laço.' -ForegroundColor Yellow
+    }
+    Write-Host '  Reinicie e rode mywiniso-setup.cmd de novo se algo tiver ficado para trás.' -ForegroundColor Yellow
+} else {
+    Write-Host '  Reinicie. Depois: abra o RedM.exe da área de trabalho.' -ForegroundColor Cyan
+}
+# nada mais pendente: a retomada não sobrevive ao fim da instalação
+Unregister-ScheduledTask -TaskName $Retomar -Confirm:$false -ErrorAction Ignore
+Set-ItemProperty -LiteralPath $ChaveMy -Name Retomadas -Value 0 -Type DWord -Force
 $Pulso.Ligado = $false
 if ($PulsoPS) { try { $PulsoPS.Runspace.Close() } catch { } }
 try { Stop-Transcript | Out-Null } catch { }
