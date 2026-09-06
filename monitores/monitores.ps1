@@ -9,10 +9,12 @@
   mudam juntos e a posição relativa não passa por estados inválidos.
 
   -Conferir só mostra o que está ligado agora e sai, sem mexer em nada.
+  -Modos lista as resoluções e frequências que o driver de cada monitor aceita, para montar o monitores.json.
 #>
 param(
     [string] $Arquivo = (Join-Path $PSScriptRoot 'monitores.json'),
-    [switch] $Conferir
+    [switch] $Conferir,
+    [switch] $Modos
 )
 
 $ErrorActionPreference = 'Stop'
@@ -159,6 +161,23 @@ function Format-Monitor($m) {
 $ligados = Get-MonitoresLigados
 Write-Host "monitores ligados: $($ligados.Count)"
 foreach ($m in $ligados) { Write-Host "  - $(Format-Monitor $m)" }
+
+if ($Modos) {
+    foreach ($m in $ligados) {
+        Write-Host "modos de $(if ($m.Nome) { $m.Nome } else { $m.Monitor }) [$($m.Dispositivo)]:"
+        $vistos = @{}
+        for ($i = 0; ; $i++) {
+            $dm = [MyWinIsoDisplay]::NovoDevMode()
+            if (-not [MyWinIsoDisplay]::EnumDisplaySettings($m.Dispositivo, $i, [ref] $dm)) { break }
+            if ($dm.dmBitsPerPel -ne 32) { continue }
+            $chave = "$($dm.dmPelsWidth)x$($dm.dmPelsHeight)@$($dm.dmDisplayFrequency)"
+            if ($vistos.ContainsKey($chave)) { continue }
+            $vistos[$chave] = $true
+            Write-Host "  $chave Hz"
+        }
+    }
+    exit 0
+}
 
 if ($Conferir) { exit 0 }
 
