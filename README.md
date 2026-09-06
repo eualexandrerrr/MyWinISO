@@ -8,7 +8,7 @@ Um pendrive que boota, acha o disco certo, formata, instala o Windows, cria a co
 configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um arquivo de resposta
 (`autounattend.xml`) que o instalador segue sozinho.
 
-[![Windows 11](https://img.shields.io/badge/Windows_11-25H2-0078D4?style=flat-square&logo=windows&logoColor=white)](https://www.microsoft.com/pt-br/software-download/windows11)
+[![Windows 11](https://img.shields.io/badge/Windows_11-26H2-0078D4?style=flat-square&logo=windows&logoColor=white)](https://www.microsoft.com/pt-br/software-download/windows11)
 [![Ventoy](https://img.shields.io/badge/Ventoy-auto__install-2E8B57?style=flat-square)](https://www.ventoy.net/en/plugin_autoinstall.html)
 
 </div>
@@ -182,6 +182,21 @@ tire o pendrive e deixe reiniciar. Do primeiro reinício em diante nada mais é 
 
 Secure Boot: o Ventoy pede para registrar a chave dele na primeira vez (MokManager, *Enroll key from
 disk*, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). Ou desligue o Secure Boot na UEFI só para a instalação.
+
+## O que vai no pendrive
+
+| Entrada do menu | Arquivo | Para quê |
+|:--|:--|:--|
+| **Windows 11 26H2 pt-BR** | `Win11_26H2_pt-BR.iso` | a ISO deste repositório: montada do UUP dump (build 26300, Pro, com as atualizações), limpa, sem nada embutido. Em 5 s o Ventoy aplica o `autounattend.xml` e a instalação corre sozinha |
+| **Arch Linux** | `myarch-2026.09.05-x86_64.iso` | o [MyArchISO](https://github.com/eualexandrerrr/MyArchISO) |
+| **Hiren's BootCD PE** | `HBCD_PE_x64.iso` | socorro quando o Windows não sobe: senha esquecida, disco, partição, backup, antivírus, um Windows PE inteiro com ferramentas |
+| **ChromeOS Flex** | `ChromeOS_Flex.img` | um sistema vivo com navegador para quando tudo mais falhar. Suporte experimental no Ventoy: o `.bin` do Google renomeado para `.img`, só o modo normal (sem Verified Boot), e a opção de instalar pode não aparecer; para instalar o Flex de verdade, grave-o num pendrive próprio |
+
+O menu usa o tema `ventoy/theme/MyWinISO` (fundo do Alexandre, fontes e ícones do
+[grub2-themes](https://github.com/vinceliuice/grub2-themes), vermelho `#D6002B` como o accent do
+Windows), com um ícone por entrada (`menu_class`) e 10 s de timeout com o Windows como padrão. O
+`ventoy.json` inteiro é o que o `pendrive.ps1` preserva: ele só garante o `auto_install` e as três
+opções de `control` dele.
 
 ## O que está assumido
 
