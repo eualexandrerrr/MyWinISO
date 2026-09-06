@@ -86,13 +86,20 @@ try {
     $PulsoPS.Runspace = $espaco
     [void]$PulsoPS.AddScript({
         param($P)
+        # o proxy do Write-Host so ve o que o script imprime. Programa nativo (git, winget, dism) escreve
+        # direto no console, e sem isto o pulso acha que esta tudo em silencio e fala por cima. A posicao
+        # do cursor mudando e a prova de que alguem escreveu, inclusive o \r do progresso do git.
+        $ondeEstava = ''
         while ($P.Ligado) {
             Start-Sleep -Milliseconds 500
             try {
                 $agora = Get-Date
+                $onde = "$([Console]::CursorTop),$([Console]::CursorLeft)"
+                if ($onde -ne $ondeEstava) { $ondeEstava = $onde; $P.Ultimo = $agora; continue }
                 if (($agora - $P.Ultimo).TotalSeconds -ge 10) {
                     $P.Ultimo = $agora
                     [Console]::WriteLine(("     ... {0} | {1} s nesta etapa | {2}" -f $P.Nome, [int]($agora - $P.Desde).TotalSeconds, $agora.ToString('HH:mm:ss')))
+                    $ondeEstava = "$([Console]::CursorTop),$([Console]::CursorLeft)"
                 }
             } catch { }
         }
@@ -392,7 +399,10 @@ if (-not ($aqui -and (Test-Path -LiteralPath (Join-Path $aqui 'apps.json')))) {
                 if (Test-Path -LiteralPath $Dir) { Passo "$Dir existe sem .git (veio do zip); trocando pelo clone"; Remove-Item -LiteralPath $Dir -Recurse -Force }
                 Passo "git clone $Repo -> $Dir"
                 New-Item -ItemType Directory -Path (Split-Path -Parent $Dir) -Force | Out-Null
-                git.exe clone --progress $Repo $Dir 2>&1 | Out-Host
+                # --progress sem 2>&1: o git escreve progresso em stderr e, redirecionado, cada linha vira
+                # registro de erro no PowerShell 5.1 (a etapa fecha em AVISO com centenas de erros falsos).
+                # Direto no console ele sai em cor normal e sobrescreve a mesma linha, como no terminal.
+                git.exe clone --progress $Repo $Dir
             }
             if (Test-Path -LiteralPath (Join-Path $Dir '.git')) {
                 Passo ("no commit " + (git.exe -C $Dir log -1 --format='%h %ad %s' --date=format:'%d/%m/%Y %H:%M'))
@@ -422,6 +432,10 @@ if (-not ($aqui -and (Test-Path -LiteralPath (Join-Path $aqui 'apps.json')))) {
         exit 1
     }
     Passo "continuando pela cópia em $Dir, que tem os arquivos ao lado"
+    # o pulso morre aqui: daqui pra frente quem fala e a copia local, com o pulso dela. Sem isto os dois
+    # ficam escrevendo no mesmo console e este, parado no bastao, repete a etapa 3 ate o fim de tudo.
+    $Pulso.Ligado = $false
+    if ($PulsoPS) { try { $PulsoPS.Runspace.Close() } catch { } }
     try { Stop-Transcript | Out-Null } catch { }
     & (Join-Path $Dir 'setup.ps1') -Senha $Senha
     exit $LASTEXITCODE
@@ -1341,8 +1355,8 @@ Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
     } else {
         $vsrc = Join-Path $env:USERPROFILE 'Projetos\Vencord'
         try {
-            if (Test-Path -LiteralPath (Join-Path $vsrc '.git')) { Passo 'git pull no fork'; git.exe -C $vsrc pull --ff-only 2>&1 | Out-Host }
-            else { Passo "git clone do fork em $vsrc"; git.exe clone --progress https://github.com/eualexandrerrr/Vencord $vsrc 2>&1 | Out-Host }
+            if (Test-Path -LiteralPath (Join-Path $vsrc '.git')) { Passo 'git pull no fork'; git.exe -C $vsrc pull --ff-only }
+            else { Passo "git clone do fork em $vsrc"; git.exe clone --progress https://github.com/eualexandrerrr/Vencord $vsrc }
             if ($LASTEXITCODE -ne 0) { throw "git saiu com código $LASTEXITCODE" }
             Passo ("fork no commit " + (git.exe -C $vsrc log -1 --format='%h %ad %s' --date=format:'%d/%m/%Y %H:%M'))
             # o pnpm vem pelo corepack do próprio Node, na versão que o package.json pede; sem prompt

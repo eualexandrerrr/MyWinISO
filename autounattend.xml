@@ -584,13 +584,19 @@ try {
     $PulsoPS.Runspace = $espaco
     [void]$PulsoPS.AddScript({
         param($P)
+        # o proxy do Write-Host so ve o que o script imprime; programa nativo escreve direto no console.
+        # A posicao do cursor mudando e a prova de que alguem escreveu, e evita falar por cima.
+        $ondeEstava = ''
         while ($P.Ligado) {
             Start-Sleep -Milliseconds 500
             try {
                 $agora = Get-Date
+                $onde = "$([Console]::CursorTop),$([Console]::CursorLeft)"
+                if ($onde -ne $ondeEstava) { $ondeEstava = $onde; $P.Ultimo = $agora; continue }
                 if (($agora - $P.Ultimo).TotalSeconds -ge 10) {
                     $P.Ultimo = $agora
                     [Console]::WriteLine(("   ... {0} | {1} s neste bloco | {2}" -f $P.Nome, [int]($agora - $P.Desde).TotalSeconds, $agora.ToString('HH:mm:ss')))
+                    $ondeEstava = "$([Console]::CursorTop),$([Console]::CursorLeft)"
                 }
             } catch { }
         }
