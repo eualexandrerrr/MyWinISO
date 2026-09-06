@@ -4,9 +4,9 @@
 
 **Windows 11 · pt-BR · instalação sem perguntas**
 
-Um pendrive que boota, acha o disco certo, formata, instala o Windows, cria a conta e
-instala os programas. Nada de ISO modificada: é a ISO oficial da Microsoft mais um
-arquivo de resposta (`autounattend.xml`) que o instalador segue sozinho.
+Um pendrive que boota, acha o disco certo, formata, instala o Windows, cria a conta, instala e
+configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um arquivo de resposta
+(`autounattend.xml`) que o instalador segue sozinho.
 
 [![Windows 11](https://img.shields.io/badge/Windows_11-25H2-0078D4?style=flat-square&logo=windows&logoColor=white)](https://www.microsoft.com/pt-br/software-download/windows11)
 [![Ventoy](https://img.shields.io/badge/Ventoy-auto__install-2E8B57?style=flat-square)](https://www.ventoy.net/en/plugin_autoinstall.html)
@@ -26,43 +26,92 @@ arquivo de resposta (`autounattend.xml`) que o instalador segue sozinho.
 | 1 | Ventoy | mostra a ISO; em 5 s aplica o `autounattend.xml` sozinho |
 | 2 | `disco.ps1` (WinPE) | pula TPM/CPU/RAM, procura o disco pelo serial ou modelo, apaga e cria GPT: EFI 300 MB, MSR, Windows, Recovery 1 GB |
 | 3 | Setup | instala o Windows 11 Pro na partição que acabou de ser criada |
-| 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot, widgets e telemetria, plano de energia alto desempenho |
-| 5 | OOBE | conta local `alexandre`, sem senha, sem conta Microsoft, teclado ABNT2 |
-| 6 | `primeiro-logon.ps1` | login automático permanente, baixa o `setup.ps1` deste repositório e roda |
-| 7 | `setup.ps1` | garante o winget, clona o repo em `~\Projetos\mywiniso`, instala tudo do `apps.json`, RedM na área de trabalho, preferências e energia, Office, wallpaper nos dois monitores e na tela de bloqueio, Área de Trabalho Remota, WSL com Debian, drivers pelo Windows Update |
+| 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio |
+| 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
+| 6 | `primeiro-logon.ps1` | baixa o `setup.ps1` deste repositório e roda; deixa `mywiniso-setup.cmd` na área de trabalho |
+| 7 | `setup.ps1` | as 17 etapas abaixo |
 
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção.
-O `setup.ps1` e o `apps.json` ficam fora de propósito: mudam com frequência e são baixados do GitHub
+O `setup.ps1` e o resto ficam fora de propósito: mudam com frequência e são baixados do GitHub
 na hora, então o pendrive não envelhece quando a lista de programas muda.
+
+## O que o setup.ps1 faz
+
+Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou o `irm` abaixo).
+
+| # | Etapa |
+|:--|:--|
+| 1 | garante que o winget funciona (em instalação nova ele demora a registrar) |
+| 2 | instala o Git e clona este repositório em `~\Projetos\mywiniso` |
+| 3 | `winget import apps.json`: 45 programas do winget e o WhatsApp da Loja |
+| 4 | RedM na área de trabalho (o instalador não tem modo silencioso) |
+| 5 | `git config` com nome e e-mail |
+| 6 | preferências do usuário (tabela abaixo) |
+| 7 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`) |
+| 8 | wallpaper nos dois monitores e na tela de bloqueio |
+| 9 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
+| 10 | energia: plano Desempenho Máximo, nunca suspende, nunca apaga a tela, sem hibernação |
+| 11 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
+| 12 | MariaDB como serviço, root com a senha da conta e acesso remoto |
+| 13 | fonte Cascadia Mono na máquina, no console e no terminal do VS Code |
+| 14 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
+| 15 | barra de tarefas com Explorer, Firefox, Discord, VS Code, WinSCP e Chrome; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar |
+| 16 | WSL com Debian: usuário `alexandre`, sudo sem senha, systemd (`wsl/debian.sh`) |
+| 17 | drivers e atualizações pelo Windows Update |
+
+## Programas
+
+`apps.json` é o formato do `winget import`; gerar um novo com `winget export -o apps.json`.
+
+| | |
+|:--|:--|
+| Dia a dia | Chrome, Firefox, Google Drive, Discord, WhatsApp, Spotify, Obsidian, VLC, Lightshot, WinRAR, 7-Zip, TranslucentTB |
+| Jogos | Steam, Radmin VPN, OBS Studio, RedM (área de trabalho), NVIDIA App |
+| Dev | Git, GitHub CLI, VS Code, Claude Code, PowerShell 7, Node.js, Bun, Python 3.13, uv, Docker Desktop, cloudflared, MariaDB, HeidiSQL, WinSCP |
+| CLI | starship, zoxide, fzf, bat, fd, ripgrep, eza, jq, ffmpeg, rclone, JetBrainsMono Nerd Font |
+| Android | Temurin JDK 17, Android Studio, Platform Tools, scrcpy |
+| Office | Word, Excel, PowerPoint (sem Access, Outlook, OneNote, Publisher, Lync, OneDrive) |
+
+Insync e Maestro não existem no winget; Google Drive oficial entra no lugar do Insync.
 
 ## Arquivos
 
 | | |
 |:--|:--|
 | `autounattend.xml` | fonte de verdade da instalação: disco, idioma, conta, bloatware, primeiro logon |
-| `setup.ps1` | pós-instalação; roda em qualquer Windows 11, não só no instalado pelo pendrive |
-| `apps.json` | lista do `winget import`; gerar uma nova com `winget export -o apps.json` |
-| `ventoy/ventoy.json` | plugin `auto_install` do Ventoy; o `pendrive.ps1` troca o caminho da ISO |
-| `office/Configuracao.xml` | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool, que o `setup.ps1` baixa da Microsoft na hora |
-| `wallpaper/` | imagem aplicada nos dois monitores e na tela de bloqueio |
-| `wsl/debian.sh`, `wsl/wsl.conf` | configuração do Debian no WSL: usuário `alexandre`, sudo sem senha, systemd, pacotes base |
+| `setup.ps1` | pós-instalação; roda em qualquer Windows 11 |
+| `apps.json` | lista do `winget import` |
 | `pendrive.ps1` | grava o XML no pendrive sem formatar e sem tocar nas ISOs que já estão lá |
+| `ventoy/ventoy.json` | plugin `auto_install` do Ventoy; o `pendrive.ps1` troca o caminho da ISO |
+| `office/Configuracao.xml` | Office pelo Office Deployment Tool, que o `setup.ps1` baixa da Microsoft na hora |
+| `wallpaper/` | imagem dos dois monitores e da tela de bloqueio |
+| `powershell/profile.ps1` | perfil do PowerShell 7 |
+| `taskbar/LayoutModification.xml` | pinos da barra de tarefas |
+| `startup/startup-onlogon.ps1` | tarefa de logon: maximiza o Discord, posiciona duas janelas do Chrome no monitor vertical, backup do histórico do terminal |
+| `vscode/settings.json` | o que o `setup.ps1` mescla no `settings.json` do VS Code |
+| `wsl/debian.sh`, `wsl/wsl.conf` | configuração do Debian no WSL |
 
 ## Fazer o pendrive
 
-O pendrive já tem a ISO do Windows 11 em Português (Brasil). O script não formata nada.
-PowerShell como administrador, com o pendrive na letra `E:`, por exemplo:
+O pendrive já é Ventoy e já tem a ISO do Windows 11 em Português (Brasil). O script não formata
+nada e não mexe nas ISOs. PowerShell como administrador, com o pendrive na letra `E:`:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E:              # uma ISO só no pendrive
-powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: win11.iso    # mais de uma: diga qual
+powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: -Senha 123                                 # uma ISO só
+powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: Win11_pt-BR_unattend.iso -Senha 123        # mais de uma: diga qual
 ```
 
+- `-Senha` vira a senha da conta `Alexandre` e do root do MariaDB **só na cópia do XML gravada no
+  pendrive**; o `autounattend.xml` do repositório continua sem senha, e o repositório é público.
+  Sem `-Senha` a conta fica sem senha e a Área de Trabalho Remota não aceita login.
 - **Ventoy**: copia `autounattend.xml` e `ventoy.json` para `\ventoy`. Um `ventoy.json` que já exista
   é preservado (cópia em `.bak`) e só a entrada desta ISO é trocada.
 - **Windows extraído** (Rufus, Media Creation Tool): copia `autounattend.xml` para a raiz, que é onde o Setup procura.
 - O script monta a ISO, confere `sources\lang.ini` e para se não tiver pt-BR.
+- A ISO que já está no pendrive traz um `autounattend.xml` antigo embutido. Ele não atrapalha: o Windows
+  procura primeiro o arquivo que o Ventoy injeta. Escolher "Boot without template" no menu do Ventoy
+  usa o antigo, que serve de plano B.
 - Pendrive novo: baixe o [Ventoy](https://www.ventoy.net), rode o `Ventoy2Disk.exe` (GPT, Secure Boot ligado),
   copie a ISO e rode o script. Isso sim apaga o pendrive.
 
@@ -77,9 +126,8 @@ disk*, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). Ou desligue o Secure Boot na UEFI s
 | Edição | Pro, pela chave genérica pública `VK7JG-…`, que só escolhe a edição | `<ProductKey>`; Home é `YTMG3-N6DKC-DKB77-7M9GH-8HVX7` |
 | Ativação | licença digital gravada na placa-mãe; sem chave nenhuma o Setup pararia para perguntar a edição | |
 | ISO | Windows 11 em Português (Brasil), da Microsoft | |
-| Conta | `alexandre`, administrador, **sem senha**, login automático | `<LocalAccount>` e `<AutoLogon>`; se puser senha depois, atualize `DefaultPassword` no Winlogon ou o autologin para |
-| PC | nome `RRR`, fuso `E. South America Standard Time`, teclado ABNT2 (`0416:00010416`) | `specialize` e `oobeSystem` |
-| Bloatware | lista em `especializar.ps1`; ficam Loja, App Installer, Calculadora, Fotos, Bloco de Notas, Paint, Captura, Terminal | |
+| Conta | `Alexandre`, administradora, senha pelo `pendrive.ps1 -Senha`, login automático permanente | `<LocalAccount>` e `<AutoLogon>` |
+| PC | nome `RRR`, fuso `E. South America Standard Time`, teclado ABNT2 (`0416:00010416`) | `specialize` e `oobeSystem`; ABNT sem o 2 é `0416:00000416` |
 
 ## Debloat
 
@@ -88,11 +136,14 @@ de qualquer usuário existir, e a lista está legível no `especializar.ps1` den
 
 | | |
 |:--|:--|
-| Apps removidos | Clipchamp, Cortana, Notícias, Clima, Bing Search, Copilot, Game Assist, app Xbox, Game Bar, Obter Ajuda, Dicas, Office Hub, Solitaire, Sticky Notes, Outlook, Pessoas, Power Automate, To Do, Dev Home, Alarmes, Câmera, Feedback Hub, Mapas, Gravador, Telefone, Mídia, Filmes e TV, Família, Assistência Rápida, Teams, Mail e Calendário |
-| Ficam | Loja e App Installer (o winget depende deles), Calculadora, Fotos, Bloco de Notas, Paint, Ferramenta de Captura, Terminal, Xbox Identity Provider |
-| Também sai | OneDrive, Recall, agendamento pós-OOBE do Outlook e Dev Home |
-| Políticas | telemetria no mínimo, sem sugestões e apps promovidos, sem Copilot, sem widgets, sem ID de anúncio, Edge sem tela inicial, busca sem Bing |
-| Sistema | inicialização rápida desligada, caminhos longos, plano de energia alto desempenho |
+| Apps removidos | Clipchamp, Cortana, Notícias, Clima, Bing Search, Copilot, Game Assist, app Xbox, Game Bar, Obter Ajuda, Dicas, Office Hub, Solitaire, Sticky Notes, Outlook, Pessoas, Power Automate, To Do, Dev Home, Alarmes, Câmera, Feedback Hub, Mapas, Gravador, Telefone, Mídia, Filmes e TV, Família, Assistência Rápida, Teams, Mail e Calendário, Skype, Carteira, OneNote, 3D Viewer, Mixed Reality, **Bloco de Notas, Paint e Ferramenta de Captura** (VS Code e Lightshot no lugar) |
+| Capacidades removidas | Internet Explorer, WordPad, Fax e Scanner, Windows Media Player legado, Steps Recorder, Math Input, Handwriting, Speech e TTS, Hello Face, OneSync, OpenSSH Client (o Git traz o dele), PowerShell ISE |
+| Recursos removidos | PowerShell 2.0, cliente de Área de Trabalho Remota (`mstsc`), Recall, Captura |
+| Ficam | Loja e App Installer (o winget depende deles), Calculadora, Fotos, Terminal, Xbox Identity Provider, MediaPlayback (jogos e apps usam para vídeo) |
+| Também sai | OneDrive, agendamento pós-OOBE do Outlook, Dev Home e Teams, ícone do Edge, sons do sistema |
+| Políticas | telemetria no mínimo, sem sugestões e apps promovidos, sem Copilot, sem widgets, sem ID de anúncio, Edge sem tela inicial e sem startup boost, Edge desinstalável, busca sem Bing, Iniciar sem nada fixado |
+| Segurança que atrapalha | UAC sem perguntar (o LUA fica ligado, senão apps da Loja não abrem), Smart App Control e SmartScreen desligados, ícone da Segurança do Windows escondido |
+| Sistema | inicialização rápida desligada, caminhos longos, som de inicialização desligado, senha sem validade, sem bloqueio de conta |
 
 Quer mais? Adicione o nome do pacote na lista `$bloat` (`Get-AppxProvisionedPackage -Online | Select DisplayName` mostra os nomes).
 
@@ -102,17 +153,20 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 
 | Área | O que fica |
 |:--|:--|
-| Explorer | extensões visíveis, abre em Este Computador |
-| Barra e Iniciar | ícones à esquerda, só o ícone da busca, sem Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito |
-| Tema | escuro |
+| Explorer | extensões visíveis, abre em Este Computador, menu de contexto clássico |
+| Barra e Iniciar | ícones à esquerda, sem busca, Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito; pinos fixos |
+| Tema | escuro, sem transparência, sem cor de destaque em bordas e Iniciar |
 | Desligar | apps travados são encerrados sozinhos (`AutoEndTasks`), sem "este aplicativo está impedindo o desligamento" |
-| Entrar | reabre os apps que estavam abertos (`RestartApps`), NumLock ligado |
-| Teclado | Print Screen não abre a Ferramenta de Captura, fica para o Lightshot; atalhos de Teclas de Aderência, Alternância e Filtragem desligados |
+| Entrar | reabre os apps que estavam abertos (`RestartApps`), NumLock ligado, tarefa de logon arruma as janelas |
+| Teclado | repetição no máximo, cursor piscando rápido, Print Screen não abre a Ferramenta de Captura (fica para o Lightshot), atalhos de Teclas de Aderência, Alternância e Filtragem desligados |
 | Mouse | sem aceleração |
 | Jogos | Game DVR desligado |
 | Área de transferência | histórico Win+V ligado, ações sugeridas desligadas |
-| Energia | nunca suspende, nunca apaga a tela, sem hibernação |
-| RDP | ligado como host com autenticação de rede; **precisa de senha na conta** |
+| Privacidade | sem experiências personalizadas, ID de anúncio, dados de digitação, fala online, localização, Encontrar meu dispositivo |
+| Região | Brasil, pt-BR |
+| Sons | esquema "Sem sons" |
+| Energia | Desempenho Máximo, nunca suspende, nunca apaga a tela, sem hibernação |
+| RDP | ligado como host com autenticação de rede; precisa da senha da conta |
 | WSL | Debian com usuário `alexandre`, sudo sem senha, systemd; precisa de um reinício na primeira vez |
 
 ## Rodar o setup num Windows já instalado
@@ -120,32 +174,29 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 PowerShell como administrador:
 
 ```powershell
+$env:MYWINISO_SENHA = '123'    # opcional: vira a senha do root do MariaDB
 irm https://raw.githubusercontent.com/eualexandrerrr/mywiniso/main/setup.ps1 | iex
 ```
 
-O `primeiro-logon.ps1` deixa um `mywiniso-setup.cmd` na área de trabalho que faz exatamente isso.
-
 ## Depois de instalado
 
-- **NVIDIA App** não está no winget; o driver vem pelo Windows Update no passo 7. Baixe o app em nvidia.com.
-- **RedM.exe** fica na área de trabalho; o instalador dele não tem modo silencioso.
-- **RDP** só aceita conta com senha. Defina uma com `net user alexandre *` e atualize `DefaultPassword` em
-  `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon`, senão o login automático para.
+- **RedM.exe** fica na área de trabalho; abra uma vez para instalar.
 - **WSL**: na primeira execução o Windows precisa reiniciar; rode `mywiniso-setup.cmd` de novo e o Debian entra.
-- **MariaDB** instala como serviço com `root` sem senha, só local. `mysql_secure_installation` resolve.
+- **MariaDB**: root com a senha da conta, acesso local e remoto. Sem senha, root sem senha e só local.
 - **Office**: a chave do `Configuracao.xml` é a GVLK pública da Microsoft para volume, que só ativa contra um
   servidor KMS de organização. Com licença pessoal, troque o produto por `ProPlus2024Retail` ou `O365ProPlusRetail`.
 - **Tela de bloqueio**: o wallpaper entra pela `PersonalizationCSP`, que trava a opção em Configurações. Para
   liberar, apague a chave `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP`.
+- **Senha depois**: `net user Alexandre *` troca; o login automático continua (o Windows guarda a senha do autologon).
 - **AtlasOS** é opcional: aplique o playbook por cima, se quiser os tweaks de jogo.
 
 ## Se algo der errado
 
 | Fase | Log |
 |:--|:--|
-| WinPE não achou o disco | `X:\mywiniso\disco.log`; o Bloco de Notas abre sozinho com ele e nada foi apagado |
+| WinPE não achou o disco | `X:\mywiniso\disco.log`; o Bloco de Notas do WinPE abre sozinho com ele e nada foi apagado |
 | specialize | `C:\Windows\Setup\Scripts\especializar.log` |
-| primeiro logon e setup | `C:\Users\alexandre\mywiniso.log` |
+| primeiro logon e setup | `C:\Users\Alexandre\mywiniso.log` |
 
 Sem internet no primeiro logon, o `primeiro-logon.ps1` desiste depois de 5 minutos e o
 `mywiniso-setup.cmd` da área de trabalho roda o resto quando a rede voltar.
@@ -154,5 +205,6 @@ Sem internet no primeiro logon, o `primeiro-logon.ps1` desiste depois de 5 minut
 
 - [Unattend Generator (schneegans.de)](https://schneegans.de/windows/unattend-generator/): de onde vem a técnica de embutir scripts no XML e o caminho `C:\Windows\Panther\unattend.xml`
 - [Ventoy auto_install](https://www.ventoy.net/en/plugin_autoinstall.html)
+- [Microsoft: ordem de busca do arquivo de resposta](https://learn.microsoft.com/windows-hardware/manufacture/desktop/windows-setup-automation-overview)
 - [Microsoft: layout de partições UEFI/GPT](https://learn.microsoft.com/windows-hardware/manufacture/desktop/configure-uefigpt-based-hard-drive-partitions)
 - [Microsoft: chaves genéricas de instalação (KMS client setup keys)](https://learn.microsoft.com/windows-server/get-started/kms-client-activation-keys)

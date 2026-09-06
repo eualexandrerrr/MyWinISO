@@ -15,9 +15,14 @@
         { "PackageIdentifier": "Valve.Steam" },
         { "PackageIdentifier": "VideoLAN.VLC" },
         { "PackageIdentifier": "Skillbrains.Lightshot" },
+        { "PackageIdentifier": "Mozilla.Firefox" },
+        { "PackageIdentifier": "OBSProject.OBSStudio" },
+        { "PackageIdentifier": "Famatech.RadminVPN" },
+        { "PackageIdentifier": "RARLab.WinRAR" },
+        { "PackageIdentifier": "WinSCP.WinSCP" },
+        { "PackageIdentifier": "CharlesMilette.TranslucentTB" },
 
         { "PackageIdentifier": "Microsoft.PowerShell" },
-        { "PackageIdentifier": "Microsoft.WindowsTerminal" },
         { "PackageIdentifier": "DEVCOM.JetBrainsMonoNerdFont" },
         { "PackageIdentifier": "Starship.Starship" },
         { "PackageIdentifier": "ajeetdsouza.zoxide" },
@@ -41,6 +46,7 @@
         { "PackageIdentifier": "Docker.DockerDesktop" },
         { "PackageIdentifier": "Cloudflare.cloudflared" },
         { "PackageIdentifier": "MariaDB.Server" },
+        { "PackageIdentifier": "HeidiSQL.HeidiSQL" },
 
         { "PackageIdentifier": "EclipseAdoptium.Temurin.17.JDK" },
         { "PackageIdentifier": "Google.AndroidStudio" },
@@ -52,6 +58,17 @@
         "Identifier": "Microsoft.Winget.Source_8wekyb3d8bbwe",
         "Name": "winget",
         "Type": "Microsoft.PreIndexed.Package"
+      }
+    },
+    {
+      "Packages": [
+        { "PackageIdentifier": "9NBDXK71NK08" }
+      ],
+      "SourceDetails": {
+        "Argument": "https://storeedgefd.dsx.mp.microsoft.com/v9.0",
+        "Identifier": "StoreEdgeFD",
+        "Name": "msstore",
+        "Type": "Microsoft.Rest"
       }
     }
   ],

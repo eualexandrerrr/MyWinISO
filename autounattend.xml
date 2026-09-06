@@ -8,11 +8,13 @@
     windowsPE    pula a checagem de TPM/CPU/RAM/Secure Boot, acha o disco pelo serial
                  e particiona (disco.ps1). Se não achar exatamente um disco, aborta sem tocar em nada.
     specialize   nome do PC, fuso, remove bloatware, OneDrive, Copilot e telemetria (especializar.ps1)
-    oobeSystem   conta local "alexandre" sem senha, login automático, sem conta Microsoft.
+    oobeSystem   conta local "Alexandre" administradora, login automático permanente, sem conta Microsoft.
                  No primeiro logon, primeiro-logon.ps1 baixa o setup.ps1 deste repositório e roda,
-                 que instala os programas do apps.json.
+                 que instala e configura tudo.
 
   Os scripts ficam embutidos no fim do arquivo (<Extensions>), assim o pendrive precisa de um XML só.
+  Senha: neste arquivo a conta fica sem senha. O pendrive.ps1 -Senha preenche os dois Value vazios de
+  Password e o $Senha do primeiro-logon.ps1 na cópia que vai para o pendrive, sem passar pelo git.
   Chave de produto: é a chave genérica pública da Microsoft, que só escolhe a edição (Pro).
   A ativação vem da licença digital gravada na placa-mãe. Para Home, troque por YTMG3-N6DKC-DKB77-7M9GH-8HVX7.
 -->
@@ -117,7 +119,7 @@
       <UserAccounts>
         <LocalAccounts>
           <LocalAccount wcm:action="add">
-            <Name>alexandre</Name>
+            <Name>Alexandre</Name>
             <DisplayName>Alexandre</DisplayName>
             <Group>Administrators</Group>
             <Password>
@@ -128,9 +130,9 @@
         </LocalAccounts>
       </UserAccounts>
       <AutoLogon>
-        <Username>alexandre</Username>
+        <Username>Alexandre</Username>
         <Enabled>true</Enabled>
-        <LogonCount>1</LogonCount>
+        <LogonCount>999999</LogonCount>
         <Password>
           <Value></Value>
           <PlainText>true</PlainText>
@@ -139,7 +141,7 @@
       <FirstLogonCommands>
         <SynchronousCommand wcm:action="add">
           <Order>1</Order>
-          <Description>Login automático permanente e setup.ps1 do repositório</Description>
+          <Description>setup.ps1 do repositório</Description>
           <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Setup\Scripts\primeiro-logon.ps1</CommandLine>
         </SynchronousCommand>
       </FirstLogonCommands>
@@ -230,38 +232,63 @@ function Set-Reg([string] $Path, [string] $Name, $Value, [string] $Type = 'DWord
     Set-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -Type $Type -Force
 }
 
-# --- Bloatware (pacotes provisionados: nunca chegam a ser instalados para o usuário) ---
-# Ficam: Loja e App Installer (o winget depende deles), Calculadora, Fotos, Bloco de Notas, Paint,
-# Ferramenta de Captura, Terminal, Xbox Identity Provider (login em jogos da Loja).
+# --- Bloatware: pacotes provisionados (nunca chegam a ser instalados para o usuário) ---
+# Ficam: Loja e App Installer (o winget depende deles), Calculadora, Fotos, Terminal, Xbox Identity Provider.
+# Bloco de Notas, Paint e Ferramenta de Captura saem: VS Code e Lightshot no lugar.
 $bloat = @(
     'Clipchamp.Clipchamp', 'Microsoft.549981C3F5F10', 'Microsoft.BingNews', 'Microsoft.BingSearch',
     'Microsoft.BingWeather', 'Microsoft.Copilot', 'Microsoft.Edge.GameAssist', 'Microsoft.GamingApp',
-    'Microsoft.GetHelp', 'Microsoft.Getstarted', 'Microsoft.MicrosoftOfficeHub',
-    'Microsoft.MicrosoftSolitaireCollection', 'Microsoft.MicrosoftStickyNotes', 'Microsoft.OutlookForWindows',
-    'Microsoft.People', 'Microsoft.PowerAutomateDesktop', 'Microsoft.Todos', 'Microsoft.Windows.DevHome',
-    'Microsoft.WindowsAlarms', 'Microsoft.WindowsCamera', 'Microsoft.WindowsFeedbackHub', 'Microsoft.WindowsMaps',
-    'Microsoft.WindowsSoundRecorder', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxGamingOverlay',
-    'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone', 'Microsoft.ZuneMusic', 'Microsoft.ZuneVideo',
-    'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist', 'MSTeams',
-    'microsoft.windowscommunicationsapps'
+    'Microsoft.GetHelp', 'Microsoft.Getstarted', 'Microsoft.Microsoft3DViewer', 'Microsoft.MicrosoftOfficeHub',
+    'Microsoft.MicrosoftSolitaireCollection', 'Microsoft.MicrosoftStickyNotes', 'Microsoft.MixedReality.Portal',
+    'Microsoft.MSPaint', 'Microsoft.Office.OneNote', 'Microsoft.OutlookForWindows', 'Microsoft.Paint',
+    'Microsoft.People', 'Microsoft.PowerAutomateDesktop', 'Microsoft.ScreenSketch', 'Microsoft.SkypeApp',
+    'Microsoft.Todos', 'Microsoft.Wallet', 'Microsoft.Windows.DevHome', 'Microsoft.WindowsAlarms',
+    'Microsoft.WindowsCamera', 'Microsoft.WindowsFeedbackHub', 'Microsoft.WindowsMaps', 'Microsoft.WindowsNotepad',
+    'Microsoft.WindowsSoundRecorder', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxApp', 'Microsoft.XboxGameOverlay',
+    'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone', 'Microsoft.ZuneMusic',
+    'Microsoft.ZuneVideo', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
+    'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps'
 )
 Get-AppxProvisionedPackage -Online | Where-Object { $bloat -contains $_.DisplayName } | ForEach-Object {
     Write-Output "removendo $($_.DisplayName)"
     Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName | Out-Null
 }
 
-# Outlook e Dev Home ficam agendados para instalar depois do OOBE; tirar o agendamento.
+# --- Capacidades (recursos sob demanda) ---
+$capacidades = @(
+    'App.StepsRecorder', 'App.Support.QuickAssist', 'Browser.InternetExplorer', 'Hello.Face.18967', 'Hello.Face.20134',
+    'Hello.Face.Migration.18967', 'Language.Handwriting', 'Language.Speech', 'Language.TextToSpeech', 'MathRecognizer',
+    'Media.WindowsMediaPlayer', 'Microsoft.Windows.MSPaint', 'Microsoft.Windows.PowerShell.ISE',
+    'Microsoft.Windows.SnippingTool', 'Microsoft.Windows.WordPad', 'OneCoreUAP.OneSync', 'OpenSSH.Client', 'Print.Fax.Scan'
+)
+Get-WindowsCapability -Online | Where-Object { $_.State -notin 'NotPresent', 'Removed' -and $capacidades -contains ($_.Name -split '~')[0] } | ForEach-Object {
+    Write-Output "removendo capacidade $($_.Name)"
+    Remove-WindowsCapability -Online -Name $_.Name -ErrorAction Continue | Out-Null
+}
+
+# --- Recursos opcionais: PowerShell 2.0, cliente de Área de Trabalho Remota (mstsc), Recall, Captura ---
+# MediaPlayback fica: jogos e apps usam para vídeo.
+foreach ($f in 'MicrosoftWindowsPowerShellV2Root', 'Microsoft-RemoteDesktopConnection', 'Recall', 'Microsoft-SnippingTool') {
+    Disable-WindowsOptionalFeature -Online -FeatureName $f -Remove -NoRestart -ErrorAction SilentlyContinue | Out-Null
+}
+
+# Outlook e Dev Home ficam agendados para instalar depois do OOBE; tirar o agendamento. Teams idem.
 foreach ($k in 'OutlookUpdate', 'DevHomeUpdate') {
     Remove-Item -LiteralPath "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\$k" -Force -ErrorAction SilentlyContinue
 }
+Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Communications' 'ConfigureChatAutoInstall' 0
 
-# Recall (só existe em Copilot+ PC; inofensivo aqui)
-Disable-WindowsOptionalFeature -Online -FeatureName 'Recall' -NoRestart -ErrorAction SilentlyContinue | Out-Null
+# Sem o Bloco de Notas, "Novo > Documento de Texto" continua existindo
+reg.exe add "HKCR\txtfilelegacy" /ve /t REG_SZ /d "Text Document" /f | Out-Null
+reg.exe add "HKCR\txtfilelegacy" /v FriendlyTypeName /t REG_EXPAND_SZ /d "@C:\Windows\system32\notepad.exe,-469" /f | Out-Null
+reg.exe add "HKCR\.txt\ShellNew" /v ItemName /t REG_EXPAND_SZ /d "@C:\Windows\system32\notepad.exe,-470" /f | Out-Null
+reg.exe add "HKCR\.txt\ShellNew" /v NullFile /t REG_SZ /f | Out-Null
 
 # --- OneDrive: desinstala e tira do autostart do perfil padrão ---
 foreach ($exe in "$env:SystemRoot\System32\OneDriveSetup.exe", "$env:SystemRoot\SysWOW64\OneDriveSetup.exe") {
     if (Test-Path -LiteralPath $exe) { Start-Process -FilePath $exe -ArgumentList '/uninstall' -Wait }
 }
+Remove-Item -LiteralPath 'C:\Users\Default\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\OneDrive.lnk' -Force -ErrorAction SilentlyContinue
 reg.exe load HKU\DefaultUser C:\Users\Default\NTUSER.DAT | Out-Null
 reg.exe delete "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Run" /v OneDriveSetup /f 2>$null
 reg.exe unload HKU\DefaultUser | Out-Null
@@ -275,13 +302,41 @@ Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot'         'Turn
 Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh'                            'AllowNewsAndInterests'          0
 Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo'        'DisabledByGroupPolicy'          1
 Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'                           'HideFirstRunExperience'         1
+Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\Recommended'               'BackgroundModeEnabled'          0
+Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\Recommended'               'StartupBoostEnabled'            0
 Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'       'NoAutoRebootWithLoggedOnUsers'  1
 
-# --- Sistema ---
-Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power'     'HiberbootEnabled'               0   # inicialização rápida desligada
-Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'                'LongPathsEnabled'               1
+# Edge desinstalável (política regional que a Microsoft aplica na Europa)
+try {
+    $arq = 'C:\Windows\System32\IntegratedServicesRegionPolicySet.json'
+    $o = Get-Content -LiteralPath $arq -Encoding UTF8 | ConvertFrom-Json
+    $o.policies | Where-Object { $_.guid -eq '{1bca278a-5d11-4acf-ad2f-f9ab6d7f93a6}' } | ForEach-Object { $_.defaultState = 'enabled' }
+    $o | ConvertTo-Json -Depth 9 | Out-File -LiteralPath $arq -Encoding UTF8
+} catch { Write-Output "Edge desinstalável: $_" }
 
-# Plano de energia "Alto desempenho"
+# Menu Iniciar sem nada fixado
+Set-Reg 'HKLM:\SOFTWARE\Microsoft\PolicyManager\current\device\Start' 'ConfigureStartPins' '{"pinnedList":[]}' 'String'
+
+# --- Segurança que atrapalha: UAC sem perguntar (mantendo o LUA, senão apps da Loja não abrem),
+# Smart App Control e SmartScreen desligados, ícone da Segurança do Windows escondido ---
+$sys = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+Set-Reg $sys 'ConsentPromptBehaviorAdmin' 0
+Set-Reg $sys 'PromptOnSecureDesktop'      0
+Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy'                 'VerifiedAndReputablePolicyState' 0
+Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer'         'SmartScreenEnabled'  'Off' 'String'
+$wtds = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WTDS\Components'
+foreach ($n in 'ServiceEnabled', 'NotifyMalicious', 'NotifyPasswordReuse', 'NotifyUnsafeApp') { Set-Reg $wtds $n 0 }
+Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Systray' 'HideSystray' 1
+
+# --- Sistema ---
+Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power'     'HiberbootEnabled' 0   # inicialização rápida desligada
+Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'                'LongPathsEnabled' 1
+Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\BootAnimation' 'DisableStartupSound' 1
+Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\EditionOverrides' 'UserSetting_DisableStartupSound' 1
+net.exe accounts /maxpwage:unlimited | Out-Null
+net.exe accounts /lockoutthreshold:0 | Out-Null
+
+# Plano de energia "Alto desempenho" já no primeiro boot; o setup.ps1 troca para Desempenho Máximo
 $alto = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
 powercfg.exe /setactive $alto 2>$null
 if ($LASTEXITCODE -ne 0) {
@@ -294,22 +349,20 @@ exit 0
 ]]></File>
 
     <File path="C:\Windows\Setup\Scripts\primeiro-logon.ps1" pass="specialize"><![CDATA[
-# Roda uma vez, no primeiro logon do alexandre, elevado.
-# 1. deixa o login automático permanente (o do autounattend vale para um logon só)
-# 2. cria mywiniso-setup.cmd na área de trabalho, para rodar o setup de novo quando quiser
-# 3. baixa o setup.ps1 do repositório e roda: é ele que instala os programas
+# Roda uma vez, no primeiro logon do Alexandre, elevado.
+# 1. deixa mywiniso-setup.cmd na área de trabalho, para rodar o setup de novo quando quiser
+# 2. baixa o setup.ps1 do repositório e roda: é ele que instala e configura tudo
+# 3. apaga as cópias do arquivo de resposta que o Setup deixa em C:\Windows\Panther
+# O login automático é permanente pelo próprio autounattend (LogonCount alto); nada a fazer aqui.
+
+$Senha = ''   # preenchido pelo pendrive.ps1 -Senha; vai para o setup.ps1 em MYWINISO_SENHA (root do MariaDB)
 
 $ErrorActionPreference = 'Continue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Start-Transcript -Path (Join-Path $env:USERPROFILE 'mywiniso.log') -Append | Out-Null
 
 $raw = 'https://raw.githubusercontent.com/eualexandrerrr/mywiniso/main'
-
-$wl = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
-Set-ItemProperty -LiteralPath $wl -Name 'AutoAdminLogon'  -Value '1'           -Type String
-Set-ItemProperty -LiteralPath $wl -Name 'DefaultUserName' -Value $env:USERNAME -Type String
-Set-ItemProperty -LiteralPath $wl -Name 'DefaultPassword' -Value ''            -Type String
-Remove-ItemProperty -LiteralPath $wl -Name 'AutoLogonCount' -ErrorAction SilentlyContinue
+$env:MYWINISO_SENHA = $Senha
 
 $desktop = [Environment]::GetFolderPath('Desktop')
 $cmd = "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -Command `"irm $raw/setup.ps1 | iex`"`r`npause`r`n"
@@ -323,13 +376,13 @@ for ($i = 0; $i -lt 60 -and -not $ok; $i++) {          # até 5 minutos esperand
         $ok = $true
     } catch { Start-Sleep -Seconds 5 }
 }
-if (-not $ok) {
+if ($ok) {
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File $destino
+} else {
     Write-Warning "Sem internet: não baixei o setup.ps1. Quando tiver rede, rode mywiniso-setup.cmd na área de trabalho."
-    Stop-Transcript | Out-Null
-    exit 0
 }
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File $destino
+Remove-Item -LiteralPath 'C:\Windows\Panther\unattend.xml', 'C:\Windows\Panther\unattend-original.xml' -Force -ErrorAction SilentlyContinue
 Stop-Transcript | Out-Null
 exit 0
 ]]></File>

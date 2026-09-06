@@ -1,8 +1,11 @@
 <#
   Coloca o autounattend.xml no pendrive SEM formatar e SEM mexer nas ISOs que já estão lá.
 
-    powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E:              # letra do pendrive
-    powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: win11.iso    # mais de uma ISO: diga qual
+    powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: -Senha 123          # letra do pendrive
+    powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: win11.iso -Senha 123 # mais de uma ISO: diga qual
+
+  -Senha vira a senha da conta Alexandre (e do root do MariaDB) só na cópia do XML gravada no pendrive;
+  o autounattend.xml do repositório continua sem senha. Sem -Senha a conta fica sem senha e o RDP não entra.
 
   Dois tipos de pendrive são aceitos:
     Ventoy             copia autounattend.xml e ventoy.json para \ventoy, apontando para a ISO do Windows
@@ -13,7 +16,8 @@
 #>
 param(
     [Parameter(Mandatory = $true)] [string] $Letra,
-    [string] $Iso
+    [string] $Iso,
+    [string] $Senha
 )
 $ErrorActionPreference = 'Stop'
 
@@ -24,6 +28,16 @@ function Test-Idioma([string] $LangIni) {
         throw "a mídia não tem pt-BR (sources\lang.ini). Baixe a ISO em Português (Brasil) ou troque os 'pt-BR' do autounattend.xml."
     }
     Write-Host 'idioma: pt-BR ok'
+}
+
+# Preenche a senha nos dois <Value></Value> (conta e autologon) e no $Senha do primeiro-logon.ps1.
+function Set-SenhaXml([string] $Texto, [string] $Senha) {
+    if (-not $Senha) { return $Texto }
+    $xml = [System.Security.SecurityElement]::Escape($Senha)
+    $ps  = $Senha.Replace("'", "''")
+    $Texto = $Texto.Replace('<Value></Value>', "<Value>$xml</Value>")
+    $Texto = $Texto.Replace("`$Senha = ''", "`$Senha = '$ps'")
+    return $Texto
 }
 
 # ventoy.json: preserva o que já existe no pendrive e só troca a entrada auto_install desta ISO.
@@ -48,8 +62,9 @@ $disco = Get-Disk -Number $part.DiskNumber
 if ($disco.BusType -ne 'USB') { throw "$raiz não é USB ($($disco.BusType)); me recuso a mexer" }
 Write-Host ("pendrive: {0}, {1} GB" -f $disco.FriendlyName, [math]::Round($disco.Size / 1GB))
 
-$xml = Join-Path $PSScriptRoot 'autounattend.xml'
+$xmlTexto = Set-SenhaXml (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'autounattend.xml') -Raw) $Senha
 $modelo = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'ventoy\ventoy.json') -Raw
+if (-not $Senha) { Write-Warning 'sem -Senha: a conta fica sem senha e a Área de Trabalho Remota não aceita login.' }
 
 $ehVentoy = [bool](Get-Partition -DiskNumber $disco.Number |
     ForEach-Object { Get-Volume -Partition $_ -ErrorAction SilentlyContinue } |
@@ -82,7 +97,7 @@ if ($ehVentoy) {
     }
 
     New-Item -ItemType Directory -Path "$raiz\ventoy" -Force | Out-Null
-    Copy-Item -LiteralPath $xml -Destination "$raiz\ventoy\autounattend.xml" -Force
+    [System.IO.File]::WriteAllText("$raiz\ventoy\autounattend.xml", $xmlTexto, [System.Text.UTF8Encoding]::new($false))
     $destino = "$raiz\ventoy\ventoy.json"
     $existente = $null
     if (Test-Path -LiteralPath $destino) {
@@ -97,7 +112,7 @@ if ($ehVentoy) {
 } elseif (Test-Path -LiteralPath "$raiz\sources\boot.wim") {
     Write-Host 'pendrive com o Windows extraído detectado'
     Test-Idioma "$raiz\sources\lang.ini"
-    Copy-Item -LiteralPath $xml -Destination "$raiz\autounattend.xml" -Force
+    [System.IO.File]::WriteAllText("$raiz\autounattend.xml", $xmlTexto, [System.Text.UTF8Encoding]::new($false))
     Write-Host 'gravado: \autounattend.xml (o Setup procura na raiz da mídia removível)'
 
 } else {
