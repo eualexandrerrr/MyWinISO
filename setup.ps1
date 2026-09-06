@@ -6,19 +6,20 @@
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
 
-  O console mostra cada etapa como [n/18], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
+  O console mostra cada etapa como [n/19], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
   listados) ou ERRO (a etapa parou; a mensagem aparece). Nenhuma etapa derruba as seguintes. No final sai um
   resumo de todas as etapas e dos programas que falharam. Tudo vai também para ~\mywiniso-setup.log.
 
-   1. garante que o winget funciona          10. Área de Trabalho Remota e política de senha
-   2. Git e clone em ~\Projetos\mywiniso     11. energia: Desempenho Máximo, nunca suspender
-   3. programas do apps.json, um a um        12. NVIDIA App (instalador silencioso)
-   4. RedM na área de trabalho               13. MariaDB: serviço e root
-   5. git config                             14. fonte Cascadia Mono, console e VS Code
-   6. preferências do usuário                15. perfil do PowerShell
-   7. Explorer em Detalhes (WinSetView)      16. barra de tarefas e tarefa de logon
-   8. Office                                 17. WSL com Debian
-   9. wallpaper                              18. Windows Update (drivers)
+   1. garante que o winget funciona          11. Área de Trabalho Remota e política de senha
+   2. Git e clone em ~\Projetos\mywiniso     12. energia: Desempenho Máximo, nunca suspender
+   3. programas do apps.json, um a um        13. NVIDIA App (instalador silencioso)
+   4. RedM na área de trabalho               14. MariaDB: serviço e root
+   5. git config                             15. fonte Cascadia Mono, console e VS Code
+   6. preferências do usuário                16. perfil do PowerShell
+   7. Explorer em Detalhes (WinSetView)      17. barra de tarefas e tarefa de logon
+   8. Windhawk: tema Translucent             18. WSL com Debian
+   9. Office                                 19. Windows Update (drivers)
+  10. wallpaper
 #>
 param([string] $Senha = $env:MYWINISO_SENHA)
 
@@ -49,7 +50,7 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$TotalEtapas = 18
+$TotalEtapas = 19
 $NumEtapa    = 0
 $Resultado   = New-Object System.Collections.Generic.List[object]
 $Falhas      = New-Object System.Collections.Generic.List[string]
@@ -400,7 +401,73 @@ Etapa 'Explorer em Detalhes (WinSetView)' {
     Passo 'aplicado; o Explorer foi reiniciado'
 }
 
-# --- 8. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) ------------------------
+# --- 8. Windhawk: barra, Iniciar e central de notificações translúcidos, menus escuros, sem bordas --------
+# Windhawk (winget) mais 5 mods, sem abrir a interface: desde o 1.7 os mods vêm precompilados de mods.windhawk.net e o
+# motor lê HKLM\SOFTWARE\Windhawk\Engine\Mods\<id> e carrega o mod na hora, em todos os processos já injetados. Os temas
+# Translucent (Undisputed00x) já vêm dentro dos Styler do m417z; só o setting "theme" precisa ser gravado. Cada mod:
+# .wh.cpp em ModsSource (a interface lista por ele), a DLL em Engine\Mods\<bits>, e a chave com Include/Exclude/
+# Architecture/Version/Settings; LibraryFileName por último, porque é ele que dispara a carga.
+Etapa 'Windhawk: tema Translucent' {
+    winget.exe install --id RamenSoftware.Windhawk --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189) { throw "winget não instalou o Windhawk (código $LASTEXITCODE)" }
+    $wh = Join-Path $env:ProgramFiles 'Windhawk'
+    if (-not (Test-Path -LiteralPath (Join-Path $wh 'windhawk.exe'))) { throw "não achei $wh\windhawk.exe" }
+    $pd = Join-Path $env:ProgramData 'Windhawk'
+    foreach ($d in 'ModsSource', 'Engine\Mods\64', 'Engine\Mods\32') { New-Item -ItemType Directory -Path (Join-Path $pd $d) -Force | Out-Null }
+    # bibliotecas que a interface copiaria na primeira abertura; as DLLs precompiladas dos Styler dependem delas
+    foreach ($alvo in @(@{ dir = 'x86_64-w64-mingw32'; bits = '64' }, @{ dir = 'i686-w64-mingw32'; bits = '32' })) {
+        $bin = Join-Path $wh "Compiler\$($alvo.dir)\bin"
+        foreach ($par in @(@('libc++.dll', 'libc++.whl'), @('libunwind.dll', 'libunwind.whl'), @('windhawk-mod-shim.dll', 'windhawk-mod-shim.dll'))) {
+            $src = Join-Path $bin $par[0]; $dst = Join-Path $pd "Engine\Mods\$($alvo.bits)\$($par[1])"
+            if ((Test-Path -LiteralPath $src) -and -not (Test-Path -LiteralPath $dst)) { Copy-Item -LiteralPath $src -Destination $dst -Force }
+        }
+    }
+    $mods = @(
+        @{ id = 'windows-11-taskbar-styler';             settings = @{ theme = 'TranslucentTaskbar'; xamlDiagnosticsHandling = 'block' } },
+        @{ id = 'windows-11-start-menu-styler';          settings = @{ theme = 'TranslucentStartMenu' } },
+        @{ id = 'windows-11-notification-center-styler'; settings = @{ theme = 'TranslucentShell' } },
+        @{ id = 'dark-menus';                            settings = @{} },
+        @{ id = 'invisible-borders';                     settings = @{} }
+    )
+    foreach ($m in $mods) {
+        $id  = $m.id
+        $src = Join-Path $pd "ModsSource\$id.wh.cpp"
+        Baixar "https://raw.githubusercontent.com/ramensoftware/windhawk-mods/main/mods/$id.wh.cpp" $src
+        $meta = @{}
+        foreach ($l in (Get-Content -LiteralPath $src -Encoding UTF8 -TotalCount 80)) {
+            if ($l -match '^//\s*==/WindhawkMod==') { break }
+            if ($l -match '^//\s*@(\w+)\s+(.+?)\s*$') { $meta[$Matches[1]] = @($meta[$Matches[1]]) + $Matches[2] }
+        }
+        $ver  = "$($meta['version'])".Trim()
+        $arch = "$($meta['architecture'])".Trim()
+        if (-not $ver) { throw "${id}: não achei @version no .wh.cpp" }
+        $inc  = @($meta['include'] | Where-Object { $_ }) -join '|'
+        $exc  = @($meta['exclude'] | Where-Object { $_ }) -join '|'
+        $k    = "HKLM:\SOFTWARE\Windhawk\Engine\Mods\$id"
+        $dll  = (Get-ItemProperty -LiteralPath $k -Name LibraryFileName -ErrorAction Ignore).LibraryFileName
+        $verAntes = (Get-ItemProperty -LiteralPath $k -Name Version -ErrorAction Ignore).Version
+        if (-not $dll -or $verAntes -ne $ver) {
+            $dll  = "${id}_${ver}_$(Get-Random -Minimum 100000 -Maximum 999999).dll"
+            $bits = if ($arch -eq 'x86-64') { @('64') } else { @('64', '32') }
+            foreach ($b in $bits) { Baixar "https://mods.windhawk.net/mods/$id/${ver}_$b.dll" (Join-Path $pd "Engine\Mods\$b\$dll") }
+        } else { Passo "$id $ver já registrado; só conferindo settings" }
+        Set-Reg $k 'Include'      $inc  'String'
+        Set-Reg $k 'Exclude'      $exc  'String'
+        Set-Reg $k 'Architecture' $arch 'String'
+        Set-Reg $k 'Version'      $ver  'String'
+        Set-Reg $k 'Disabled'     0
+        foreach ($nome in $m.settings.Keys) { Set-Reg "$k\Settings" $nome $m.settings[$nome] 'String' }
+        Set-Reg $k 'SettingsChangeTime' ([int]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -band 0x7fffffff))
+        Set-Reg $k 'LibraryFileName' $dll 'String'
+        Passo ("{0} {1}: {2}{3}" -f $id, $ver, $(if ($m.settings.theme) { "tema $($m.settings.theme)" } else { 'ativo' }), $(if ($inc) { " em $inc" } else { '' }))
+    }
+    # serviço e ícone da bandeja; o instalador silencioso pode não subir os dois na hora
+    Start-Service -Name Windhawk -ErrorAction SilentlyContinue
+    if (-not (Get-Process -Name windhawk -ErrorAction SilentlyContinue)) { Start-Process -FilePath (Join-Path $wh 'windhawk.exe') -ArgumentList '-tray-only' }
+    Passo "serviço Windhawk: $((Get-Service -Name Windhawk -ErrorAction SilentlyContinue).Status)"
+}
+
+# --- 9. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) ------------------------
 Etapa 'Office' {
     $odt = Join-Path $env:TEMP 'odt'
     New-Item -ItemType Directory -Path $odt -Force | Out-Null
@@ -412,7 +479,7 @@ Etapa 'Office' {
     Passo 'instalado'
 }
 
-# --- 9. Wallpaper nos dois monitores e na tela de bloqueio ------------------------------------------
+# --- 10. Wallpaper nos dois monitores e na tela de bloqueio ------------------------------------------
 Etapa 'Wallpaper' {
     $wallDir = Join-Path $env:SystemRoot 'Web\Wallpaper\mywiniso'     # legível pelo SYSTEM, que desenha a tela de bloqueio
     New-Item -ItemType Directory -Path $wallDir -Force | Out-Null
@@ -431,7 +498,7 @@ Etapa 'Wallpaper' {
     Set-Reg $csp 'LockScreenImageStatus' 1
 }
 
-# --- 10. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados ----------
+# --- 11. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados ----------
 Etapa 'Área de Trabalho Remota e contas' {
     Passo 'RDP ligado com autenticação de rede; regra de firewall'
     Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' 'fDenyTSConnections' 0
@@ -444,7 +511,7 @@ Etapa 'Área de Trabalho Remota e contas' {
     Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force
 }
 
-# --- 11. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação ----------
+# --- 12. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação ----------
 Etapa 'Energia' {
     # Desempenho Máximo (Ultimate Performance) vem oculto no Windows 11; /duplicatescheme cria uma cópia visível.
     # Se a cópia já existe (segunda execução), reaproveita em vez de criar outra.
@@ -466,7 +533,7 @@ Etapa 'Energia' {
     Passo ((powercfg.exe /getactivescheme) -join ' ')
 }
 
-# --- 12. NVIDIA App (não está no winget; instalador silencioso com /s) -----------------------------
+# --- 13. NVIDIA App (não está no winget; instalador silencioso com /s) -----------------------------
 Etapa 'NVIDIA App' {
     $url = 'https://us.download.nvidia.com/nvapp/client/11.0.9.251/NVIDIA_app_v11.0.9.251.exe'   # reserva, caso a página mude
     try {
@@ -482,7 +549,7 @@ Etapa 'NVIDIA App' {
     if ($p.ExitCode -ne 0) { throw "instalador da NVIDIA saiu com código $($p.ExitCode); instale pelo nvidia.com" }
 }
 
-# --- 13. MariaDB: serviço automático, root com a senha da conta e acesso remoto --------------------
+# --- 14. MariaDB: serviço automático, root com a senha da conta e acesso remoto --------------------
 Etapa 'MariaDB' {
     $maria = Get-ChildItem -Path 'C:\Program Files\MariaDB*' -Directory -ErrorAction Ignore | Select-Object -First 1
     if (-not $maria) { throw 'não instalado (MariaDB.Server falhou no winget?)' }
@@ -512,7 +579,7 @@ Etapa 'MariaDB' {
     }
 }
 
-# --- 14. Fonte Cascadia Mono (máquina), console e VS Code --------------------------------------------
+# --- 15. Fonte Cascadia Mono (máquina), console e VS Code --------------------------------------------
 Etapa 'Cascadia Mono, console e VS Code' {
     $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/cascadia-code/releases/latest' -Headers @{ 'User-Agent' = 'PowerShell' }
     $asset = $rel.assets | Where-Object { $_.name -like 'CascadiaCode-*.zip' } | Select-Object -First 1
@@ -557,7 +624,7 @@ Etapa 'Cascadia Mono, console e VS Code' {
     Passo "VS Code: $vsArq"
 }
 
-# --- 15. Perfil do PowerShell (powershell\profile.ps1) ----------------------------------------------
+# --- 16. Perfil do PowerShell (powershell\profile.ps1) ----------------------------------------------
 Etapa 'Perfil do PowerShell' {
     $docs = [Environment]::GetFolderPath('MyDocuments')
     New-Item -ItemType Directory -Path (Join-Path $docs 'PowerShell'), (Join-Path $docs 'WindowsPowerShell') -Force | Out-Null
@@ -566,7 +633,7 @@ Etapa 'Perfil do PowerShell' {
     Passo "$docs\PowerShell\profile.ps1 (o do Windows PowerShell aponta para ele)"
 }
 
-# --- 16. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" --------------
+# --- 17. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" --------------
 Etapa 'Barra de tarefas e tarefa de logon' {
     $layout = Join-Path $aqui 'taskbar\LayoutModification.xml'
     foreach ($shell in (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Shell'), 'C:\Users\Default\AppData\Local\Microsoft\Windows\Shell') {
@@ -592,7 +659,7 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     Stop-Process -Name explorer -Force -ErrorAction Ignore
 }
 
-# --- 17. WSL com Debian (wsl\debian.sh configura por dentro) ---------------------------------------
+# --- 18. WSL com Debian (wsl\debian.sh configura por dentro) ---------------------------------------
 Etapa 'WSL com Debian' {
     wsl.exe --status 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
@@ -616,7 +683,7 @@ Etapa 'WSL com Debian' {
     }
 }
 
-# --- 18. Drivers e atualizações pelo Windows Update ------------------------------------------------
+# --- 19. Drivers e atualizações pelo Windows Update ------------------------------------------------
 Etapa 'Windows Update (drivers)' {
     Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null
     Set-PSRepository -Name PSGallery -InstallationPolicy Trusted

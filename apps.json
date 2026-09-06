@@ -20,7 +20,6 @@
         { "PackageIdentifier": "Famatech.RadminVPN" },
         { "PackageIdentifier": "RARLab.WinRAR" },
         { "PackageIdentifier": "WinSCP.WinSCP" },
-        { "PackageIdentifier": "CharlesMilette.TranslucentTB" },
 
         { "PackageIdentifier": "Microsoft.PowerShell" },
         { "PackageIdentifier": "DEVCOM.JetBrainsMonoNerdFont" },
