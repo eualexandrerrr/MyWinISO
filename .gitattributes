@@ -8,3 +8,7 @@ wsl.conf  text eol=lf
 *.jpg     binary
 *.exe     binary
 *.dll     binary
+# tema do Ventoy: o GRUB le o theme.txt com LF; fontes e imagens sao binarias
+ventoy/theme/**/theme.txt  text eol=lf
+*.pf2     binary
+*.png     binary
