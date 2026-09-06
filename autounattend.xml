@@ -420,7 +420,7 @@ Faz 'OneDrive: desinstalar' {
     Remove-Item -LiteralPath 'C:\Users\Default\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\OneDrive.lnk' -Force -ErrorAction Ignore
 }
 
-Faz 'Perfil padrão (a conta nasce assim): tema escuro, barra à esquerda sem busca, extensões visíveis, sem OneDrive e Copilot' {
+Faz 'Perfil padrão (a conta nasce assim): tema escuro, barra centralizada e só no monitor principal, sem busca, extensões visíveis, teclado rápido, sem OneDrive e Copilot' {
     Reg 'load HKU\DefaultUser C:\Users\Default\NTUSER.DAT'
     try {
         Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v AppsUseLightTheme /t REG_DWORD /d 0 /f'
