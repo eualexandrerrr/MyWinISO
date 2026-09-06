@@ -15,9 +15,9 @@ arquivo de resposta (`autounattend.xml`) que o instalador segue sozinho.
 
 ---
 
-> **Apaga o disco inteiro.** O alvo é o Corsair MP700 ELITE (serial `AA09B5211012T9`), que hoje
-> tem o Arch e a VM `w11`. O script só particiona se achar exatamente esse disco; qualquer outro
-> cenário aborta antes de gravar. Mesmo assim: backup antes.
+> **Apaga o disco inteiro.** O alvo é o Corsair MP700 ELITE (serial `AA09B5211012T9`).
+> O script só particiona se achar exatamente esse disco; qualquer outro cenário aborta antes
+> de gravar. Mesmo assim: backup antes.
 
 ## O que acontece ao ligar o PC com o pendrive
 
@@ -43,22 +43,25 @@ na hora, então o pendrive não envelhece quando a lista de programas muda.
 | `autounattend.xml` | fonte de verdade da instalação: disco, idioma, conta, bloatware, primeiro logon |
 | `setup.ps1` | pós-instalação; roda em qualquer Windows 11, não só no instalado pelo pendrive |
 | `apps.json` | lista do `winget import`; gerar uma nova com `winget export -o apps.json` |
-| `ventoy/ventoy.json` | plugin `auto_install` do Ventoy; o `pendrive.sh` troca o caminho da ISO |
-| `pendrive.sh` | grava o XML no pendrive sem formatar e sem tocar nas ISOs que já estão lá |
+| `ventoy/ventoy.json` | plugin `auto_install` do Ventoy; o `pendrive.ps1` troca o caminho da ISO |
+| `pendrive.ps1` | grava o XML no pendrive sem formatar e sem tocar nas ISOs que já estão lá |
 
 ## Fazer o pendrive
 
 O pendrive já tem a ISO do Windows 11 em Português (Brasil). O script não formata nada.
+PowerShell como administrador, com o pendrive na letra `E:`, por exemplo:
 
-```sh
-sudo ./pendrive.sh /dev/sdX            # uma ISO só no pendrive
-sudo ./pendrive.sh /dev/sdX win11.iso  # mais de uma: diga qual
+```powershell
+powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E:              # uma ISO só no pendrive
+powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: win11.iso    # mais de uma: diga qual
 ```
 
-- **Ventoy**: copia `autounattend.xml` e `ventoy.json` para `/ventoy`. Um `ventoy.json` que já exista
+- **Ventoy**: copia `autounattend.xml` e `ventoy.json` para `\ventoy`. Um `ventoy.json` que já exista
   é preservado (cópia em `.bak`) e só a entrada desta ISO é trocada.
-- **Windows extraído** (Rufus, dd): copia `autounattend.xml` para a raiz, que é onde o Setup procura.
-- O script confere `sources/lang.ini` e para se a ISO não tiver pt-BR.
+- **Windows extraído** (Rufus, Media Creation Tool): copia `autounattend.xml` para a raiz, que é onde o Setup procura.
+- O script monta a ISO, confere `sources\lang.ini` e para se não tiver pt-BR.
+- Pendrive novo: baixe o [Ventoy](https://www.ventoy.net), rode o `Ventoy2Disk.exe` (GPT, Secure Boot ligado),
+  copie a ISO e rode o script. Isso sim apaga o pendrive.
 
 Secure Boot: o Ventoy pede para registrar a chave dele na primeira vez (MokManager, *Enroll key from
 disk*, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). Ou desligue o Secure Boot na UEFI só para a instalação.
@@ -67,11 +70,11 @@ disk*, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). Ou desligue o Secure Boot na UEFI s
 
 | | Valor | Onde mudar |
 |:--|:--|:--|
-| Disco | serial `AA09B5211012T9` ou modelo `MP700 ELITE` | `$Serial` e `$Modelo` no `disco.ps1`, dentro do XML. `lsblk -o MODEL,SERIAL` no Linux, `Get-Disk` no Windows |
+| Disco | serial `AA09B5211012T9` ou modelo `MP700 ELITE` | `$Serial` e `$Modelo` no `disco.ps1`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
 | Edição | Pro, pela chave genérica pública `VK7JG-…`, que só escolhe a edição | `<ProductKey>`; Home é `YTMG3-N6DKC-DKB77-7M9GH-8HVX7` |
 | Ativação | licença digital gravada na placa-mãe; sem chave nenhuma o Setup pararia para perguntar a edição | |
 | ISO | Windows 11 em Português (Brasil), da Microsoft | |
-| Conta | `alexandre`, administrador, **sem senha**, login automático como o `sddm` faz hoje | `<LocalAccount>` e `<AutoLogon>`; se puser senha depois, atualize `DefaultPassword` no Winlogon ou o autologin para |
+| Conta | `alexandre`, administrador, **sem senha**, login automático | `<LocalAccount>` e `<AutoLogon>`; se puser senha depois, atualize `DefaultPassword` no Winlogon ou o autologin para |
 | PC | nome `RRR`, fuso `E. South America Standard Time`, teclado ABNT2 (`0416:00010416`) | `specialize` e `oobeSystem` |
 | Bloatware | lista em `especializar.ps1`; ficam Loja, App Installer, Calculadora, Fotos, Bloco de Notas, Paint, Captura, Terminal | |
 
@@ -90,7 +93,6 @@ O `primeiro-logon.ps1` deixa um `mywiniso-setup.cmd` na área de trabalho que fa
 - **NVIDIA App** não está no winget; o driver vem pelo Windows Update no passo 7. Baixe o app em nvidia.com.
 - **RedM.exe** fica na área de trabalho; o instalador dele não tem modo silencioso.
 - **AtlasOS** é opcional: aplique o playbook por cima, se quiser os tweaks de jogo.
-- Insync e Maestro não existem no winget; Google Drive oficial entra no lugar do Insync.
 
 ## Se algo der errado
 

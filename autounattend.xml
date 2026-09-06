@@ -165,7 +165,7 @@ foreach ($file in $Document.GetElementsByTagName('File')) {
 # Procura o disco alvo pelo serial ou pelo modelo. Só particiona se achar EXATAMENTE um; senão aborta
 # e o Setup para com erro, sem ter apagado nada. Pendrives nunca são candidatos.
 
-$Serial = 'AA09B5211012T9'      # lsblk -o MODEL,SERIAL no Linux, Get-Disk no Windows
+$Serial = 'AA09B5211012T9'      # Get-Disk | Select-Object FriendlyName, SerialNumber
 $Modelo = 'MP700 ELITE'
 
 $log = 'X:\mywiniso\disco.log'
@@ -281,7 +281,7 @@ Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'       'NoAu
 Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power'     'HiberbootEnabled'               0   # inicialização rápida desligada
 Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'                'LongPathsEnabled'               1
 
-# Plano de energia "Alto desempenho" (equivalente ao power-profiles-daemon em performance)
+# Plano de energia "Alto desempenho"
 $alto = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
 powercfg.exe /setactive $alto 2>$null
 if ($LASTEXITCODE -ne 0) {
