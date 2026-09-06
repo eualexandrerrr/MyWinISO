@@ -880,8 +880,20 @@ Etapa 'Windhawk: tema Translucent' {
             } },
         @{ id = 'windows-11-start-menu-styler';          settings = @{ theme = 'TranslucentStartMenu' } },
         @{ id = 'windows-11-notification-center-styler'; settings = @{ theme = 'TranslucentShell' } },
-        # sem styler para o Explorer, de propósito: o Translucent Explorer11 deixa as janelas de pasta num
-        # cinza lavado por cima do wallpaper. O escuro padrão do Windows fica.
+        # Explorer e Configurações no mesmo Translucent escuro da barra. São dois mods que só funcionam
+        # juntos, e o FAQ do próprio autor diz isso: o file-explorer-styler deixa transparente a parte WinUI
+        # do Explorer, e o translucent-windows põe o desfoque escuro por trás de toda janela (Win32 e WinUI,
+        # Configurações incluída). O styler sozinho é o "cinza lavado" que apareceu na primeira tentativa:
+        # WinUI transparente sobre o fundo chapado do Win32. O tint é o mesmo da barra, $TaskbarTint.
+        @{ id = 'translucent-windows';                   settings = [ordered]@{
+                'RenderingMod.ThemeBackground'       = '1'
+                'RenderingMod.SysColors'             = '0'
+                'RenderingMod.AccentColorControls'   = '1'
+                'BackgroundEffects.type'             = 'acrylicblur'
+                'BackgroundEffects.AccentBlurBehind' = $TaskbarTint.TrimStart('#')
+                'FlyoutsEffects'                     = '1'
+            } },
+        @{ id = 'windows-11-file-explorer-styler';       settings = @{ theme = 'Translucent Explorer11' } },
         @{ id = 'taskbar-thumbnail-reorder';             settings = @{} },   # arrastar a miniatura da barra com o botão esquerdo
         @{ id = 'dark-menus';                            settings = @{} },
         @{ id = 'invisible-borders';                     settings = @{} }
