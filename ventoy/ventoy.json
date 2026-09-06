@@ -1,4 +1,8 @@
 {
+  "control": [
+    { "VTOY_SECONDARY_BOOT_MENU": "0" },
+    { "VTOY_DEFAULT_IMAGE": "/win11.iso" }
+  ],
   "auto_install": [
     {
       "image": "/win11.iso",

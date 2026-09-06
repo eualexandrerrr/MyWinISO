@@ -41,7 +41,7 @@ function Set-SenhaXml([string] $Texto, [string] $Senha) {
 }
 
 # ventoy.json: preserva o que já existe no pendrive, troca só a entrada auto_install desta ISO e deixa
-# esta ISO como entrada padrão do menu (VTOY_DEFAULT_IMAGE), assim o boot vai direto sem apertar nada.
+# esta ISO como entrada padrão do menu (VTOY_DEFAULT_IMAGE) sem o menu secundário, assim o boot vai direto sem apertar nada.
 function Merge-VentoyJson([string] $ModeloJson, [string] $Existente, [string] $Imagem) {
     $novo = $ModeloJson | ConvertFrom-Json
     $novo.auto_install[0].image = $Imagem
@@ -49,7 +49,9 @@ function Merge-VentoyJson([string] $ModeloJson, [string] $Existente, [string] $I
     $lista = @($atual.auto_install | Where-Object { $_ -and $_.image -ne $Imagem }) + @($novo.auto_install)
     if ($atual.PSObject.Properties['auto_install']) { $atual.auto_install = $lista }
     else { $atual | Add-Member -NotePropertyName 'auto_install' -NotePropertyValue $lista }
-    $controle = @($atual.control | Where-Object { $_ -and -not $_.PSObject.Properties['VTOY_DEFAULT_IMAGE'] }) + @([pscustomobject]@{ VTOY_DEFAULT_IMAGE = $Imagem })
+    # VTOY_SECONDARY_BOOT_MENU=0: sem o menu "Boot in normal mode / wimboot", que não tem timeout e travaria o boot
+    $controle = @($atual.control | Where-Object { $_ -and -not $_.PSObject.Properties['VTOY_DEFAULT_IMAGE'] -and -not $_.PSObject.Properties['VTOY_SECONDARY_BOOT_MENU'] }) +
+                @([pscustomobject]@{ VTOY_DEFAULT_IMAGE = $Imagem }, [pscustomobject]@{ VTOY_SECONDARY_BOOT_MENU = '0' })
     if ($atual.PSObject.Properties['control']) { $atual.control = $controle }
     else { $atual | Add-Member -NotePropertyName 'control' -NotePropertyValue $controle }
     return ($atual | ConvertTo-Json -Depth 10)
