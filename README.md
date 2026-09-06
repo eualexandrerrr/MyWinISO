@@ -29,7 +29,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
 | 6 | `primeiro-logon.ps1` | baixa o `setup.ps1` deste repositório e roda; deixa `mywiniso-setup.cmd` na área de trabalho |
-| 7 | `setup.ps1` | as 20 etapas abaixo |
+| 7 | `setup.ps1` | as 21 etapas abaixo |
 
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção. No WinPE,
@@ -53,7 +53,7 @@ Cada script mostra o estado real, não uma barra decorativa:
 - **specialize**: cada bloco aparece como `-> nome`, com os pacotes removidos um a um, e termina em `OK` ou `ERRO` com a mensagem.
 - **primeiro logon**: uma janela de console que diz o que está fazendo (espera pela rede com contagem de tentativas,
   download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela.
-- **setup.ps1**: cada etapa como `[n/20] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
+- **setup.ps1**: cada etapa como `[n/21] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
   `já instalado` ou `FALHOU (código)`, e no fim de cada etapa `OK`, `AVISO` (erros não fatais, listados) ou
   `ERRO` (a etapa parou, a mensagem aparece). Uma etapa com erro não derruba as seguintes. No final, um resumo
   de todas as etapas com tempo, a lista de programas que falharam e o caminho do log.
@@ -76,16 +76,17 @@ Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou 
 | 8 | Windhawk com os temas Translucent do Undisputed00x na barra, no Iniciar e na central de notificações, menus de contexto escuros e janelas sem borda; tudo por registro, sem abrir o Windhawk |
 | 9 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`) |
 | 10 | wallpaper nos dois monitores e na tela de bloqueio |
-| 11 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
-| 12 | energia: plano Desempenho Máximo, nunca suspende, nunca apaga a tela, sem hibernação |
-| 13 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
-| 14 | MariaDB como serviço, root com a senha da conta e acesso remoto |
-| 15 | fonte Cascadia Mono na máquina, no console e no terminal do VS Code |
-| 16 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
-| 17 | barra de tarefas com Explorer, Firefox, Discord, VS Code, WinSCP e Chrome; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar |
-| 18 | WSL com Debian: usuário `alexandre`, sudo sem senha, systemd (`wsl/debian.sh`) |
-| 19 | drivers e atualizações pelo Windows Update |
-| 20 | monitores: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`) |
+| 11 | foto do perfil da conta (`perfil/avatar.png`) no Iniciar e na tela de login |
+| 12 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
+| 13 | energia: plano Desempenho Máximo, nunca suspende, nunca apaga a tela, sem hibernação |
+| 14 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
+| 15 | MariaDB como serviço, root com a senha da conta e acesso remoto |
+| 16 | fonte Cascadia Mono na máquina, no console e no terminal do VS Code |
+| 17 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
+| 18 | barra de tarefas com Explorer, Firefox, Discord, VS Code, WinSCP e Chrome; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar |
+| 19 | WSL com Debian: usuário `alexandre`, sudo sem senha, systemd (`wsl/debian.sh`) |
+| 20 | drivers e atualizações pelo Windows Update |
+| 21 | monitores: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`) |
 
 ## Programas
 
@@ -118,6 +119,7 @@ Insync e Maestro não existem no winget; Google Drive oficial entra no lugar do 
 | `taskbar/LayoutModification.xml` | pinos da barra de tarefas |
 | `explorer/WinSetView/` | WinSetView (Les Ferch, MIT) com o modo de exibição do Explorer em `AppData/Win10.ini`; ver o README da pasta |
 | `monitores/` | `monitores.json` com resolução, Hz, orientação e posição de cada monitor, e o `monitores.ps1` que aplica |
+| `perfil/avatar.png` | foto da conta, redimensionada pelo setup para os tamanhos que o Windows usa |
 | `startup/startup-onlogon.ps1` | tarefa de logon: maximiza o Discord, posiciona duas janelas do Chrome no monitor vertical, backup do histórico do terminal |
 | `vscode/settings.json` | o que o `setup.ps1` mescla no `settings.json` do VS Code |
 | `wsl/debian.sh`, `wsl/wsl.conf` | configuração do Debian no WSL |
@@ -196,7 +198,7 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 | Área | O que fica |
 |:--|:--|
 | Explorer | extensões visíveis, abre em Este Computador, menu de contexto clássico; Detalhes em todas as pastas com Nome, Caminho, Data de modificação, Tipo e Tamanho (WinSetView) |
-| Barra e Iniciar | ícones centralizados, sem busca, Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito; pinos fixos |
+| Barra e Iniciar | ícones centralizados e só no monitor principal (a LG de pé fica sem barra), sem busca, Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito; pinos fixos |
 | Tema | escuro desde o primeiro boot, cor de destaque puxada do wallpaper; barra, Iniciar e central de notificações translúcidos pelo Windhawk (TranslucentTaskbar, TranslucentStartMenu, TranslucentShell), menus escuros, janelas sem borda |
 | Desligar | apps travados são encerrados sozinhos (`AutoEndTasks`), sem "este aplicativo está impedindo o desligamento" |
 | Entrar | reabre os apps que estavam abertos (`RestartApps`), NumLock ligado, tarefa de logon arruma as janelas |
@@ -211,6 +213,7 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 | RDP | ligado como host com autenticação de rede; precisa da senha da conta |
 | WSL | Debian com usuário `alexandre`, sudo sem senha, systemd; precisa de um reinício na primeira vez |
 | Monitores | ASUS XG27ACS em 2560x1440 a 180 Hz como principal; LG UltraGear em 1920x1080 a 144 Hz, de pé, à esquerda e 262 px acima. Casados pelo nome do EDID, então trocar de porta não embaralha |
+| Conta | foto do perfil do `perfil/avatar.png` no Iniciar e na tela de login |
 
 ## Rodar o setup num Windows já instalado
 

@@ -6,20 +6,21 @@
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
 
-  O console mostra cada etapa como [n/20], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
+  O console mostra cada etapa como [n/21], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
   listados) ou ERRO (a etapa parou; a mensagem aparece). Nenhuma etapa derruba as seguintes. No final sai um
   resumo de todas as etapas e dos programas que falharam. Tudo vai também para ~\mywiniso-setup.log.
 
-   1. garante que o winget funciona          11. Área de Trabalho Remota e política de senha
-   2. Git e clone em ~\Projetos\mywiniso     12. energia: Desempenho Máximo, nunca suspender
-   3. programas do apps.json, um a um        13. NVIDIA App (instalador silencioso)
-   4. RedM na área de trabalho               14. MariaDB: serviço e root
-   5. git config                             15. fonte Cascadia Mono, console e VS Code
-   6. preferências do usuário                16. perfil do PowerShell
-   7. Explorer em Detalhes (WinSetView)      17. barra de tarefas e tarefa de logon
-   8. Windhawk: tema Translucent             18. WSL com Debian
-   9. Office                                 19. Windows Update (drivers)
-  10. wallpaper                              20. monitores: resolução, Hz e posição
+   1. garante que o winget funciona          12. Área de Trabalho Remota e política de senha
+   2. Git e clone em ~\Projetos\mywiniso     13. energia: Desempenho Máximo, nunca suspender
+   3. programas do apps.json, um a um        14. NVIDIA App (instalador silencioso)
+   4. RedM na área de trabalho               15. MariaDB: serviço e root
+   5. git config                             16. fonte Cascadia Mono, console e VS Code
+   6. preferências do usuário                17. perfil do PowerShell
+   7. Explorer em Detalhes (WinSetView)      18. barra de tarefas e tarefa de logon
+   8. Windhawk: tema Translucent             19. WSL com Debian
+   9. Office                                 20. Windows Update (drivers)
+  10. wallpaper                              21. monitores: resolução, Hz e posição
+  11. foto do perfil
   10. wallpaper
 #>
 param([string] $Senha = $env:MYWINISO_SENHA)
@@ -51,7 +52,7 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$TotalEtapas = 20
+$TotalEtapas = 21
 $NumEtapa    = 0
 $Resultado   = New-Object System.Collections.Generic.List[object]
 $Falhas      = New-Object System.Collections.Generic.List[string]
@@ -280,11 +281,12 @@ Etapa 'Preferências do usuário' {
     Set-Reg $adv 'HideFileExt'        0
     Set-Reg $adv 'LaunchTo'           1
     Set-Reg 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32' '(Default)' '' 'String'
-    Passo 'barra: ícones centralizados, sem busca, Visão de Tarefas, widgets e Copilot; "Finalizar tarefa"'
+    Passo 'barra: ícones centralizados, só no monitor principal, sem busca, Visão de Tarefas, widgets e Copilot; "Finalizar tarefa"'
     Set-Reg $adv 'TaskbarAl'          1      # 1 = ícones centralizados
     Set-Reg $adv 'ShowTaskViewButton' 0
     Set-Reg $adv 'TaskbarDa'          0
     Set-Reg $adv 'ShowCopilotButton'  0
+    Set-Reg $adv 'MMTaskbarEnabled'  0      # barra de tarefas só no monitor principal
     Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Search' 'SearchboxTaskbarMode' 0
     Set-Reg "$adv\TaskbarDeveloperSettings" 'TaskbarEndTask' 1
     Passo 'Iniciar: mais fixados, sem recomendações'
@@ -521,7 +523,42 @@ Etapa 'Wallpaper' {
     Set-Reg $csp 'LockScreenImageStatus' 1
 }
 
-# --- 11. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados ----------
+# --- 11. Foto do perfil da conta (perfil\avatar.png) -----------------------------------------------
+# O Windows guarda a foto da conta em tamanhos fixos dentro de C:\Users\Public\AccountPictures\<SID> e
+# aponta cada um no registro, por SID. Sem esses valores a tela de login e o Iniciar mostram o boneco padrão.
+Etapa 'Foto do perfil' {
+    $origem = Join-Path $aqui 'perfil\avatar.png'
+    if (-not (Test-Path -LiteralPath $origem)) { throw "não achei $origem" }
+    $sid = ([Security.Principal.NTAccount]"$env:USERDOMAIN\$env:USERNAME").Translate([Security.Principal.SecurityIdentifier]).Value
+    $dir = Join-Path $env:PUBLIC "AccountPictures\$sid"
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    Add-Type -AssemblyName System.Drawing
+    $img = [System.Drawing.Image]::FromFile($origem)
+    try {
+        $tamanhos = 32, 40, 48, 96, 192, 208, 240, 424, 448, 1080
+        $chave = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AccountPicture\Users\$sid"
+        foreach ($t in $tamanhos) {
+            $arq = Join-Path $dir "Image$t.png"
+            $bmp = New-Object System.Drawing.Bitmap $t, $t
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            try {
+                $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $g.DrawImage($img, 0, 0, $t, $t)
+            } finally { $g.Dispose() }
+            $bmp.Save($arq, [System.Drawing.Imaging.ImageFormat]::Png)
+            $bmp.Dispose()
+            Set-Reg $chave "Image$t" $arq 'String'
+        }
+        Passo "$($tamanhos.Count) tamanhos em $dir"
+    } finally { $img.Dispose() }
+    # a cópia no perfil do usuário é a que o Iniciar usa quando o registro ainda não foi lido
+    $meu = Join-Path $env:APPDATA 'Microsoft\Windows\AccountPictures'
+    New-Item -ItemType Directory -Path $meu -Force | Out-Null
+    Copy-Item -LiteralPath $origem -Destination (Join-Path $meu 'avatar.png') -Force
+    Passo 'foto da conta aplicada; aparece no Iniciar e na tela de login'
+}
+
+# --- 12. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados ----------
 Etapa 'Área de Trabalho Remota e contas' {
     Passo 'RDP ligado com autenticação de rede; regra de firewall'
     Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' 'fDenyTSConnections' 0
@@ -539,7 +576,7 @@ Etapa 'Área de Trabalho Remota e contas' {
     }
 }
 
-# --- 12. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação ----------
+# --- 13. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação ----------
 Etapa 'Energia' {
     # Desempenho Máximo (Ultimate Performance) vem oculto no Windows 11; /duplicatescheme cria uma cópia visível.
     # Se a cópia já existe (segunda execução), reaproveita em vez de criar outra.
@@ -561,7 +598,7 @@ Etapa 'Energia' {
     Passo ((powercfg.exe /getactivescheme) -join ' ')
 }
 
-# --- 13. NVIDIA App (não está no winget; instalador silencioso com /s) -----------------------------
+# --- 14. NVIDIA App (não está no winget; instalador silencioso com /s) -----------------------------
 Etapa 'NVIDIA App' {
     $url = 'https://us.download.nvidia.com/nvapp/client/11.0.9.251/NVIDIA_app_v11.0.9.251.exe'   # reserva, caso a página mude
     try {
@@ -578,7 +615,7 @@ Etapa 'NVIDIA App' {
     else { Passo 'NVIDIA App instalado' }
 }
 
-# --- 14. MariaDB: serviço automático, root com a senha da conta e acesso remoto --------------------
+# --- 15. MariaDB: serviço automático, root com a senha da conta e acesso remoto --------------------
 Etapa 'MariaDB' {
     $maria = Get-ChildItem -Path 'C:\Program Files\MariaDB*' -Directory -ErrorAction Ignore | Select-Object -First 1
     if (-not $maria) { throw 'não instalado (MariaDB.Server falhou no winget?)' }
@@ -608,7 +645,7 @@ Etapa 'MariaDB' {
     }
 }
 
-# --- 15. Fonte Cascadia Mono (máquina), console e VS Code --------------------------------------------
+# --- 16. Fonte Cascadia Mono (máquina), console e VS Code --------------------------------------------
 Etapa 'Cascadia Mono, console e VS Code' {
     $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/cascadia-code/releases/latest' -Headers @{ 'User-Agent' = 'PowerShell' }
     $asset = $rel.assets | Where-Object { $_.name -like 'CascadiaCode-*.zip' } | Select-Object -First 1
@@ -660,7 +697,7 @@ Etapa 'Cascadia Mono, console e VS Code' {
     Passo "VS Code: $vsArq"
 }
 
-# --- 16. Perfil do PowerShell (powershell\profile.ps1) ----------------------------------------------
+# --- 17. Perfil do PowerShell (powershell\profile.ps1) ----------------------------------------------
 Etapa 'Perfil do PowerShell' {
     $docs = [Environment]::GetFolderPath('MyDocuments')
     New-Item -ItemType Directory -Path (Join-Path $docs 'PowerShell'), (Join-Path $docs 'WindowsPowerShell') -Force | Out-Null
@@ -669,7 +706,7 @@ Etapa 'Perfil do PowerShell' {
     Passo "$docs\PowerShell\profile.ps1 (o do Windows PowerShell aponta para ele)"
 }
 
-# --- 17. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" --------------
+# --- 18. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" --------------
 Etapa 'Barra de tarefas e tarefa de logon' {
     $layout = Join-Path $aqui 'taskbar\LayoutModification.xml'
     foreach ($shell in (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Shell'), 'C:\Users\Default\AppData\Local\Microsoft\Windows\Shell') {
@@ -694,7 +731,7 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     Stop-Process -Name explorer -Force -ErrorAction Ignore
 }
 
-# --- 18. WSL com Debian (wsl\debian.sh configura por dentro) ---------------------------------------
+# --- 19. WSL com Debian (wsl\debian.sh configura por dentro) ---------------------------------------
 Etapa 'WSL com Debian' {
     wsl.exe --status 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
@@ -721,7 +758,7 @@ Etapa 'WSL com Debian' {
     }
 }
 
-# --- 19. Drivers e atualizações pelo Windows Update ------------------------------------------------
+# --- 20. Drivers e atualizações pelo Windows Update ------------------------------------------------
 Etapa 'Windows Update (drivers)' {
     Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null
     Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
@@ -731,7 +768,7 @@ Etapa 'Windows Update (drivers)' {
     Get-WindowsUpdate -AcceptAll -Install -IgnoreReboot | Out-Host
 }
 
-# --- 20. Monitores: resolução, frequência, orientação e posição (monitores\monitores.json) --------
+# --- 21. Monitores: resolução, frequência, orientação e posição (monitores\monitores.json) --------
 # Depois do Windows Update de propósito: 180 Hz e 1440p só aparecem com o driver da placa instalado.
 # Se rodar antes, o driver genérico recusa o modo e a etapa avisa; rodar o setup de novo resolve.
 Etapa 'Monitores (resolução, Hz, posição)' {
