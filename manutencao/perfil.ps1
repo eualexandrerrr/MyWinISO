@@ -67,7 +67,15 @@ foreach ($r in $raizes) {
                 # o rename é o teste de "em uso": o NTFS recusa renomear pasta com arquivo aberto dentro
                 $tmp = "$de.mudando"
                 try { Rename-Item -LiteralPath $de -NewName "$nome.mudando" -Force -ErrorAction Stop }
-                catch { $emUso++; L "$($r.para)\$nome em uso; fica para a próxima rodada" 'DarkGray'; continue }
+                # o $Error.RemoveAt tira daqui o registro que o catch acabou de apanhar: pasta em uso e
+                # o caminho previsto (a NVIDIA e a de sempre), ja contado em $emUso e dito na linha acima.
+                # Sem isso ele fica em $Error, e como este script roda dentro da Etapa do setup, as etapas
+                # 7, 13 e 28 fechavam em AVISO com "o acesso ao caminho ... foi negado" -- barulho, nao erro.
+                catch {
+                    $emUso++; L "$($r.para)\$nome em uso; fica para a próxima rodada" 'DarkGray'
+                    if ($Error.Count) { $Error.RemoveAt(0) }
+                    continue
+                }
                 if ($ehPasta) {
                     New-Item -ItemType Directory -Path $para -Force | Out-Null
                     # /MOVE leva e apaga; /XO deixa no C: o que for mais velho que o de D:, e o resto some abaixo
