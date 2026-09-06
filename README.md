@@ -26,7 +26,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | 1 | Ventoy | mostra a ISO; em 5 s aplica o `autounattend.xml` sozinho |
 | 2 | `disco.ps1` (WinPE) | pula TPM/CPU/RAM, procura o disco pelo serial ou modelo, apaga e cria GPT: EFI 300 MB, MSR, Windows, Recovery 1 GB |
 | 3 | Setup | instala o Windows 11 Pro na partição que acabou de ser criada |
-| 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio |
+| 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
 | 6 | `primeiro-logon.ps1` | baixa o `setup.ps1` deste repositório e roda; deixa `mywiniso-setup.cmd` na área de trabalho |
 | 7 | `setup.ps1` | as 17 etapas abaixo |
@@ -36,6 +36,20 @@ no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup igno
 O `setup.ps1` e o resto ficam fora de propósito: mudam com frequência e são baixados do GitHub
 na hora, então o pendrive não envelhece quando a lista de programas muda.
 
+## O que aparece na tela
+
+Cada script mostra o estado real, não uma barra decorativa:
+
+- **specialize**: cada bloco aparece como `-> nome`, com os pacotes removidos um a um, e termina em `OK` ou `ERRO` com a mensagem.
+- **primeiro logon**: uma janela de console que diz o que está fazendo (espera pela rede com contagem de tentativas,
+  download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela.
+- **setup.ps1**: cada etapa como `[n/17] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
+  `já instalado` ou `FALHOU (código)`, e no fim de cada etapa `OK`, `AVISO` (erros não fatais, listados) ou
+  `ERRO` (a etapa parou, a mensagem aparece). Uma etapa com erro não derruba as seguintes. No final, um resumo
+  de todas as etapas com tempo, a lista de programas que falharam e o caminho do log.
+
+Logs: `C:\Windows\Setup\Scripts\especializar.log`, `~\mywiniso.log` (primeiro logon) e `~\mywiniso-setup.log` (setup).
+
 ## O que o setup.ps1 faz
 
 Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou o `irm` abaixo).
@@ -44,7 +58,7 @@ Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou 
 |:--|:--|
 | 1 | garante que o winget funciona (em instalação nova ele demora a registrar) |
 | 2 | instala o Git e clona este repositório em `~\Projetos\mywiniso` |
-| 3 | `winget import apps.json`: 45 programas do winget e o WhatsApp da Loja |
+| 3 | programas do `apps.json`, um a um, com resultado na tela: 45 do winget e o WhatsApp da Loja |
 | 4 | RedM na área de trabalho (o instalador não tem modo silencioso) |
 | 5 | `git config` com nome e e-mail |
 | 6 | preferências do usuário (tabela abaixo) |
@@ -144,6 +158,9 @@ de qualquer usuário existir, e a lista está legível no `especializar.ps1` den
 | Políticas | telemetria no mínimo, sem sugestões e apps promovidos, sem Copilot, sem widgets, sem ID de anúncio, Edge sem tela inicial e sem startup boost, Edge desinstalável, busca sem Bing, Iniciar sem nada fixado |
 | Segurança que atrapalha | UAC sem perguntar (o LUA fica ligado, senão apps da Loja não abrem), Smart App Control e SmartScreen desligados, ícone da Segurança do Windows escondido |
 | Sistema | inicialização rápida desligada, caminhos longos, som de inicialização desligado, senha sem validade, sem bloqueio de conta |
+| Perfil padrão | a conta já nasce com tema escuro, barra à esquerda sem busca, extensões visíveis, sem OneDrive: a primeira tela não aparece clara |
+| Jogo (o que Atlas e Revi fazem) | agendamento de GPU por hardware, sem power throttling, **VBS e isolamento de núcleo desligados** (uns FPS a mais, menos proteção; ligue de volta em Segurança do Windows se quiser), MMCSS com prioridade para jogos, serviço de telemetria parado, Modo Jogo, apps em segundo plano desligados |
+| Identidade | Sistema > Sobre mostra fabricante `mywiniso`, modelo `RRR`, dono `Alexandre`, link para este repositório |
 
 Quer mais? Adicione o nome do pacote na lista `$bloat` (`Get-AppxProvisionedPackage -Online | Select DisplayName` mostra os nomes).
 
@@ -155,7 +172,7 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 |:--|:--|
 | Explorer | extensões visíveis, abre em Este Computador, menu de contexto clássico |
 | Barra e Iniciar | ícones à esquerda, sem busca, Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito; pinos fixos |
-| Tema | escuro, sem transparência, sem cor de destaque em bordas e Iniciar |
+| Tema | escuro desde o primeiro boot, sem transparência, cor de destaque puxada do wallpaper |
 | Desligar | apps travados são encerrados sozinhos (`AutoEndTasks`), sem "este aplicativo está impedindo o desligamento" |
 | Entrar | reabre os apps que estavam abertos (`RestartApps`), NumLock ligado, tarefa de logon arruma as janelas |
 | Teclado | repetição no máximo, cursor piscando rápido, Print Screen não abre a Ferramenta de Captura (fica para o Lightshot), atalhos de Teclas de Aderência, Alternância e Filtragem desligados |
@@ -188,7 +205,7 @@ irm https://raw.githubusercontent.com/eualexandrerrr/mywiniso/main/setup.ps1 | i
 - **Tela de bloqueio**: o wallpaper entra pela `PersonalizationCSP`, que trava a opção em Configurações. Para
   liberar, apague a chave `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP`.
 - **Senha depois**: `net user Alexandre *` troca; o login automático continua (o Windows guarda a senha do autologon).
-- **AtlasOS** é opcional: aplique o playbook por cima, se quiser os tweaks de jogo.
+- **AtlasOS e ReviOS** não entram: dependem do AME Wizard, que é gráfico, e o playbook brigaria com esta limpeza. O que eles fazem de relevante para jogo já está na tabela de Debloat.
 
 ## Se algo der errado
 

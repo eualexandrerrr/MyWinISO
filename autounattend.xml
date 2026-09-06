@@ -222,136 +222,211 @@ exit 0
 
     <File path="C:\Windows\Setup\Scripts\especializar.ps1" pass="specialize"><![CDATA[
 # Roda no passo "specialize", como SYSTEM, antes do primeiro boot na área de trabalho.
-# Só coisas de sistema. Preferências de usuário (tema, barra, mouse) ficam no setup.ps1 do repositório.
+# Só coisas de sistema e do perfil padrão. O resto das preferências fica no setup.ps1 do repositório.
+# O console mostra cada bloco como "-> nome" e, no fim dele, OK ou ERRO com a mensagem. Log em especializar.log.
 
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
+try { $Host.UI.RawUI.WindowTitle = 'mywiniso: specialize' } catch { }
 Start-Transcript -Path 'C:\Windows\Setup\Scripts\especializar.log' -Force | Out-Null
+Write-Host "mywiniso specialize | $(Get-Date -Format 'dd/MM/yyyy HH:mm')" -ForegroundColor Cyan
+$script:Erros = 0
 
+function Faz([string] $Nome, [scriptblock] $Corpo) {
+    Write-Host "-> $Nome" -ForegroundColor Cyan
+    try { & $Corpo; Write-Host '   OK' -ForegroundColor Green }
+    catch { $script:Erros++; Write-Host "   ERRO: $($_.Exception.Message)" -ForegroundColor Red }
+}
 function Set-Reg([string] $Path, [string] $Name, $Value, [string] $Type = 'DWord') {
     if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force | Out-Null }
     Set-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -Type $Type -Force
 }
+function Reg([string] $Args) { $saida = cmd.exe /c "reg.exe $Args 2>&1"; if ($LASTEXITCODE -ne 0) { throw "reg.exe $Args -> $saida" } }
 
-# --- Bloatware: pacotes provisionados (nunca chegam a ser instalados para o usuário) ---
-# Ficam: Loja e App Installer (o winget depende deles), Calculadora, Fotos, Terminal, Xbox Identity Provider.
-# Bloco de Notas, Paint e Ferramenta de Captura saem: VS Code e Lightshot no lugar.
-$bloat = @(
-    'Clipchamp.Clipchamp', 'Microsoft.549981C3F5F10', 'Microsoft.BingNews', 'Microsoft.BingSearch',
-    'Microsoft.BingWeather', 'Microsoft.Copilot', 'Microsoft.Edge.GameAssist', 'Microsoft.GamingApp',
-    'Microsoft.GetHelp', 'Microsoft.Getstarted', 'Microsoft.Microsoft3DViewer', 'Microsoft.MicrosoftOfficeHub',
-    'Microsoft.MicrosoftSolitaireCollection', 'Microsoft.MicrosoftStickyNotes', 'Microsoft.MixedReality.Portal',
-    'Microsoft.MSPaint', 'Microsoft.Office.OneNote', 'Microsoft.OutlookForWindows', 'Microsoft.Paint',
-    'Microsoft.People', 'Microsoft.PowerAutomateDesktop', 'Microsoft.ScreenSketch', 'Microsoft.SkypeApp',
-    'Microsoft.Todos', 'Microsoft.Wallet', 'Microsoft.Windows.DevHome', 'Microsoft.WindowsAlarms',
-    'Microsoft.WindowsCamera', 'Microsoft.WindowsFeedbackHub', 'Microsoft.WindowsMaps', 'Microsoft.WindowsNotepad',
-    'Microsoft.WindowsSoundRecorder', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxApp', 'Microsoft.XboxGameOverlay',
-    'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone', 'Microsoft.ZuneMusic',
-    'Microsoft.ZuneVideo', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
-    'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps'
-)
-Get-AppxProvisionedPackage -Online | Where-Object { $bloat -contains $_.DisplayName } | ForEach-Object {
-    Write-Output "removendo $($_.DisplayName)"
-    Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName | Out-Null
+Faz 'Bloatware: pacotes provisionados' {
+    # Ficam: Loja e App Installer (o winget depende deles), Calculadora, Fotos, Terminal, Xbox Identity Provider.
+    # Bloco de Notas, Paint e Ferramenta de Captura saem: VS Code e Lightshot no lugar.
+    $bloat = @(
+        'Clipchamp.Clipchamp', 'Microsoft.549981C3F5F10', 'Microsoft.BingNews', 'Microsoft.BingSearch',
+        'Microsoft.BingWeather', 'Microsoft.Copilot', 'Microsoft.Edge.GameAssist', 'Microsoft.GamingApp',
+        'Microsoft.GetHelp', 'Microsoft.Getstarted', 'Microsoft.Microsoft3DViewer', 'Microsoft.MicrosoftOfficeHub',
+        'Microsoft.MicrosoftSolitaireCollection', 'Microsoft.MicrosoftStickyNotes', 'Microsoft.MixedReality.Portal',
+        'Microsoft.MSPaint', 'Microsoft.Office.OneNote', 'Microsoft.OutlookForWindows', 'Microsoft.Paint',
+        'Microsoft.People', 'Microsoft.PowerAutomateDesktop', 'Microsoft.ScreenSketch', 'Microsoft.SkypeApp',
+        'Microsoft.Todos', 'Microsoft.Wallet', 'Microsoft.Windows.DevHome', 'Microsoft.WindowsAlarms',
+        'Microsoft.WindowsCamera', 'Microsoft.WindowsFeedbackHub', 'Microsoft.WindowsMaps', 'Microsoft.WindowsNotepad',
+        'Microsoft.WindowsSoundRecorder', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxApp', 'Microsoft.XboxGameOverlay',
+        'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone', 'Microsoft.ZuneMusic',
+        'Microsoft.ZuneVideo', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
+        'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps'
+    )
+    $n = 0
+    foreach ($pkg in Get-AppxProvisionedPackage -Online | Where-Object { $bloat -contains $_.DisplayName }) {
+        Write-Host "   removendo $($pkg.DisplayName)"
+        try { Remove-AppxProvisionedPackage -Online -PackageName $pkg.PackageName | Out-Null; $n++ }
+        catch { Write-Host "   FALHOU $($pkg.DisplayName): $($_.Exception.Message)" -ForegroundColor Yellow }
+    }
+    Write-Host "   $n pacotes removidos"
 }
 
-# --- Capacidades (recursos sob demanda) ---
-$capacidades = @(
-    'App.StepsRecorder', 'App.Support.QuickAssist', 'Browser.InternetExplorer', 'Hello.Face.18967', 'Hello.Face.20134',
-    'Hello.Face.Migration.18967', 'Language.Handwriting', 'Language.Speech', 'Language.TextToSpeech', 'MathRecognizer',
-    'Media.WindowsMediaPlayer', 'Microsoft.Windows.MSPaint', 'Microsoft.Windows.PowerShell.ISE',
-    'Microsoft.Windows.SnippingTool', 'Microsoft.Windows.WordPad', 'OneCoreUAP.OneSync', 'OpenSSH.Client', 'Print.Fax.Scan'
-)
-Get-WindowsCapability -Online | Where-Object { $_.State -notin 'NotPresent', 'Removed' -and $capacidades -contains ($_.Name -split '~')[0] } | ForEach-Object {
-    Write-Output "removendo capacidade $($_.Name)"
-    Remove-WindowsCapability -Online -Name $_.Name -ErrorAction Continue | Out-Null
+Faz 'Capacidades (recursos sob demanda)' {
+    $capacidades = @(
+        'App.StepsRecorder', 'App.Support.QuickAssist', 'Browser.InternetExplorer', 'Hello.Face.18967', 'Hello.Face.20134',
+        'Hello.Face.Migration.18967', 'Language.Handwriting', 'Language.Speech', 'Language.TextToSpeech', 'MathRecognizer',
+        'Media.WindowsMediaPlayer', 'Microsoft.Windows.MSPaint', 'Microsoft.Windows.PowerShell.ISE',
+        'Microsoft.Windows.SnippingTool', 'Microsoft.Windows.WordPad', 'OneCoreUAP.OneSync', 'OpenSSH.Client', 'Print.Fax.Scan'
+    )
+    foreach ($c in Get-WindowsCapability -Online | Where-Object { $_.State -notin 'NotPresent', 'Removed' -and $capacidades -contains ($_.Name -split '~')[0] }) {
+        Write-Host "   removendo $($c.Name)"
+        try { Remove-WindowsCapability -Online -Name $c.Name | Out-Null }
+        catch { Write-Host "   FALHOU $($c.Name): $($_.Exception.Message)" -ForegroundColor Yellow }
+    }
 }
 
-# --- Recursos opcionais: PowerShell 2.0, cliente de Área de Trabalho Remota (mstsc), Recall, Captura ---
-# MediaPlayback fica: jogos e apps usam para vídeo.
-foreach ($f in 'MicrosoftWindowsPowerShellV2Root', 'Microsoft-RemoteDesktopConnection', 'Recall', 'Microsoft-SnippingTool') {
-    Disable-WindowsOptionalFeature -Online -FeatureName $f -Remove -NoRestart -ErrorAction SilentlyContinue | Out-Null
+Faz 'Recursos opcionais: PowerShell 2.0, cliente RDP (mstsc), Recall, Captura' {
+    # MediaPlayback fica: jogos e apps usam para vídeo.
+    foreach ($f in 'MicrosoftWindowsPowerShellV2Root', 'Microsoft-RemoteDesktopConnection', 'Recall', 'Microsoft-SnippingTool') {
+        $r = Get-WindowsOptionalFeature -Online -FeatureName $f -ErrorAction Ignore
+        if ($r -and $r.State -notin 'Disabled', 'DisabledWithPayloadRemoved') {
+            Write-Host "   desligando $f"
+            try { Disable-WindowsOptionalFeature -Online -FeatureName $f -Remove -NoRestart | Out-Null }
+            catch { Write-Host "   FALHOU ${f}: $($_.Exception.Message)" -ForegroundColor Yellow }
+        }
+    }
 }
 
-# Outlook e Dev Home ficam agendados para instalar depois do OOBE; tirar o agendamento. Teams idem.
-foreach ($k in 'OutlookUpdate', 'DevHomeUpdate') {
-    Remove-Item -LiteralPath "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\$k" -Force -ErrorAction SilentlyContinue
+Faz 'Outlook, Dev Home e Teams: sem instalação agendada depois do OOBE' {
+    foreach ($k in 'OutlookUpdate', 'DevHomeUpdate') {
+        Remove-Item -LiteralPath "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\$k" -Force -ErrorAction Ignore
+    }
+    Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Communications' 'ConfigureChatAutoInstall' 0
 }
-Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Communications' 'ConfigureChatAutoInstall' 0
 
-# Sem o Bloco de Notas, "Novo > Documento de Texto" continua existindo
-reg.exe add "HKCR\txtfilelegacy" /ve /t REG_SZ /d "Text Document" /f | Out-Null
-reg.exe add "HKCR\txtfilelegacy" /v FriendlyTypeName /t REG_EXPAND_SZ /d "@C:\Windows\system32\notepad.exe,-469" /f | Out-Null
-reg.exe add "HKCR\.txt\ShellNew" /v ItemName /t REG_EXPAND_SZ /d "@C:\Windows\system32\notepad.exe,-470" /f | Out-Null
-reg.exe add "HKCR\.txt\ShellNew" /v NullFile /t REG_SZ /f | Out-Null
-
-# --- OneDrive: desinstala e tira do autostart do perfil padrão ---
-foreach ($exe in "$env:SystemRoot\System32\OneDriveSetup.exe", "$env:SystemRoot\SysWOW64\OneDriveSetup.exe") {
-    if (Test-Path -LiteralPath $exe) { Start-Process -FilePath $exe -ArgumentList '/uninstall' -Wait }
+Faz 'Sem o Bloco de Notas, "Novo > Documento de Texto" continua existindo' {
+    Reg 'add "HKCR\txtfilelegacy" /ve /t REG_SZ /d "Text Document" /f'
+    Reg 'add "HKCR\txtfilelegacy" /v FriendlyTypeName /t REG_EXPAND_SZ /d "@C:\Windows\system32\notepad.exe,-469" /f'
+    Reg 'add "HKCR\.txt\ShellNew" /v ItemName /t REG_EXPAND_SZ /d "@C:\Windows\system32\notepad.exe,-470" /f'
+    Reg 'add "HKCR\.txt\ShellNew" /v NullFile /t REG_SZ /f'
 }
-Remove-Item -LiteralPath 'C:\Users\Default\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\OneDrive.lnk' -Force -ErrorAction SilentlyContinue
-reg.exe load HKU\DefaultUser C:\Users\Default\NTUSER.DAT | Out-Null
-reg.exe delete "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Run" /v OneDriveSetup /f 2>$null
-reg.exe unload HKU\DefaultUser | Out-Null
 
-# --- Políticas: telemetria, sugestões, Copilot, widgets, anúncios, Edge ---
-Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE'            'BypassNRO'                      1
-Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection'         'AllowTelemetry'                 0
-Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent'           'DisableWindowsConsumerFeatures' 1
-Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent'           'DisableCloudOptimizedContent'   1
-Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot'         'TurnOffWindowsCopilot'          1
-Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh'                            'AllowNewsAndInterests'          0
-Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo'        'DisabledByGroupPolicy'          1
-Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'                           'HideFirstRunExperience'         1
-Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\Recommended'               'BackgroundModeEnabled'          0
-Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\Recommended'               'StartupBoostEnabled'            0
-Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'       'NoAutoRebootWithLoggedOnUsers'  1
+Faz 'OneDrive: desinstalar' {
+    foreach ($exe in "$env:SystemRoot\System32\OneDriveSetup.exe", "$env:SystemRoot\SysWOW64\OneDriveSetup.exe") {
+        if (Test-Path -LiteralPath $exe) { Write-Host "   $exe /uninstall"; Start-Process -FilePath $exe -ArgumentList '/uninstall' -Wait }
+    }
+    Remove-Item -LiteralPath 'C:\Users\Default\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\OneDrive.lnk' -Force -ErrorAction Ignore
+}
 
-# Edge desinstalável (política regional que a Microsoft aplica na Europa)
-try {
+Faz 'Perfil padrão (a conta nasce assim): tema escuro, barra à esquerda sem busca, extensões visíveis, sem OneDrive e Copilot' {
+    Reg 'load HKU\DefaultUser C:\Users\Default\NTUSER.DAT'
+    try {
+        Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v AppsUseLightTheme /t REG_DWORD /d 0 /f'
+        Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v SystemUsesLightTheme /t REG_DWORD /d 0 /f'
+        Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f'
+        Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarAl /t REG_DWORD /d 0 /f'
+        Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowTaskViewButton /t REG_DWORD /d 0 /f'
+        Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarDa /t REG_DWORD /d 0 /f'
+        Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f'
+        Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Search" /v SearchboxTaskbarMode /t REG_DWORD /d 0 /f'
+        Reg 'add "HKU\DefaultUser\Software\Policies\Microsoft\Windows\WindowsCopilot" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f'
+        Reg 'add "HKU\DefaultUser\Software\Policies\Microsoft\Windows\Explorer" /v DisableSearchBoxSuggestions /t REG_DWORD /d 1 /f'
+        cmd.exe /c 'reg.exe delete "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Run" /v OneDriveSetup /f >nul 2>&1'
+    } finally {
+        [GC]::Collect()
+        cmd.exe /c 'reg.exe unload HKU\DefaultUser >nul 2>&1'
+    }
+}
+
+Faz 'Políticas: telemetria, sugestões, Copilot, widgets, anúncios, Edge, Windows Update sem reiniciar sozinho' {
+    Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE'            'BypassNRO'                      1
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection'         'AllowTelemetry'                 0
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent'           'DisableWindowsConsumerFeatures' 1
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent'           'DisableCloudOptimizedContent'   1
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot'         'TurnOffWindowsCopilot'          1
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh'                            'AllowNewsAndInterests'          0
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo'        'DisabledByGroupPolicy'          1
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'                           'HideFirstRunExperience'         1
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\Recommended'               'BackgroundModeEnabled'          0
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\Recommended'               'StartupBoostEnabled'            0
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'       'NoAutoRebootWithLoggedOnUsers'  1
+}
+
+Faz 'Edge desinstalável (política regional que a Microsoft aplica na Europa)' {
     $arq = 'C:\Windows\System32\IntegratedServicesRegionPolicySet.json'
     $o = Get-Content -LiteralPath $arq -Encoding UTF8 | ConvertFrom-Json
     $o.policies | Where-Object { $_.guid -eq '{1bca278a-5d11-4acf-ad2f-f9ab6d7f93a6}' } | ForEach-Object { $_.defaultState = 'enabled' }
     $o | ConvertTo-Json -Depth 9 | Out-File -LiteralPath $arq -Encoding UTF8
-} catch { Write-Output "Edge desinstalável: $_" }
-
-# Menu Iniciar sem nada fixado
-Set-Reg 'HKLM:\SOFTWARE\Microsoft\PolicyManager\current\device\Start' 'ConfigureStartPins' '{"pinnedList":[]}' 'String'
-
-# --- Segurança que atrapalha: UAC sem perguntar (mantendo o LUA, senão apps da Loja não abrem),
-# Smart App Control e SmartScreen desligados, ícone da Segurança do Windows escondido ---
-$sys = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
-Set-Reg $sys 'ConsentPromptBehaviorAdmin' 0
-Set-Reg $sys 'PromptOnSecureDesktop'      0
-Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy'                 'VerifiedAndReputablePolicyState' 0
-Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer'         'SmartScreenEnabled'  'Off' 'String'
-$wtds = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WTDS\Components'
-foreach ($n in 'ServiceEnabled', 'NotifyMalicious', 'NotifyPasswordReuse', 'NotifyUnsafeApp') { Set-Reg $wtds $n 0 }
-Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Systray' 'HideSystray' 1
-
-# --- Sistema ---
-Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power'     'HiberbootEnabled' 0   # inicialização rápida desligada
-Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'                'LongPathsEnabled' 1
-Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\BootAnimation' 'DisableStartupSound' 1
-Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\EditionOverrides' 'UserSetting_DisableStartupSound' 1
-net.exe accounts /maxpwage:unlimited | Out-Null
-net.exe accounts /lockoutthreshold:0 | Out-Null
-
-# Plano de energia "Alto desempenho" já no primeiro boot; o setup.ps1 troca para Desempenho Máximo
-$alto = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
-powercfg.exe /setactive $alto 2>$null
-if ($LASTEXITCODE -ne 0) {
-    $saida = powercfg.exe /duplicatescheme $alto
-    if ($saida -match '([0-9a-f-]{36})') { powercfg.exe /setactive $Matches[1] }
 }
 
+Faz 'Menu Iniciar sem nada fixado' {
+    Set-Reg 'HKLM:\SOFTWARE\Microsoft\PolicyManager\current\device\Start' 'ConfigureStartPins' '{"pinnedList":[]}' 'String'
+}
+
+Faz 'UAC sem perguntar (LUA fica ligado, senão apps da Loja não abrem), Smart App Control e SmartScreen desligados' {
+    $sys = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    Set-Reg $sys 'ConsentPromptBehaviorAdmin' 0
+    Set-Reg $sys 'PromptOnSecureDesktop'      0
+    Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy'                 'VerifiedAndReputablePolicyState' 0
+    Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer'         'SmartScreenEnabled'  'Off' 'String'
+    $wtds = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WTDS\Components'
+    foreach ($n in 'ServiceEnabled', 'NotifyMalicious', 'NotifyPasswordReuse', 'NotifyUnsafeApp') { Set-Reg $wtds $n 0 }
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Systray' 'HideSystray' 1
+}
+
+Faz 'Identidade: Sistema > Sobre mostra fabricante mywiniso, modelo RRR, dono Alexandre' {
+    $oem = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation'
+    Set-Reg $oem 'Manufacturer' 'mywiniso'                                     'String'
+    Set-Reg $oem 'Model'        'RRR'                                          'String'
+    Set-Reg $oem 'SupportURL'   'https://github.com/eualexandrerrr/mywiniso'   'String'
+    Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' 'RegisteredOwner'        'Alexandre' 'String'
+    Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' 'RegisteredOrganization' 'mywiniso'  'String'
+}
+
+Faz 'Jogo (o que Atlas e Revi fazem): HAGS, sem power throttling, sem VBS/HVCI, MMCSS para jogos, telemetria parada' {
+    Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'          'HwSchMode'          2   # agendamento de GPU por hardware
+    Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling'    'PowerThrottlingOff' 1
+    $dg = 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard'
+    Set-Reg $dg 'EnableVirtualizationBasedSecurity' 0
+    Set-Reg "$dg\Scenarios\HypervisorEnforcedCodeIntegrity" 'Enabled'       0   # isolamento de núcleo desligado: alguns FPS a mais, menos proteção
+    Set-Reg "$dg\Scenarios\HypervisorEnforcedCodeIntegrity" 'EnabledBootId' 0
+    Set-Reg "$dg\Scenarios\HypervisorEnforcedCodeIntegrity" 'WasEnabledBy'  0
+    $mm = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
+    Set-Reg $mm 'SystemResponsiveness' 10
+    Reg "add `"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile`" /v NetworkThrottlingIndex /t REG_DWORD /d 4294967295 /f"
+    Set-Reg "$mm\Tasks\Games" 'GPU Priority'        8
+    Set-Reg "$mm\Tasks\Games" 'Priority'            6
+    Set-Reg "$mm\Tasks\Games" 'Scheduling Category' 'High' 'String'
+    Set-Reg "$mm\Tasks\Games" 'SFIO Priority'       'High' 'String'
+    Set-Service -Name DiagTrack -StartupType Disabled
+    Stop-Service -Name DiagTrack -Force -ErrorAction Ignore
+}
+
+Faz 'Sistema: inicialização rápida off, caminhos longos, sem som de boot, senha sem validade, sem bloqueio de conta' {
+    Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power'     'HiberbootEnabled' 0
+    Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'                'LongPathsEnabled' 1
+    Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\BootAnimation' 'DisableStartupSound' 1
+    Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\EditionOverrides' 'UserSetting_DisableStartupSound' 1
+    net.exe accounts /maxpwage:unlimited | Out-Null
+    net.exe accounts /lockoutthreshold:0 | Out-Null
+}
+
+Faz 'Energia: Alto desempenho já no primeiro boot (o setup.ps1 troca para Desempenho Máximo)' {
+    $alto = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
+    $ErrorActionPreference = 'Continue'
+    powercfg.exe /setactive $alto 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        $saida = powercfg.exe /duplicatescheme $alto 2>&1 | Out-String
+        if ($saida -match '([0-9a-f-]{36})') { powercfg.exe /setactive $Matches[1] } else { throw "powercfg: $saida" }
+    }
+}
+
+Write-Host ("specialize terminou com {0} bloco(s) com erro. Log: C:\Windows\Setup\Scripts\especializar.log" -f $script:Erros) -ForegroundColor $(if ($script:Erros) { 'Red' } else { 'Green' })
 Stop-Transcript | Out-Null
 exit 0
 ]]></File>
 
     <File path="C:\Windows\Setup\Scripts\primeiro-logon.ps1" pass="specialize"><![CDATA[
-# Roda uma vez, no primeiro logon do Alexandre, elevado.
+# Roda uma vez, no primeiro logon do Alexandre, elevado, numa janela de console que fica aberta até você fechar.
 # 1. deixa mywiniso-setup.cmd na área de trabalho, para rodar o setup de novo quando quiser
-# 2. baixa o setup.ps1 do repositório e roda: é ele que instala e configura tudo
+# 2. espera a internet, baixa o setup.ps1 do repositório e roda: é ele que instala e configura tudo
 # 3. apaga as cópias do arquivo de resposta que o Setup deixa em C:\Windows\Panther
 # O login automático é permanente pelo próprio autounattend (LogonCount alto); nada a fazer aqui.
 
@@ -359,31 +434,44 @@ $Senha = ''   # preenchido pelo pendrive.ps1 -Senha; vai para o setup.ps1 em MYW
 
 $ErrorActionPreference = 'Continue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-Start-Transcript -Path (Join-Path $env:USERPROFILE 'mywiniso.log') -Append | Out-Null
+try { $Host.UI.RawUI.WindowTitle = 'mywiniso: primeiro logon' } catch { }
+$log = Join-Path $env:USERPROFILE 'mywiniso.log'
+Start-Transcript -Path $log -Append | Out-Null
+Write-Host "mywiniso: primeiro logon de $env:USERNAME | $(Get-Date -Format 'dd/MM/yyyy HH:mm') | log: $log" -ForegroundColor Cyan
 
 $raw = 'https://raw.githubusercontent.com/eualexandrerrr/mywiniso/main'
 $env:MYWINISO_SENHA = $Senha
+Write-Host ("senha da conta: {0}" -f $(if ($Senha) { 'definida (vai para o root do MariaDB)' } else { 'nenhuma' }))
 
 $desktop = [Environment]::GetFolderPath('Desktop')
 $cmd = "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -Command `"irm $raw/setup.ps1 | iex`"`r`npause`r`n"
 [System.IO.File]::WriteAllText((Join-Path $desktop 'mywiniso-setup.cmd'), $cmd, [System.Text.Encoding]::ASCII)
+Write-Host "criado $desktop\mywiniso-setup.cmd (roda o setup de novo quando quiser)"
 
 $destino = Join-Path $env:TEMP 'mywiniso-setup.ps1'
 $ok = $false
-for ($i = 0; $i -lt 60 -and -not $ok; $i++) {          # até 5 minutos esperando a rede
+for ($i = 1; $i -le 60 -and -not $ok; $i++) {          # até 5 minutos esperando a rede
+    Write-Host ("baixando $raw/setup.ps1 (tentativa {0}/60)" -f $i)
     try {
         Invoke-WebRequest -UseBasicParsing -Uri "$raw/setup.ps1" -OutFile $destino -TimeoutSec 15
         $ok = $true
-    } catch { Start-Sleep -Seconds 5 }
+    } catch { Write-Host "  sem resposta: $($_.Exception.Message)" -ForegroundColor Yellow; Start-Sleep -Seconds 5 }
 }
 if ($ok) {
+    Write-Host "rodando $destino" -ForegroundColor Cyan
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File $destino
+    $codigo = $LASTEXITCODE
+    if ($codigo -eq 0) { Write-Host 'setup.ps1 terminou sem erros.' -ForegroundColor Green }
+    else { Write-Host "setup.ps1 terminou com $codigo etapa(s) com ERRO; veja o resumo acima e o log $env:USERPROFILE\mywiniso-setup.log" -ForegroundColor Red }
 } else {
-    Write-Warning "Sem internet: não baixei o setup.ps1. Quando tiver rede, rode mywiniso-setup.cmd na área de trabalho."
+    Write-Host 'SEM INTERNET depois de 5 minutos: o setup.ps1 não rodou. Quando tiver rede, rode mywiniso-setup.cmd na área de trabalho.' -ForegroundColor Red
 }
 
-Remove-Item -LiteralPath 'C:\Windows\Panther\unattend.xml', 'C:\Windows\Panther\unattend-original.xml' -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath 'C:\Windows\Panther\unattend.xml', 'C:\Windows\Panther\unattend-original.xml' -Force -ErrorAction Ignore
 Stop-Transcript | Out-Null
+Write-Host ''
+Write-Host 'Pressione Enter para fechar esta janela.' -ForegroundColor Cyan
+[void](Read-Host)
 exit 0
 ]]></File>
 
