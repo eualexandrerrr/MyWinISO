@@ -1,0 +1,35 @@
+<!--
+  Office LTSC Professional Plus 2024, pt-BR, sem Access, Lync, OneDrive, OneNote, Outlook e Publisher.
+  Instalado pelo setup.ps1 com o Office Deployment Tool: setup.exe /configure Configuracao.xml
+  Gerado no config.office.com; só acrescentei <Display> para instalar sem janela.
+
+  A chave é a GVLK pública da Microsoft para licença por volume: ela só ativa contra um servidor KMS
+  de organização. Com licença pessoal, troque o produto por ProPlus2024Retail (com a sua chave) ou
+  O365ProPlusRetail (login na conta Microsoft) e remova o PIDKEY.
+-->
+<Configuration ID="6f32a7d1-3e92-42b4-ac50-64fdd89b60c3">
+  <Add OfficeClientEdition="64" Channel="PerpetualVL2024">
+    <Product ID="ProPlus2024Volume" PIDKEY="XJ2XN-FW8RK-P4HMP-DKDBV-GCVGB">
+      <Language ID="pt-br" />
+      <ExcludeApp ID="Access" />
+      <ExcludeApp ID="Lync" />
+      <ExcludeApp ID="OneDrive" />
+      <ExcludeApp ID="OneNote" />
+      <ExcludeApp ID="Outlook" />
+      <ExcludeApp ID="Publisher" />
+    </Product>
+  </Add>
+  <Property Name="SharedComputerLicensing" Value="0" />
+  <Property Name="FORCEAPPSHUTDOWN" Value="FALSE" />
+  <Property Name="DeviceBasedLicensing" Value="0" />
+  <Property Name="SCLCacheOverride" Value="0" />
+  <Property Name="AUTOACTIVATE" Value="1" />
+  <Updates Enabled="TRUE" />
+  <RemoveMSI />
+  <Display Level="None" AcceptEULA="TRUE" />
+  <AppSettings>
+    <User Key="software\microsoft\office\16.0\excel\options" Name="defaultformat" Value="51" Type="REG_DWORD" App="excel16" Id="L_SaveExcelfilesas" />
+    <User Key="software\microsoft\office\16.0\powerpoint\options" Name="defaultformat" Value="27" Type="REG_DWORD" App="ppt16" Id="L_SavePowerPointfilesas" />
+    <User Key="software\microsoft\office\16.0\word\options" Name="defaultformat" Value="" Type="REG_SZ" App="word16" Id="L_SaveWordfilesas" />
+  </AppSettings>
+</Configuration>

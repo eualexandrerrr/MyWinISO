@@ -6,7 +6,7 @@
   1. garante que o winget funciona (em instalação nova ele demora a registrar)
   2. instala o Git e clona este repositório em ~\Projetos\mywiniso, se ainda não estiver rodando de lá
   3. winget import apps.json
-  4. RedM na área de trabalho, git config, preferências do usuário, drivers pelo Windows Update
+  4. RedM na área de trabalho, git config, preferências, Office, wallpaper, drivers pelo Windows Update
 #>
 
 $ErrorActionPreference = 'Continue'
@@ -109,8 +109,36 @@ Set-Reg $mouse 'MouseThreshold1' '0' 'String'
 Set-Reg $mouse 'MouseThreshold2' '0' 'String'
 Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue   # reabre sozinho com as preferências
 
-# --- 7. Drivers e atualizações pelo Windows Update (inclui o driver da NVIDIA) ----------------------
+# --- 7. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) ------------------------
+Info 'Office'
+try {
+    $odt = Join-Path $env:TEMP 'odt'
+    New-Item -ItemType Directory -Path $odt -Force | Out-Null
+    Invoke-WebRequest -UseBasicParsing -Uri 'https://officecdn.microsoft.com/pr/wsus/setup.exe' -OutFile (Join-Path $odt 'setup.exe')
+    $cfg = Join-Path $aqui 'office\Configuracao.xml'
+    $p = Start-Process -FilePath (Join-Path $odt 'setup.exe') -ArgumentList "/configure `"$cfg`"" -Wait -PassThru
+    if ($p.ExitCode -ne 0) { Write-Warning "Office: setup.exe saiu com código $($p.ExitCode)" }
+} catch { Write-Warning "Office: $_" }
+
+# --- 8. Wallpaper nos dois monitores e na tela de bloqueio ------------------------------------------
+Info 'Wallpaper'
+$wallDir = Join-Path $env:SystemRoot 'Web\Wallpaper\mywiniso'     # legível pelo SYSTEM, que desenha a tela de bloqueio
+New-Item -ItemType Directory -Path $wallDir -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $aqui 'wallpaper\Jason_and_Lucia_Robbery_landscape.jpg') -Destination $wallDir -Force
+$wall = Join-Path $wallDir 'Jason_and_Lucia_Robbery_landscape.jpg'
+Set-Reg 'HKCU:\Control Panel\Desktop' 'WallPaper'      $wall 'String'
+Set-Reg 'HKCU:\Control Panel\Desktop' 'WallpaperStyle' '10'  'String'     # preencher
+Set-Reg 'HKCU:\Control Panel\Desktop' 'TileWallpaper'  '0'   'String'
+Add-Type -Namespace Win32 -Name Wallpaper -MemberDefinition '[DllImport("user32.dll", SetLastError = true)] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);'
+[Win32.Wallpaper]::SystemParametersInfo(20, 0, $wall, 3) | Out-Null    # SPI_SETDESKWALLPAPER: vale para todos os monitores
+$csp = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP'
+Set-Reg $csp 'LockScreenImagePath'   $wall 'String'
+Set-Reg $csp 'LockScreenImageUrl'    $wall 'String'
+Set-Reg $csp 'LockScreenImageStatus' 1
+
+# --- 9. Drivers e atualizações pelo Windows Update (inclui o driver da NVIDIA) ----------------------
 Info 'Windows Update (drivers)'
+
 try {
     Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null
     Set-PSRepository -Name PSGallery -InstallationPolicy Trusted

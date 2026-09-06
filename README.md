@@ -29,7 +29,7 @@ arquivo de resposta (`autounattend.xml`) que o instalador segue sozinho.
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot, widgets e telemetria, plano de energia alto desempenho |
 | 5 | OOBE | conta local `alexandre`, sem senha, sem conta Microsoft, teclado ABNT2 |
 | 6 | `primeiro-logon.ps1` | login automático permanente, baixa o `setup.ps1` deste repositório e roda |
-| 7 | `setup.ps1` | garante o winget, clona o repo em `~\Projetos\mywiniso`, instala tudo do `apps.json`, RedM na área de trabalho, preferências, drivers pelo Windows Update |
+| 7 | `setup.ps1` | garante o winget, clona o repo em `~\Projetos\mywiniso`, instala tudo do `apps.json`, RedM na área de trabalho, preferências, Office, wallpaper nos dois monitores e na tela de bloqueio, drivers pelo Windows Update |
 
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção.
@@ -44,6 +44,8 @@ na hora, então o pendrive não envelhece quando a lista de programas muda.
 | `setup.ps1` | pós-instalação; roda em qualquer Windows 11, não só no instalado pelo pendrive |
 | `apps.json` | lista do `winget import`; gerar uma nova com `winget export -o apps.json` |
 | `ventoy/ventoy.json` | plugin `auto_install` do Ventoy; o `pendrive.ps1` troca o caminho da ISO |
+| `office/Configuracao.xml` | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool, que o `setup.ps1` baixa da Microsoft na hora |
+| `wallpaper/` | imagem aplicada nos dois monitores e na tela de bloqueio |
 | `pendrive.ps1` | grava o XML no pendrive sem formatar e sem tocar nas ISOs que já estão lá |
 
 ## Fazer o pendrive
@@ -92,6 +94,10 @@ O `primeiro-logon.ps1` deixa um `mywiniso-setup.cmd` na área de trabalho que fa
 
 - **NVIDIA App** não está no winget; o driver vem pelo Windows Update no passo 7. Baixe o app em nvidia.com.
 - **RedM.exe** fica na área de trabalho; o instalador dele não tem modo silencioso.
+- **Office**: a chave do `Configuracao.xml` é a GVLK pública da Microsoft para volume, que só ativa contra um
+  servidor KMS de organização. Com licença pessoal, troque o produto por `ProPlus2024Retail` ou `O365ProPlusRetail`.
+- **Tela de bloqueio**: o wallpaper entra pela `PersonalizationCSP`, que trava a opção em Configurações. Para
+  liberar, apague a chave `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP`.
 - **AtlasOS** é opcional: aplique o playbook por cima, se quiser os tweaks de jogo.
 
 ## Se algo der errado
