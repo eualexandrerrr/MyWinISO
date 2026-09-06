@@ -855,11 +855,11 @@ Etapa 'Preferências do usuário' {
     Set-Reg 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode'   1
     Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled' 1
 
-    # Cor de destaque fixa, e não puxada do wallpaper: a automática tirava um roxo sujo da paisagem. Um
-    # vermelho profundo, o mesmo tom do RedM e do tema dark-red do YouTube que o Alexandre usa. O Windows
+    # Cor de destaque fixa, e não puxada do wallpaper: a automática tirava um roxo sujo da paisagem. Este
+    # é o "Roxo-sombreado-escuro" da própria paleta do Windows, escolhido pelo Alexandre. O Windows
     # guarda a cor em três lugares: a AccentPalette (8 tons RGBA, da clara para a escura, a 4ª é a base) e
     # os dois menus em ABGR, mais o DWM. Trocar aqui e o Explorer, o Iniciar e as Configurações pegam junto.
-    $AccentColor = '#D6002B'
+    $AccentColor = '#6B69D6'
     Passo "cor de destaque fixa: $AccentColor"
     $rgb = [Convert]::ToInt32($AccentColor.TrimStart('#'), 16)
     $cr = ($rgb -shr 16) -band 0xFF; $cg = ($rgb -shr 8) -band 0xFF; $cb = $rgb -band 0xFF
