@@ -29,7 +29,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
 | 6 | `primeiro-logon.ps1` | baixa o `setup.ps1` deste repositório e roda; deixa `mywiniso-setup.cmd` na área de trabalho |
-| 7 | `setup.ps1` | as 19 etapas abaixo |
+| 7 | `setup.ps1` | as 20 etapas abaixo |
 
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção. No WinPE,
@@ -53,7 +53,7 @@ Cada script mostra o estado real, não uma barra decorativa:
 - **specialize**: cada bloco aparece como `-> nome`, com os pacotes removidos um a um, e termina em `OK` ou `ERRO` com a mensagem.
 - **primeiro logon**: uma janela de console que diz o que está fazendo (espera pela rede com contagem de tentativas,
   download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela.
-- **setup.ps1**: cada etapa como `[n/19] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
+- **setup.ps1**: cada etapa como `[n/20] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
   `já instalado` ou `FALHOU (código)`, e no fim de cada etapa `OK`, `AVISO` (erros não fatais, listados) ou
   `ERRO` (a etapa parou, a mensagem aparece). Uma etapa com erro não derruba as seguintes. No final, um resumo
   de todas as etapas com tempo, a lista de programas que falharam e o caminho do log.
@@ -85,6 +85,7 @@ Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou 
 | 17 | barra de tarefas com Explorer, Firefox, Discord, VS Code, WinSCP e Chrome; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar |
 | 18 | WSL com Debian: usuário `alexandre`, sudo sem senha, systemd (`wsl/debian.sh`) |
 | 19 | drivers e atualizações pelo Windows Update |
+| 20 | monitores: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`) |
 
 ## Programas
 
@@ -116,6 +117,7 @@ Insync e Maestro não existem no winget; Google Drive oficial entra no lugar do 
 | `powershell/profile.ps1` | perfil do PowerShell 7 |
 | `taskbar/LayoutModification.xml` | pinos da barra de tarefas |
 | `explorer/WinSetView/` | WinSetView (Les Ferch, MIT) com o modo de exibição do Explorer em `AppData/Win10.ini`; ver o README da pasta |
+| `monitores/` | `monitores.json` com resolução, Hz, orientação e posição de cada monitor, e o `monitores.ps1` que aplica |
 | `startup/startup-onlogon.ps1` | tarefa de logon: maximiza o Discord, posiciona duas janelas do Chrome no monitor vertical, backup do histórico do terminal |
 | `vscode/settings.json` | o que o `setup.ps1` mescla no `settings.json` do VS Code |
 | `wsl/debian.sh`, `wsl/wsl.conf` | configuração do Debian no WSL |
@@ -208,6 +210,7 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 | Energia | Desempenho Máximo, nunca suspende, nunca apaga a tela, sem hibernação |
 | RDP | ligado como host com autenticação de rede; precisa da senha da conta |
 | WSL | Debian com usuário `alexandre`, sudo sem senha, systemd; precisa de um reinício na primeira vez |
+| Monitores | ASUS XG27ACS em 2560x1440 a 180 Hz como principal; LG UltraGear em 1920x1080 a 144 Hz, de pé, à esquerda e 262 px acima. Casados pelo nome do EDID, então trocar de porta não embaralha |
 
 ## Rodar o setup num Windows já instalado
 

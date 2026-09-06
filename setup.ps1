@@ -6,7 +6,7 @@
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
 
-  O console mostra cada etapa como [n/19], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
+  O console mostra cada etapa como [n/20], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
   listados) ou ERRO (a etapa parou; a mensagem aparece). Nenhuma etapa derruba as seguintes. No final sai um
   resumo de todas as etapas e dos programas que falharam. Tudo vai também para ~\mywiniso-setup.log.
 
@@ -19,6 +19,7 @@
    7. Explorer em Detalhes (WinSetView)      17. barra de tarefas e tarefa de logon
    8. Windhawk: tema Translucent             18. WSL com Debian
    9. Office                                 19. Windows Update (drivers)
+  10. wallpaper                              20. monitores: resolução, Hz e posição
   10. wallpaper
 #>
 param([string] $Senha = $env:MYWINISO_SENHA)
@@ -50,7 +51,7 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$TotalEtapas = 19
+$TotalEtapas = 20
 $NumEtapa    = 0
 $Resultado   = New-Object System.Collections.Generic.List[object]
 $Falhas      = New-Object System.Collections.Generic.List[string]
@@ -728,6 +729,18 @@ Etapa 'Windows Update (drivers)' {
     Import-Module PSWindowsUpdate
     Passo 'procurando e instalando atualizações e drivers (o driver da NVIDIA vem por aqui)'
     Get-WindowsUpdate -AcceptAll -Install -IgnoreReboot | Out-Host
+}
+
+# --- 20. Monitores: resolução, frequência, orientação e posição (monitores\monitores.json) --------
+# Depois do Windows Update de propósito: 180 Hz e 1440p só aparecem com o driver da placa instalado.
+# Se rodar antes, o driver genérico recusa o modo e a etapa avisa; rodar o setup de novo resolve.
+Etapa 'Monitores (resolução, Hz, posição)' {
+    $mon  = Join-Path $aqui 'monitores\monitores.ps1'
+    $json = Join-Path $aqui 'monitores\monitores.json'
+    if (-not (Test-Path -LiteralPath $json)) { throw "não achei $json" }
+    Passo 'ASUS XG27ACS em 2560x1440 a 180 Hz como principal; LG UltraGear em 1920x1080 a 144 Hz, de pé, à esquerda'
+    & $mon -Arquivo $json
+    if ($LASTEXITCODE -ne 0) { Falha "monitores: $LASTEXITCODE monitor(es) não ficaram como no monitores.json; confira o driver da placa e rode de novo" }
 }
 
 # --- Resumo -----------------------------------------------------------------------------------------

@@ -1,0 +1,29 @@
+{
+  "_comentario": "Resolução, frequência, orientação e posição de cada monitor. 'nome' casa com o nome amigável do monitor (EDID); 'pnp' é o plano B. Largura e altura são as do painel, sem rotação: o script troca quando a orientação é 90 ou 270. O monitor primário fica em 0,0 e os outros usam coordenadas relativas a ele, que podem ser negativas.",
+  "monitores": [
+    {
+      "nome": "XG27ACS",
+      "pnp": "AUS27FE",
+      "apelido": "ASUS XG27ACS 27 polegadas (jogos, RedM)",
+      "primario": true,
+      "largura": 2560,
+      "altura": 1440,
+      "hz": 180,
+      "orientacao": 0,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "nome": "LG ULTRAGEAR",
+      "pnp": "GSM5C1A",
+      "apelido": "LG UltraGear de pé, à esquerda",
+      "primario": false,
+      "largura": 1920,
+      "altura": 1080,
+      "hz": 144,
+      "orientacao": 90,
+      "x": -1080,
+      "y": -262
+    }
+  ]
+}
