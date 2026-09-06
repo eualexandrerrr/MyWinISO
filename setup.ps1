@@ -6,7 +6,8 @@
   1. garante que o winget funciona (em instalação nova ele demora a registrar)
   2. instala o Git e clona este repositório em ~\Projetos\mywiniso, se ainda não estiver rodando de lá
   3. winget import apps.json
-  4. RedM na área de trabalho, git config, preferências, Office, wallpaper, drivers pelo Windows Update
+  4. RedM na área de trabalho, git config, preferências e energia, Office, wallpaper, RDP, WSL com Debian,
+     drivers pelo Windows Update
 #>
 
 $ErrorActionPreference = 'Continue'
@@ -107,7 +108,40 @@ $mouse = 'HKCU:\Control Panel\Mouse'
 Set-Reg $mouse 'MouseSpeed'      '0' 'String'
 Set-Reg $mouse 'MouseThreshold1' '0' 'String'
 Set-Reg $mouse 'MouseThreshold2' '0' 'String'
+# Desligar e reiniciar sem travar em "este aplicativo está impedindo o desligamento"
+$desk = 'HKCU:\Control Panel\Desktop'
+Set-Reg $desk 'AutoEndTasks'         '1'    'String'
+Set-Reg $desk 'WaitToKillAppTimeout' '2000' 'String'
+Set-Reg $desk 'HungAppTimeout'       '1000' 'String'
+Set-Reg "$adv\TaskbarDeveloperSettings" 'TaskbarEndTask' 1              # "Finalizar tarefa" no botão direito da barra
+# Reabrir os apps que estavam abertos ao entrar de novo (Contas > Opções de entrada)
+Set-Reg 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' 'RestartApps' 1
+# Print Screen não abre a Ferramenta de Captura: a tecla fica livre para o Lightshot
+Set-Reg 'HKCU:\Control Panel\Keyboard' 'PrintScreenKeyForSnippingEnabled' 0
+# Atalhos de acessibilidade desligados (Shift 5x, Shift por 8 s, NumLock por 5 s): atrapalham no jogo
+Set-Reg 'HKCU:\Control Panel\Accessibility\StickyKeys'        'Flags' '506' 'String'
+Set-Reg 'HKCU:\Control Panel\Accessibility\ToggleKeys'        'Flags' '58'  'String'
+Set-Reg 'HKCU:\Control Panel\Accessibility\Keyboard Response' 'Flags' '122' 'String'
+# Game DVR (gravação em segundo plano) desligado
+Set-Reg 'HKCU:\System\GameConfigStore' 'GameDVR_Enabled' 0
+Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled' 0
+# Histórico da área de transferência (Win+V) ligado, "ações sugeridas" desligadas
+Set-Reg 'HKCU:\Software\Microsoft\Clipboard' 'EnableClipboardHistory' 1
+Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\SmartActionPlatform\SmartClipboard' 'Disabled' 1
+# Menu Iniciar com mais fixados e sem recomendações; sem botão do Copilot
+Set-Reg $adv 'Start_Layout'             1
+Set-Reg $adv 'Start_IrisRecommendations' 0
+Set-Reg $adv 'ShowCopilotButton'        0
+# NumLock ligado ao entrar (na sessão e na tela de login)
+Set-Reg 'HKCU:\Control Panel\Keyboard'                    'InitialKeyboardIndicators' '2' 'String'
+Set-Reg 'Registry::HKU\.DEFAULT\Control Panel\Keyboard'  'InitialKeyboardIndicators' '2' 'String'
 Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue   # reabre sozinho com as preferências
+
+# Energia: nunca suspender, nunca apagar a tela, sem hibernação
+powercfg.exe /change standby-timeout-ac 0
+powercfg.exe /change hibernate-timeout-ac 0
+powercfg.exe /change monitor-timeout-ac 0
+powercfg.exe /hibernate off
 
 # --- 7. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) ------------------------
 Info 'Office'
@@ -136,7 +170,33 @@ Set-Reg $csp 'LockScreenImagePath'   $wall 'String'
 Set-Reg $csp 'LockScreenImageUrl'    $wall 'String'
 Set-Reg $csp 'LockScreenImageStatus' 1
 
-# --- 9. Drivers e atualizações pelo Windows Update (inclui o driver da NVIDIA) ----------------------
+# --- 9. Área de Trabalho Remota (este PC como host) ------------------------------------------------
+# Só aceita conta com senha: a do autounattend não tem. Para usar: net user alexandre *  (e atualizar
+# DefaultPassword no Winlogon, senão o login automático para).
+Info 'Área de Trabalho Remota'
+Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' 'fDenyTSConnections' 0
+Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' 'UserAuthentication' 1
+Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28752' -ErrorAction SilentlyContinue   # grupo "Área de Trabalho Remota", nome neutro de idioma
+
+# --- 10. WSL com Debian (wsl\debian.sh configura por dentro) ---------------------------------------
+# Em máquina nova, o WSL precisa de um reinício antes de aceitar distro. O script detecta e avisa;
+# rodar de novo depois do reinício termina o serviço.
+Info 'WSL e Debian'
+try {
+    wsl.exe --status 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        wsl.exe --install --no-distribution
+        Write-Warning 'WSL instalado: precisa reiniciar. Depois rode mywiniso-setup.cmd de novo para instalar e configurar o Debian.'
+    } else {
+        $distros = ((wsl.exe --list --quiet 2>$null) -join "`n") -replace "`0", ''
+        if ($distros -notmatch 'Debian') { wsl.exe --install --distribution Debian --no-launch }
+        $aquiWsl = '/mnt/' + $aqui.Substring(0, 1).ToLower() + ($aqui.Substring(2) -replace '\\', '/')
+        wsl.exe --distribution Debian --user root -- bash "$aquiWsl/wsl/debian.sh"
+        wsl.exe --terminate Debian
+    }
+} catch { Write-Warning "WSL: $_" }
+
+# --- 11. Drivers e atualizações pelo Windows Update (inclui o driver da NVIDIA) ---------------------
 Info 'Windows Update (drivers)'
 
 try {

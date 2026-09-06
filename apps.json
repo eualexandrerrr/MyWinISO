@@ -13,6 +13,8 @@
         { "PackageIdentifier": "Spotify.Spotify" },
         { "PackageIdentifier": "Obsidian.Obsidian" },
         { "PackageIdentifier": "Valve.Steam" },
+        { "PackageIdentifier": "VideoLAN.VLC" },
+        { "PackageIdentifier": "Skillbrains.Lightshot" },
 
         { "PackageIdentifier": "Microsoft.PowerShell" },
         { "PackageIdentifier": "Microsoft.WindowsTerminal" },
@@ -38,6 +40,7 @@
         { "PackageIdentifier": "astral-sh.uv" },
         { "PackageIdentifier": "Docker.DockerDesktop" },
         { "PackageIdentifier": "Cloudflare.cloudflared" },
+        { "PackageIdentifier": "MariaDB.Server" },
 
         { "PackageIdentifier": "EclipseAdoptium.Temurin.17.JDK" },
         { "PackageIdentifier": "Google.AndroidStudio" },

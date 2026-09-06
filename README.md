@@ -29,7 +29,7 @@ arquivo de resposta (`autounattend.xml`) que o instalador segue sozinho.
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot, widgets e telemetria, plano de energia alto desempenho |
 | 5 | OOBE | conta local `alexandre`, sem senha, sem conta Microsoft, teclado ABNT2 |
 | 6 | `primeiro-logon.ps1` | login automático permanente, baixa o `setup.ps1` deste repositório e roda |
-| 7 | `setup.ps1` | garante o winget, clona o repo em `~\Projetos\mywiniso`, instala tudo do `apps.json`, RedM na área de trabalho, preferências, Office, wallpaper nos dois monitores e na tela de bloqueio, drivers pelo Windows Update |
+| 7 | `setup.ps1` | garante o winget, clona o repo em `~\Projetos\mywiniso`, instala tudo do `apps.json`, RedM na área de trabalho, preferências e energia, Office, wallpaper nos dois monitores e na tela de bloqueio, Área de Trabalho Remota, WSL com Debian, drivers pelo Windows Update |
 
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção.
@@ -46,6 +46,7 @@ na hora, então o pendrive não envelhece quando a lista de programas muda.
 | `ventoy/ventoy.json` | plugin `auto_install` do Ventoy; o `pendrive.ps1` troca o caminho da ISO |
 | `office/Configuracao.xml` | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool, que o `setup.ps1` baixa da Microsoft na hora |
 | `wallpaper/` | imagem aplicada nos dois monitores e na tela de bloqueio |
+| `wsl/debian.sh`, `wsl/wsl.conf` | configuração do Debian no WSL: usuário `alexandre`, sudo sem senha, systemd, pacotes base |
 | `pendrive.ps1` | grava o XML no pendrive sem formatar e sem tocar nas ISOs que já estão lá |
 
 ## Fazer o pendrive
@@ -80,6 +81,40 @@ disk*, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). Ou desligue o Secure Boot na UEFI s
 | PC | nome `RRR`, fuso `E. South America Standard Time`, teclado ABNT2 (`0416:00010416`) | `specialize` e `oobeSystem` |
 | Bloatware | lista em `especializar.ps1`; ficam Loja, App Installer, Calculadora, Fotos, Bloco de Notas, Paint, Captura, Terminal | |
 
+## Debloat
+
+Não há ferramenta de terceiro: a limpeza é feita pelo próprio instalador, no passo `specialize`, antes
+de qualquer usuário existir, e a lista está legível no `especializar.ps1` dentro do XML.
+
+| | |
+|:--|:--|
+| Apps removidos | Clipchamp, Cortana, Notícias, Clima, Bing Search, Copilot, Game Assist, app Xbox, Game Bar, Obter Ajuda, Dicas, Office Hub, Solitaire, Sticky Notes, Outlook, Pessoas, Power Automate, To Do, Dev Home, Alarmes, Câmera, Feedback Hub, Mapas, Gravador, Telefone, Mídia, Filmes e TV, Família, Assistência Rápida, Teams, Mail e Calendário |
+| Ficam | Loja e App Installer (o winget depende deles), Calculadora, Fotos, Bloco de Notas, Paint, Ferramenta de Captura, Terminal, Xbox Identity Provider |
+| Também sai | OneDrive, Recall, agendamento pós-OOBE do Outlook e Dev Home |
+| Políticas | telemetria no mínimo, sem sugestões e apps promovidos, sem Copilot, sem widgets, sem ID de anúncio, Edge sem tela inicial, busca sem Bing |
+| Sistema | inicialização rápida desligada, caminhos longos, plano de energia alto desempenho |
+
+Quer mais? Adicione o nome do pacote na lista `$bloat` (`Get-AppxProvisionedPackage -Online | Select DisplayName` mostra os nomes).
+
+## Configurações do usuário
+
+Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
+
+| Área | O que fica |
+|:--|:--|
+| Explorer | extensões visíveis, abre em Este Computador |
+| Barra e Iniciar | ícones à esquerda, só o ícone da busca, sem Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito |
+| Tema | escuro |
+| Desligar | apps travados são encerrados sozinhos (`AutoEndTasks`), sem "este aplicativo está impedindo o desligamento" |
+| Entrar | reabre os apps que estavam abertos (`RestartApps`), NumLock ligado |
+| Teclado | Print Screen não abre a Ferramenta de Captura, fica para o Lightshot; atalhos de Teclas de Aderência, Alternância e Filtragem desligados |
+| Mouse | sem aceleração |
+| Jogos | Game DVR desligado |
+| Área de transferência | histórico Win+V ligado, ações sugeridas desligadas |
+| Energia | nunca suspende, nunca apaga a tela, sem hibernação |
+| RDP | ligado como host com autenticação de rede; **precisa de senha na conta** |
+| WSL | Debian com usuário `alexandre`, sudo sem senha, systemd; precisa de um reinício na primeira vez |
+
 ## Rodar o setup num Windows já instalado
 
 PowerShell como administrador:
@@ -94,6 +129,10 @@ O `primeiro-logon.ps1` deixa um `mywiniso-setup.cmd` na área de trabalho que fa
 
 - **NVIDIA App** não está no winget; o driver vem pelo Windows Update no passo 7. Baixe o app em nvidia.com.
 - **RedM.exe** fica na área de trabalho; o instalador dele não tem modo silencioso.
+- **RDP** só aceita conta com senha. Defina uma com `net user alexandre *` e atualize `DefaultPassword` em
+  `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon`, senão o login automático para.
+- **WSL**: na primeira execução o Windows precisa reiniciar; rode `mywiniso-setup.cmd` de novo e o Debian entra.
+- **MariaDB** instala como serviço com `root` sem senha, só local. `mysql_secure_installation` resolve.
 - **Office**: a chave do `Configuracao.xml` é a GVLK pública da Microsoft para volume, que só ativa contra um
   servidor KMS de organização. Com licença pessoal, troque o produto por `ProPlus2024Retail` ou `O365ProPlusRetail`.
 - **Tela de bloqueio**: o wallpaper entra pela `PersonalizationCSP`, que trava a opção em Configurações. Para
