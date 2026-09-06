@@ -50,8 +50,13 @@ function Merge-VentoyJson([string] $ModeloJson, [string] $Existente, [string] $I
     if ($atual.PSObject.Properties['auto_install']) { $atual.auto_install = $lista }
     else { $atual | Add-Member -NotePropertyName 'auto_install' -NotePropertyValue $lista }
     # VTOY_SECONDARY_BOOT_MENU=0: sem o menu "Boot in normal mode / wimboot", que não tem timeout e travaria o boot
-    $controle = @($atual.control | Where-Object { $_ -and -not $_.PSObject.Properties['VTOY_DEFAULT_IMAGE'] -and -not $_.PSObject.Properties['VTOY_SECONDARY_BOOT_MENU'] }) +
-                @([pscustomobject]@{ VTOY_DEFAULT_IMAGE = $Imagem }, [pscustomobject]@{ VTOY_SECONDARY_BOOT_MENU = '0' })
+    # VTOY_WIN_UEFI_RES_LOCK=1: em UEFI, o WinPE arranca na resolução mais alta que o monitor aceita, em vez
+    #   dos 1024x768 esticados. Equivale a "highestmode on" no BCD, mas sem tocar na ISO. As três opções do
+    #   Ventoy nossas são reescritas do modelo do repositório; o que o pendrive tiver de outras é preservado.
+    $nossas = 'VTOY_DEFAULT_IMAGE', 'VTOY_SECONDARY_BOOT_MENU', 'VTOY_WIN_UEFI_RES_LOCK'
+    $controle = @($atual.control | Where-Object { $c = $_; $c -and -not ($nossas | Where-Object { $c.PSObject.Properties[$_] }) }) +
+                @([pscustomobject]@{ VTOY_DEFAULT_IMAGE = $Imagem }, [pscustomobject]@{ VTOY_SECONDARY_BOOT_MENU = '0' },
+                  [pscustomobject]@{ VTOY_WIN_UEFI_RES_LOCK = '1' })
     if ($atual.PSObject.Properties['control']) { $atual.control = $controle }
     else { $atual | Add-Member -NotePropertyName 'control' -NotePropertyValue $controle }
     return ($atual | ConvertTo-Json -Depth 10)

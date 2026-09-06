@@ -1,6 +1,7 @@
 {
   "control": [
     { "VTOY_SECONDARY_BOOT_MENU": "0" },
+    { "VTOY_WIN_UEFI_RES_LOCK": "1" },
     { "VTOY_DEFAULT_IMAGE": "/win11.iso" }
   ],
   "auto_install": [

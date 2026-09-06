@@ -29,7 +29,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
 | 6 | `primeiro-logon.ps1` | baixa o `setup.ps1` deste repositório e roda; deixa `mywiniso-setup.cmd` na área de trabalho |
-| 7 | `setup.ps1` | as 25 etapas abaixo |
+| 7 | `setup.ps1` | as 29 etapas abaixo |
 
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção. No WinPE,
@@ -53,7 +53,7 @@ Cada script mostra o estado real, não uma barra decorativa:
 - **specialize**: cada bloco aparece como `-> nome`, com os pacotes removidos um a um, e termina em `OK` ou `ERRO` com a mensagem.
 - **primeiro logon**: uma janela de console que diz o que está fazendo (espera pela rede com contagem de tentativas,
   download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela.
-- **setup.ps1**: cada etapa como `[n/25] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
+- **setup.ps1**: cada etapa como `[n/29] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
   `já instalado` ou `FALHOU (código)`, e no fim de cada etapa `OK`, `AVISO` (erros não fatais, listados) ou
   `ERRO` (a etapa parou, a mensagem aparece). Uma etapa com erro não derruba as seguintes. No final, um resumo
   de todas as etapas com tempo, a lista de programas que falharam e o caminho do log.
@@ -64,37 +64,47 @@ Logs: `C:\Windows\Setup\Scripts\especializar.log`, `~\mywiniso.log` (primeiro lo
 
 Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou o `irm` abaixo).
 
-As etapas **4 a 11** são as que mudam o que se vê. Vêm de propósito antes dos programas (etapa 12,
-que sozinha leva uns treze minutos): em uns quatro minutos a máquina já está com o driver da placa,
-nos 2560x1440 a 180 Hz, no tema escuro, com o wallpaper e a barra no lugar, e o resto se instala por baixo.
+O **Claude Code entra na etapa 4**, antes de tudo que é longo: com ele na mão dá para consertar o que
+der errado nas etapas seguintes sem esperar o resto. Depois, as etapas **5 a 12** são as que mudam o que
+se vê. Tudo isso vem de propósito antes dos programas (etapa 13, que sozinha leva uns treze minutos): em
+uns cinco minutos a máquina já está com o driver da placa, nos 2560x1440 a 180 Hz, no tema escuro, com o
+wallpaper e a barra no lugar, e o resto se instala por baixo.
+
+A **etapa 25** é a única fora de lugar de propósito. Reiniciar o Explorer desfaz a atribuição de
+wallpaper por monitor, e o Explorer reinicia na etapa 10 e no fim da 24; então o monitor em pé só recebe
+a imagem dele depois disso. Até lá a etapa 8 deixa a paisagem nos dois.
 
 | # | Etapa |
 |:--|:--|
 | 1 | ponto de restauração antes de mexer em qualquer coisa |
 | 2 | garante que o winget funciona e, se a ISO trouxe um velho (o 1.9 não fala mais com a msstore), instala o release atual do GitHub |
 | 3 | instala o Git e clona este repositório em `~\Projetos\mywiniso`; sem Git, baixa o zip e segue |
-| 4 | **driver de vídeo da NVIDIA**, o mais novo, baixado da própria NVIDIA pela API que a página de download usa; instalado em silêncio com `-s -clean -noreboot` |
-| 5 | **monitores**: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`); tenta três vezes, porque o driver acabou de assumir |
-| 6 | **preferências do usuário**: tema escuro, barra centralizada e só no monitor principal, Explorer, teclado, mouse, privacidade (tabela abaixo) |
-| 7 | **wallpaper** nos dois monitores e na tela de bloqueio |
-| 8 | **foto do perfil** da conta (`perfil/avatar.png`) no Iniciar e na tela de login |
-| 9 | **Explorer em Detalhes** em todas as pastas, com as colunas do Alexandre, pelo WinSetView (`explorer/WinSetView/`); reinicia o Explorer, e é aqui que tema, barra e wallpaper passam a valer |
-| 10 | **Windhawk** com os temas Translucent do Undisputed00x na barra, no Iniciar e na central de notificações, menus de contexto escuros e janelas sem borda; tudo por registro, sem abrir o Windhawk |
-| 11 | **energia**: plano Desempenho Máximo, nunca suspende nem hiberna, tela apaga em 5 minutos |
-| 12 | programas do `apps.json`, um a um, com resultado na tela: 44 do winget, e WhatsApp e Bloco de Notas da Loja. Instalador que recusa administrador (o do Spotify) vai por tarefa agendada sem elevação |
-| 13 | RedM na área de trabalho (o instalador não tem modo silencioso) |
-| 14 | `git config` com nome e e-mail |
-| 15 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`) |
-| 16 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
-| 17 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
-| 18 | MariaDB como serviço, root com a senha da conta e acesso remoto |
-| 19 | fonte Cascadia Mono na máquina, no console e no terminal do VS Code |
-| 20 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
-| 21 | barra de tarefas com Explorer, Firefox, Discord, VS Code, WinSCP e Chrome; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar. Depois dos programas, porque os pinos precisam dos apps instalados |
-| 22 | WSL com Debian: usuário `alexandre` com zsh, sudo sem senha, systemd (`wsl/debian.sh`) |
-| 23 | resto dos drivers e as atualizações, pelo Windows Update (o de vídeo já veio na etapa 4) |
-| 24 | Windows Terminal instalado, atualizado e como console padrão do sistema, com cinco shells em abas (`terminal/settings.json`) |
-| 25 | manutenção: três tarefas de limpeza que rodam sozinhas, armazenamento reservado liberado, sem compartilhar updates com a internet, backup do registro e as tarefas de telemetria de fundo desligadas |
+| 4 | **Claude Code (CLI)** pelo winget, antes de tudo que é longo |
+| 5 | **driver de vídeo da NVIDIA**, o mais novo, baixado da própria NVIDIA pela API que a página de download usa; instalado em silêncio com `-s -clean -noreboot` |
+| 6 | **monitores**: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`); tenta três vezes, porque o driver acabou de assumir |
+| 7 | **preferências do usuário**: tema escuro, barra centralizada e só no monitor principal, **área de trabalho sem ícone nenhum**, **notificações desligadas**, Explorer, teclado, mouse, privacidade (tabela abaixo) |
+| 8 | **wallpaper** (paisagem nos dois monitores) e tela de bloqueio |
+| 9 | **foto do perfil** da conta (`perfil/avatar.png`) no Iniciar e na tela de login |
+| 10 | **Explorer em Detalhes** em todas as pastas, com as colunas do Alexandre, pelo WinSetView (`explorer/WinSetView/`); reinicia o Explorer, e é aqui que tema e barra passam a valer |
+| 11 | **Windhawk** com os temas Translucent do Undisputed00x na barra (escurecida), no Iniciar, na central de notificações e no Explorer, mais reordenar miniaturas da barra, menus escuros e janelas sem borda; tudo por registro, sem abrir o Windhawk. No fim reinicia o `ShellExperienceHost` e o `StartMenuExperienceHost`, senão eles ficam sem tema |
+| 12 | **energia**: plano Desempenho Máximo, nunca suspende nem hiberna, tela apaga em 5 minutos |
+| 13 | programas do `apps.json`, um a um, com resultado na tela: 44 do winget, e WhatsApp e Bloco de Notas da Loja. Instalador que recusa administrador (o do Spotify) vai por tarefa agendada sem elevação |
+| 14 | **Lightshot**: um atalho só, `Shift+PrintScreen`, os outros dois desligados |
+| 15 | **Chrome**: gerenciador de senhas desligado (fica só o Proton Pass), e Proton Pass e Enhancer for YouTube instalados por política |
+| 16 | RedM na área de trabalho (o instalador não tem modo silencioso) |
+| 17 | `git config` com nome e e-mail |
+| 18 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`) |
+| 19 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
+| 20 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
+| 21 | MariaDB como serviço, root com a senha da conta e acesso remoto |
+| 22 | fonte Cascadia Mono na máquina, no console e no terminal do VS Code |
+| 23 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
+| 24 | barra de tarefas com Explorer, Discord, VS Code, WinSCP e Chrome; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar. Depois dos programas, porque os pinos precisam dos apps instalados |
+| 25 | **wallpaper do monitor em pé** (`Real_Dimez_portrait.jpg`), pela `IDesktopWallpaper`; aqui porque o Explorer não reinicia mais |
+| 26 | WSL com Debian: usuário `alexandre` com zsh, sudo sem senha, systemd (`wsl/debian.sh`) |
+| 27 | resto dos drivers e as atualizações, pelo Windows Update (o de vídeo já veio na etapa 5) |
+| 28 | Windows Terminal instalado, atualizado e como console padrão do sistema, com cinco shells em abas (`terminal/settings.json`) |
+| 29 | manutenção: três tarefas de limpeza que rodam sozinhas, armazenamento reservado liberado, sem compartilhar updates com a internet, backup do registro e as tarefas de telemetria de fundo desligadas |
 
 ## Programas
 
@@ -102,9 +112,9 @@ nos 2560x1440 a 180 Hz, no tema escuro, com o wallpaper e a barra no lugar, e o 
 
 | | |
 |:--|:--|
-| Dia a dia | Chrome, Firefox, Google Drive, Discord, WhatsApp, Spotify, Obsidian, VLC, Lightshot, WinRAR, 7-Zip, Bloco de Notas |
+| Dia a dia | Chrome, Google Drive, Discord, WhatsApp, Spotify, Obsidian, VLC, Lightshot, Proton Pass, WinRAR, 7-Zip, Bloco de Notas |
 | Jogos | Steam, Radmin VPN, OBS Studio, RedM (área de trabalho), NVIDIA App |
-| Visual | Windhawk com Taskbar, Start Menu e Notification Center Styler (m417z) nos temas Translucent, Dark mode context menus, Invisible Window Borders |
+| Visual | Windhawk com Taskbar, Start Menu, Notification Center e File Explorer Styler (m417z) nos temas Translucent, Taskbar Thumbnail Reorder, Dark mode context menus, Invisible Window Borders |
 | Dev | Git, GitHub CLI, VS Code, Claude Code, PowerShell 7, Node.js, Bun, Python 3.13, uv, cloudflared, MariaDB, HeidiSQL, WinSCP |
 | CLI | Windows Terminal, starship, zoxide, fzf, bat, fd, ripgrep, eza, jq, ffmpeg, rclone, JetBrainsMono Nerd Font |
 | Android | Temurin JDK 17, Android Studio, Platform Tools, scrcpy |
@@ -122,7 +132,8 @@ Insync e Maestro não existem no winget; Google Drive oficial entra no lugar do 
 | `pendrive.ps1` | grava o XML no pendrive sem formatar e sem tocar nas ISOs que já estão lá |
 | `ventoy/ventoy.json` | plugin `auto_install` do Ventoy; o `pendrive.ps1` troca o caminho da ISO |
 | `office/Configuracao.xml` | Office pelo Office Deployment Tool, que o `setup.ps1` baixa da Microsoft na hora |
-| `wallpaper/` | imagem dos dois monitores e da tela de bloqueio |
+| `chrome/` | `enhancer-for-youtube.json`, o backup das configurações da extensão para importar na mão (ela guarda tudo dentro do perfil do Chrome e não tem managed storage, então não dá para injetar de fora) |
+| `wallpaper/` | a paisagem dos dois monitores e da tela de bloqueio, e a imagem em retrato do monitor em pé |
 | `powershell/profile.ps1` | perfil do PowerShell 7 |
 | `taskbar/LayoutModification.xml` | pinos da barra de tarefas |
 | `explorer/WinSetView/` | WinSetView (Les Ferch, MIT) com o modo de exibição do Explorer em `AppData/Win10.ini`; ver o README da pasta |
@@ -209,7 +220,11 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 |:--|:--|
 | Explorer | extensões visíveis, abre em Este Computador, menu de contexto clássico; Detalhes em todas as pastas com Nome, Caminho, Data de modificação, Tipo e Tamanho (WinSetView) |
 | Barra e Iniciar | ícones centralizados e só no monitor principal (a LG de pé fica sem barra), sem busca, Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito; pinos fixos |
-| Tema | escuro desde o primeiro boot, cor de destaque puxada do wallpaper; barra, Iniciar e central de notificações translúcidos pelo Windhawk (TranslucentTaskbar, TranslucentStartMenu, TranslucentShell), menus escuros, janelas sem borda |
+| Tema | escuro desde o primeiro boot, cor de destaque puxada do wallpaper; barra, Iniciar, central de notificações e Explorer translúcidos pelo Windhawk (TranslucentTaskbar, TranslucentStartMenu, TranslucentShell, Translucent Explorer11), menus escuros, janelas sem borda. A barra leva um `controlStyles` por cima do tema com `TintColor #CC101010`, senão ela fica clara demais sobre wallpaper claro |
+| Área de trabalho | **sem ícone nenhum** (`HideIcons`). Os arquivos continuam lá, o `RedM.exe` inclusive; para chegar neles, Win+E e ir na pasta Área de Trabalho |
+| Notificações | os avisos que aparecem no canto ficam **desligados**. A central de notificações em si continua de pé, de propósito: no Windows 11 o calendário mora dentro dela, e clicar no relógio abre esse painel. A política `DisableNotificationCenter` levaria o calendário junto, então ela fica de fora |
+| Print Screen | `Shift+PrintScreen` chama o Lightshot para selecionar área, e é o único atalho dele ligado; os de "salvar tela toda" e "enviar tela toda" ficam desligados |
+| Senhas | o gerenciador do Chrome é desligado por política (`PasswordManagerEnabled=0`): não salva, não preenche e não sugere senha. Fica só o Proton Pass, no Windows e como extensão |
 | Desligar | apps travados são encerrados sozinhos (`AutoEndTasks`), sem "este aplicativo está impedindo o desligamento" |
 | Entrar | reabre os apps que estavam abertos (`RestartApps`), NumLock ligado, tarefa de logon arruma as janelas |
 | Teclado | só o layout ABNT2, sem nenhum em inglês; repetição no máximo aplicada na hora, cursor piscando rápido, Print Screen não abre a Ferramenta de Captura (fica para o Lightshot), atalhos de Teclas de Aderência, Alternância e Filtragem desligados |

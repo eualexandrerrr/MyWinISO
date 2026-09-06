@@ -6,27 +6,34 @@
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
 
-  O console mostra cada etapa como [n/25], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
+  O console mostra cada etapa como [n/29], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
   listados) ou ERRO (a etapa parou; a mensagem aparece). Nenhuma etapa derruba as seguintes. No final sai um
   resumo de todas as etapas e dos programas que falharam. Tudo vai também para ~\mywiniso-setup.log.
 
-  As etapas 4 a 11 são as que mudam o que se vê: driver de vídeo, monitores, tema, wallpaper, barra.
-  Vêm antes dos programas (etapa 12, que sozinha leva uns treze minutos) para a máquina já estar com a
-  cara certa, na resolução certa e no tema escuro enquanto o resto se instala por baixo.
+  O Claude Code vem na etapa 4, antes de tudo que é longo: com ele na mão dá para consertar o que der
+  errado nas etapas seguintes sem esperar o resto. Depois, as etapas 5 a 12 são as que mudam o que se
+  vê (driver, monitores, tema, wallpaper, barra), e só então vêm os programas, que sozinhos levam uns
+  treze minutos. Em uns cinco minutos a máquina já está na cara certa e o resto instala por baixo.
 
-   1. ponto de restauração antes de mexer    14. git config
-   2. garante que o winget funciona          15. Office
-   3. Git e clone em ~\Projetos\mywiniso     16. Área de Trabalho Remota e política de senha
-   4. driver de vídeo, direto da NVIDIA      17. NVIDIA App (instalador silencioso)
-   5. monitores: resolução, Hz e posição     18. MariaDB: serviço e root
-   6. preferências do usuário (tema escuro)  19. fonte Cascadia Mono, console e VS Code
-   7. wallpaper                              20. perfil do PowerShell
-   8. foto do perfil                         21. barra de tarefas e tarefa de logon
-   9. Explorer em Detalhes (WinSetView)      22. WSL com Debian e zsh
-  10. Windhawk: tema Translucent             23. Windows Update (resto dos drivers)
-  11. energia: tela apaga em 5 min           24. Windows Terminal como terminal único
-  12. programas do apps.json, um a um        25. manutenção: limpeza automática e telemetria
-  13. RedM na área de trabalho
+   1. ponto de restauração antes de mexer    16. RedM na área de trabalho
+   2. garante que o winget funciona          17. git config
+   3. Git e clone em ~\Projetos\mywiniso     18. Office
+   4. Claude Code (CLI)                      19. Área de Trabalho Remota e política de senha
+   5. driver de vídeo, direto da NVIDIA      20. NVIDIA App (instalador silencioso)
+   6. monitores: resolução, Hz e posição     21. MariaDB: serviço e root
+   7. preferências do usuário (tema escuro)  22. fonte Cascadia Mono, console e VS Code
+   8. wallpaper e tela de bloqueio           23. perfil do PowerShell
+   9. foto do perfil                         24. barra de tarefas e tarefa de logon
+  10. Explorer em Detalhes (WinSetView)      25. wallpaper do monitor em pé
+  11. Windhawk: tema Translucent             26. WSL com Debian e zsh
+  12. energia: tela apaga em 5 min           27. Windows Update (resto dos drivers)
+  13. programas do apps.json, um a um        28. Windows Terminal como terminal único
+  14. Lightshot: só Shift+PrintScreen        29. manutenção: limpeza e telemetria
+  15. Chrome: senhas só no Proton Pass
+
+  A etapa 25 é a única fora de lugar de propósito: reiniciar o Explorer desfaz a atribuição de wallpaper
+  por monitor, e o Explorer reinicia na 10 e no fim da 24. Então o monitor em pé só recebe a imagem
+  dele depois disso, e a etapa 8 deixa a paisagem nos dois enquanto o setup corre.
 #>
 param([string] $Senha = $env:MYWINISO_SENHA)
 
@@ -58,7 +65,7 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$TotalEtapas = 25
+$TotalEtapas = 29
 $NumEtapa    = 0
 $Resultado   = New-Object System.Collections.Generic.List[object]
 $Falhas      = New-Object System.Collections.Generic.List[string]
@@ -298,7 +305,19 @@ Etapa 'Git e clone do repositório' {
     } else { Passo 'cópia sem .git ou sem Git; nada a atualizar' }
 }
 
-# --- 4. Driver de vídeo da NVIDIA, direto da NVIDIA --------------------------------------------------
+# --- 4. Claude Code (CLI) -------------------------------------------------------------------------
+# Cedo de propósito: com o Claude na mão dá para consertar o que der errado nas etapas seguintes sem
+# esperar os treze minutos da instalação dos programas. Custa uns 30 s, então não atrasa o driver e os
+# monitores de forma sentida. Não está mais no apps.json, justamente para não instalar duas vezes.
+Etapa 'Claude Code (CLI)' {
+    winget.exe install --id Anthropic.ClaudeCode --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189) { throw "winget não instalou o Claude Code (código $LASTEXITCODE)" }
+    Refresh-Path
+    $exe = Get-Command claude -ErrorAction Ignore
+    if ($exe) { Passo "claude em $($exe.Source)" } else { Falha 'o claude não aparece no PATH; abra um terminal novo e rode "claude --version"' }
+}
+
+# --- 5. Driver de vídeo da NVIDIA, direto da NVIDIA --------------------------------------------------
 # Primeira coisa que o setup faz depois de ter o repositório na mão, e de propósito: sem o driver da placa
 # o Windows fica no adaptador básico da Microsoft, numa resolução baixa, e a etapa dos monitores não tem
 # como pedir 1440p a 180 Hz nem girar a LG. O Windows Update também traz o driver, mas só na etapa 23 e
@@ -391,7 +410,7 @@ Etapa 'Driver de vídeo (NVIDIA)' {
     }
 }
 
-# --- 5. Monitores: resolução, frequência, orientação e posição (monitores\monitores.json) ----------
+# --- 6. Monitores: resolução, frequência, orientação e posição (monitores\monitores.json) ----------
 # Logo depois do driver, de propósito: 1440p a 180 Hz e o giro da LG só existem com o driver da placa
 # carregado. O driver acabou de assumir e o Windows leva alguns segundos para publicar os modos novos,
 # então tenta até três vezes antes de desistir, em vez de avisar na primeira.
@@ -412,12 +431,17 @@ Etapa 'Monitores (resolução, Hz, posição)' {
     }
 }
 
-# --- 6. Preferências do usuário ----------------------------------------------------------------------
+# --- 7. Preferências do usuário ----------------------------------------------------------------------
 Etapa 'Preferências do usuário' {
     Passo 'Explorer: extensões, Este Computador, menu de contexto clássico'
     $adv = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
     Set-Reg $adv 'HideFileExt'        0
     Set-Reg $adv 'LaunchTo'           1
+    # área de trabalho limpa: nenhum ícone aparece. Os arquivos continuam lá (o RedM.exe e o
+    # mywiniso-setup.cmd que o setup deixa), só não são desenhados; para chegar neles, Win+E e ir na
+    # pasta Área de Trabalho. O Explorer relê isso quando reiniciar, na etapa 10.
+    Passo 'área de trabalho sem nenhum ícone (os arquivos ficam, só não aparecem)'
+    Set-Reg $adv 'HideIcons'          1
     Set-Reg 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32' '(Default)' '' 'String'
     Passo 'barra: ícones centralizados, só no monitor principal, sem busca, Visão de Tarefas, widgets e Copilot; "Finalizar tarefa"'
     Set-Reg $adv 'TaskbarAl'          1      # 1 = ícones centralizados
@@ -508,6 +532,21 @@ Etapa 'Preferências do usuário' {
     Passo 'histórico Win+V ligado, ações sugeridas desligadas'
     Set-Reg 'HKCU:\Software\Microsoft\Clipboard' 'EnableClipboardHistory' 1
     Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\SmartActionPlatform\SmartClipboard' 'Disabled' 1
+    Passo 'notificações desligadas: nada de balão, banner nem som de aviso'
+    # Só os avisos (toasts). A central de notificações em si NÃO é desligada, de propósito: no Windows 11
+    # o calendário mora dentro dela, e clicar no relógio abre esse painel. A política
+    # DisableNotificationCenter tiraria o painel inteiro e levaria o calendário junto, então ela fica de
+    # fora. Resultado: nada aparece sozinho no canto, mas clicar no relógio ainda abre o calendário.
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications' 'ToastEnabled' 0
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings' 'NOC_GLOBAL_SETTING_TOASTS_ENABLED' 0
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings' 'NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK' 0
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings' 'NOC_GLOBAL_SETTING_ALLOW_CRITICAL_TOASTS_ABOVE_LOCK' 0
+    # as três da tela de boas-vindas e das "dicas" do Windows, que também chegam como notificação
+    Set-Reg $cdm 'SubscribedContent-310093Enabled' 0
+    Set-Reg $cdm 'SubscribedContent-338389Enabled' 0
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement' 'ScoobeSystemSettingEnabled' 0
+    Passo 'clicar no relógio abre a central com o calendário (por isso a central fica de pé)'
+
     Passo 'sons do sistema desligados'
     Set-Reg 'HKCU:\AppEvents\Schemes' '(Default)' '.None' 'String'
     Get-ChildItem -Path 'HKCU:\AppEvents\Schemes\Apps\*\*' -ErrorAction Ignore |
@@ -560,18 +599,31 @@ Etapa 'Preferências do usuário' {
     Remove-Item -LiteralPath (Join-Path $desktop 'Microsoft Edge.lnk'), 'C:\Users\Public\Desktop\Microsoft Edge.lnk' -Force -ErrorAction Ignore
 }
 
-# --- 7. Wallpaper nos dois monitores e na tela de bloqueio --------------------------------------------
-Etapa 'Wallpaper' {
-    $wallDir = Join-Path $env:SystemRoot 'Web\Wallpaper\mywiniso'     # legível pelo SYSTEM, que desenha a tela de bloqueio
-    New-Item -ItemType Directory -Path $wallDir -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $aqui 'wallpaper\Jason_and_Lucia_Robbery_landscape.jpg') -Destination $wallDir -Force
-    $wall = Join-Path $wallDir 'Jason_and_Lucia_Robbery_landscape.jpg'
-    Passo "área de trabalho (todos os monitores): $wall"
+# --- 8. Wallpaper e tela de bloqueio ----------------------------------------------------------------
+# Aqui entra a paisagem nos dois monitores, para a máquina já ficar com cara de gente nesta altura do
+# setup. A imagem em retrato do monitor em pé NÃO entra aqui: o registro só guarda uma imagem para todos
+# os monitores, e a atribuição por monitor (IDesktopWallpaper) não sobrevive a um reinício do Explorer,
+# que ainda vai acontecer duas vezes: na etapa 10 (WinSetView) e no fim da etapa 24 (barra de tarefas).
+# Testado: depois do Stop-Process explorer, o monitor em pé volta para o valor único do registro.
+# Por isso o retrato fica para a etapa 25, depois do último reinício do Explorer.
+$WallPaisagem = 'Jason_and_Lucia_Robbery_landscape.jpg'
+$WallRetrato  = 'Real_Dimez_portrait.jpg'
+$WallDir      = Join-Path $env:SystemRoot 'Web\Wallpaper\mywiniso'   # legível pelo SYSTEM, que desenha a tela de bloqueio
+Etapa 'Wallpaper e tela de bloqueio' {
+    New-Item -ItemType Directory -Path $WallDir -Force | Out-Null
+    foreach ($nome in $WallPaisagem, $WallRetrato) {
+        $origem = Join-Path $aqui "wallpaper\$nome"
+        if (-not (Test-Path -LiteralPath $origem)) { throw "não achei $origem" }
+        Copy-Item -LiteralPath $origem -Destination $WallDir -Force
+    }
+    $wall = Join-Path $WallDir $WallPaisagem
+    Passo "área de trabalho (todos os monitores por enquanto): $wall"
     Set-Reg 'HKCU:\Control Panel\Desktop' 'WallPaper'      $wall 'String'
     Set-Reg 'HKCU:\Control Panel\Desktop' 'WallpaperStyle' '10'  'String'     # preencher
     Set-Reg 'HKCU:\Control Panel\Desktop' 'TileWallpaper'  '0'   'String'
     Add-Type -Namespace Win32 -Name Wallpaper -MemberDefinition '[DllImport("user32.dll", SetLastError = true)] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);'
     if (-not [Win32.Wallpaper]::SystemParametersInfo(20, 0, $wall, 3)) { throw 'SystemParametersInfo recusou o wallpaper' }
+    Passo "o monitor em pé recebe $WallRetrato na etapa 25, depois do último reinício do Explorer"
     Passo 'tela de bloqueio (PersonalizationCSP)'
     $csp = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP'
     Set-Reg $csp 'LockScreenImagePath'   $wall 'String'
@@ -579,7 +631,7 @@ Etapa 'Wallpaper' {
     Set-Reg $csp 'LockScreenImageStatus' 1
 }
 
-# --- 8. Foto do perfil da conta (perfil\avatar.png) -------------------------------------------------
+# --- 9. Foto do perfil da conta (perfil\avatar.png) -------------------------------------------------
 # O Windows guarda a foto da conta em tamanhos fixos dentro de C:\Users\Public\AccountPictures\<SID> e
 # aponta cada um no registro, por SID. Sem esses valores a tela de login e o Iniciar mostram o boneco padrão.
 Etapa 'Foto do perfil' {
@@ -614,7 +666,7 @@ Etapa 'Foto do perfil' {
     Passo 'foto da conta aplicada; aparece no Iniciar e na tela de login'
 }
 
-# --- 9. Explorer em Detalhes (WinSetView) -------------------------------------------------------------
+# --- 10. Explorer em Detalhes (WinSetView) ------------------------------------------------------------
 # WinSetView (Les Ferch, MIT) grava em HKCU os padrões de exibição de todos os tipos de pasta e reinicia o Explorer.
 # O INI é o do Alexandre (explorer\WinSetView\README.md). Roda em outro processo: o script mexe em Set-Location e
 # solta dezenas de linhas do reg.exe, que vão para um log próprio em vez do console.
@@ -635,7 +687,7 @@ Etapa 'Explorer em Detalhes (WinSetView)' {
     Passo 'aplicado; o Explorer foi reiniciado'
 }
 
-# --- 10. Windhawk: barra, Iniciar e central de notificações translúcidos, menus escuros, sem bordas --------
+# --- 11. Windhawk: barra, Iniciar e central de notificações translúcidos, menus escuros, sem bordas --------
 # Windhawk (winget) mais 5 mods, sem abrir a interface: desde o 1.7 os mods vêm precompilados de mods.windhawk.net e o
 # motor lê HKLM\SOFTWARE\Windhawk\Engine\Mods\<id> e carrega o mod na hora, em todos os processos já injetados. Os temas
 # Translucent (Undisputed00x) já vêm dentro dos Styler do m417z; só o setting "theme" precisa ser gravado. Cada mod:
@@ -659,10 +711,27 @@ Etapa 'Windhawk: tema Translucent' {
     if (-not (Test-Path -LiteralPath (Join-Path $pd 'Engine\Mods\64\libc++.whl'))) {
         Falha 'não achei libc++.whl em Engine\Mods\64 (o Windhawk veio sem a pasta Compiler?); se a barra não ficar translúcida, abra o Windhawk uma vez, que ele copia essas bibliotecas'
     }
+    # O tema TranslucentTaskbar pinta o fundo da barra com <WindhawkBlur TintColor="#25323232">: alpha 0x25,
+    # uns 15%, que sobre wallpaper claro fica quase branco. Aqui o mesmo desfoque com um tint bem mais
+    # escuro: 0xCC é 80% de um cinza quase preto. Para clarear de novo, baixe o primeiro par de dígitos.
+    # Os dois alvos são os do próprio tema: o fundo da barra e o da bandeja que abre no hover.
+    $TaskbarTint  = '#CC101010'
+    $TaskbarFundo = "Fill:=<WindhawkBlur BlurAmount=`"18`" TintColor=`"$TaskbarTint`"/>"
     $mods = @(
-        @{ id = 'windows-11-taskbar-styler';             settings = @{ theme = 'TranslucentTaskbar'; xamlDiagnosticsHandling = 'block' } },
+        @{ id = 'windows-11-taskbar-styler';             settings = [ordered]@{
+                theme                        = 'TranslucentTaskbar'
+                xamlDiagnosticsHandling      = 'block'
+                'controlStyles[0].target'    = 'Taskbar.TaskbarFrame > Grid#RootGrid > Taskbar.TaskbarBackground > Grid > Rectangle#BackgroundFill'
+                'controlStyles[0].styles[0]' = $TaskbarFundo
+                'controlStyles[1].target'    = 'Taskbar.TaskbarBackground#HoverFlyoutBackgroundControl > Grid > Rectangle#BackgroundFill'
+                'controlStyles[1].styles[0]' = $TaskbarFundo
+            } },
         @{ id = 'windows-11-start-menu-styler';          settings = @{ theme = 'TranslucentStartMenu' } },
         @{ id = 'windows-11-notification-center-styler'; settings = @{ theme = 'TranslucentShell' } },
+        # o painel do relógio e a central de notificações são desenhados pelo ShellExperienceHost, e o
+        # Explorer tem o styler próprio: sem ele o Iniciar fica translúcido mas as janelas de pasta não
+        @{ id = 'windows-11-file-explorer-styler';       settings = @{ theme = 'Translucent Explorer11' } },
+        @{ id = 'taskbar-thumbnail-reorder';             settings = @{} },   # arrastar a miniatura da barra com o botão esquerdo
         @{ id = 'dark-menus';                            settings = @{} },
         @{ id = 'invisible-borders';                     settings = @{} }
     )
@@ -715,9 +784,22 @@ Etapa 'Windhawk: tema Translucent' {
     Start-Service -Name Windhawk -ErrorAction SilentlyContinue
     if (-not (Get-Process -Name windhawk -ErrorAction SilentlyContinue)) { Start-Process -FilePath (Join-Path $wh 'windhawk.exe') -ArgumentList '-tray-only' }
     Passo "serviço Windhawk: $((Get-Service -Name Windhawk -ErrorAction SilentlyContinue).Status)"
+
+    # O Windhawk injeta em processo que sobe depois dele. O painel que abre ao clicar no relógio e a
+    # central de notificações são desenhados pelo ShellExperienceHost, e o Iniciar pelo
+    # StartMenuExperienceHost; os dois já estavam de pé quando os mods foram registrados, então ficavam
+    # sem tema até o próximo logon. Era por isso que o Iniciar e o painel do relógio saíam sem estilo
+    # enquanto a barra ficava certa: a barra é o Explorer, que a etapa 10 já tinha reiniciado.
+    # O Windows sobe os dois sozinho em seguida.
+    foreach ($proc in 'ShellExperienceHost', 'StartMenuExperienceHost') {
+        if (Get-Process -Name $proc -ErrorAction Ignore) {
+            Passo "reiniciando o $proc para o Windhawk injetar nele"
+            Stop-Process -Name $proc -Force -ErrorAction Ignore
+        }
+    }
 }
 
-# --- 11. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação -----------
+# --- 12. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação -----------
 Etapa 'Energia' {
     # Desempenho Máximo (Ultimate Performance) vem oculto no Windows 11; /duplicatescheme cria uma cópia visível.
     # Se a cópia já existe (segunda execução), reaproveita em vez de criar outra.
@@ -739,7 +821,7 @@ Etapa 'Energia' {
     Passo ((powercfg.exe /getactivescheme) -join ' ')
 }
 
-# --- 12. Programas, um a um, com resultado ----------------------------------------------------------
+# --- 13. Programas, um a um, com resultado ----------------------------------------------------------
 # Instalador que recusa rodar elevado faz o winget sair com 0x8A150056 (INSTALLER_PROHIBITS_ELEVATION).
 # O setup roda como administrador, então esses vão por uma tarefa agendada sem elevação. O do Spotify é o
 # caso conhecido; se outro aparecer com esse código no resumo, é só acrescentar o id aqui.
@@ -772,13 +854,89 @@ Etapa 'Programas (apps.json)' {
     Refresh-Path
 }
 
-# --- 13. RedM ----------------------------------------------------------------------------------------
+# --- 14. Lightshot: um atalho só, Shift+PrintScreen -----------------------------------------------
+# O Lightshot guarda tudo em HKCU\Software\Skillbrains\lightshot, e lê esses valores quando inicia.
+# Tem três atalhos: o principal (selecionar área), salvar a tela toda e enviar a tela toda para o site.
+# Aqui fica só o principal, em Shift+PrintScreen, e os outros dois desligados.
+#   Hotkey_*_mod  = bits do RegisterHotKey: 1 ALT, 2 CTRL, 4 SHIFT, 8 WIN
+#   Hotkey_*_vk   = virtual-key code: 44 = 0x2C = VK_SNAPSHOT (PrintScreen)
+# A etapa 7 já pôs PrintScreenKeyForSnippingEnabled em 0, senão o Windows engole a tecla para a
+# Ferramenta de Captura antes de o Lightshot ver. appFirstRun em 0 tira a janela de boas-vindas.
+Etapa 'Lightshot: só Shift+PrintScreen' {
+    $ls = 'HKCU:\Software\Skillbrains\lightshot'
+    if (-not (Test-Path -LiteralPath $ls)) {
+        Passo 'o Lightshot ainda não criou a chave dele; gravando os valores para ele achar no primeiro início'
+    }
+    Passo 'atalho principal: Shift+PrintScreen (selecionar área)'
+    Set-Reg $ls 'Hotkey_main_mod'     4
+    Set-Reg $ls 'Hotkey_main_vk'      44
+    Set-Reg $ls 'Hotkey_main_enabled' 1
+    Passo 'os outros dois atalhos desligados: salvar tela toda e enviar tela toda'
+    Set-Reg $ls 'Hotkey_savefull_enabled'   0
+    Set-Reg $ls 'Hotkey_uploadfull_enabled' 0
+    Passo 'sem janela de boas-vindas, sem balão de aviso, em pt-BR'
+    Set-Reg $ls 'appFirstRun'  0
+    Set-Reg $ls 'ShowBubbles'  0
+    Set-Reg $ls 'Locale' 'PT-BR' 'String'
+    # se o Lightshot estiver rodando, ele só releria no próximo início
+    if (Get-Process -Name Lightshot -ErrorAction Ignore) {
+        Passo 'Lightshot está aberto; reiniciando para ele reler os atalhos'
+        $exe = (Get-Process -Name Lightshot -ErrorAction Ignore | Select-Object -First 1).Path
+        Stop-Process -Name Lightshot -Force -ErrorAction Ignore
+        Start-Sleep -Seconds 1
+        if ($exe -and (Test-Path -LiteralPath $exe)) { Start-Process -FilePath $exe }
+    }
+}
+
+# --- 15. Chrome: senhas só no Proton Pass, e as duas extensões já instaladas -----------------------
+# Por política de máquina (HKLM\SOFTWARE\Policies\Google\Chrome), que o Chrome lê no início:
+#   PasswordManagerEnabled 0  desliga o cofre do Chrome inteiro: não oferece salvar, não preenche e
+#                             não sugere senha forte. É o que faz o Proton Pass ficar sendo o único.
+#   ExtensionInstallForcelist instala e mantém instaladas as extensões, sem pedir nada ao usuário.
+# Efeito colateral aceito: o Chrome passa a mostrar "Gerenciado pela sua organização" nas
+# configurações, e extensão de forcelist não pode ser desativada pela página de extensões.
+$ChromeExtensoes = [ordered]@{
+    'ghmbeldphafepmbegfdlkpapadhbakde' = 'Proton Pass'
+    'ponfpcnoihfmfllpaingbgckeeldkhle' = 'Enhancer for YouTube'
+}
+Etapa 'Chrome: senhas no Proton Pass e extensões' {
+    $pol = 'HKLM:\SOFTWARE\Policies\Google\Chrome'
+    Passo 'gerenciador de senhas do Chrome desligado (nao salva, nao preenche, nao sugere senha)'
+    Set-Reg $pol 'PasswordManagerEnabled' 0
+    Passo 'sem detecção de vazamento e sem preenchimento de cartão, que também puxam para o cofre do Chrome'
+    Set-Reg $pol 'PasswordLeakDetectionEnabled' 0
+    Set-Reg $pol 'AutofillCreditCardEnabled'    0
+
+    $lista = "$pol\ExtensionInstallForcelist"
+    $i = 0
+    foreach ($id in $ChromeExtensoes.Keys) {
+        $i++
+        Passo "extensão $($ChromeExtensoes[$id]) ($id)"
+        # o ";https://clients2.google.com/service/update2/crx" e a URL de update da Chrome Web Store
+        Set-Reg $lista "$i" "$id;https://clients2.google.com/service/update2/crx" 'String'
+    }
+
+    # O Enhancer for YouTube guarda a configuração dentro do perfil do Chrome (chrome.storage) e não tem
+    # política de managed storage, então não dá para injetar de fora. O que dá é deixar o arquivo de
+    # backup pronto: na extensão, Opções > Importar configurações > escolher este arquivo.
+    $backup = Join-Path $aqui 'chrome\enhancer-for-youtube.json'
+    if (Test-Path -LiteralPath $backup) {
+        Passo "config do Enhancer for YouTube pronta para importar: $backup"
+        Passo '  (na extensão: Opções > Importar configurações; não dá para injetar de fora)'
+    } else { Falha "não achei $backup" }
+
+    $pp = Get-ChildItem 'C:\Program Files\Proton\Proton Pass', "$env:LOCALAPPDATA\Programs\Proton Pass" -ErrorAction Ignore | Select-Object -First 1
+    if ($pp) { Passo 'Proton Pass para Windows instalado (veio do apps.json)' }
+    else { Passo 'Proton Pass para Windows ainda não aparece; ele vem do apps.json na etapa 13' }
+}
+
+# --- 16. RedM ----------------------------------------------------------------------------------------
 Etapa 'RedM na área de trabalho' {
     Baixar 'https://runtime.fivem.net/redm/RedM.exe' (Join-Path $desktop 'RedM.exe')
     Passo 'o instalador não tem modo silencioso: abra o RedM.exe uma vez'
 }
 
-# --- 14. Git -----------------------------------------------------------------------------------------
+# --- 17. Git -----------------------------------------------------------------------------------------
 Etapa 'git config' {
     git.exe config --global user.name  'Alexandre Rangel'
     git.exe config --global user.email 'mamutal91@gmail.com'
@@ -786,7 +944,7 @@ Etapa 'git config' {
     Passo "user.name=$(git.exe config --global user.name) user.email=$(git.exe config --global user.email)"
 }
 
-# --- 15. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) -------------------------
+# --- 18. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) -------------------------
 Etapa 'Office' {
     $odt = Join-Path $env:TEMP 'odt'
     New-Item -ItemType Directory -Path $odt -Force | Out-Null
@@ -798,7 +956,7 @@ Etapa 'Office' {
     Passo 'instalado'
 }
 
-# --- 16. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados -----------
+# --- 19. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados -----------
 Etapa 'Área de Trabalho Remota e contas' {
     Passo 'RDP ligado com autenticação de rede; regra de firewall'
     Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' 'fDenyTSConnections' 0
@@ -816,7 +974,7 @@ Etapa 'Área de Trabalho Remota e contas' {
     }
 }
 
-# --- 17. NVIDIA App (não está no winget; instalador silencioso com /s) ------------------------------
+# --- 20. NVIDIA App (não está no winget; instalador silencioso com /s) ------------------------------
 Etapa 'NVIDIA App' {
     $url = 'https://us.download.nvidia.com/nvapp/client/11.0.9.251/NVIDIA_app_v11.0.9.251.exe'   # reserva, caso a página mude
     try {
@@ -833,7 +991,7 @@ Etapa 'NVIDIA App' {
     else { Passo 'NVIDIA App instalado' }
 }
 
-# --- 18. MariaDB: serviço automático, root com a senha da conta e acesso remoto ---------------------
+# --- 21. MariaDB: serviço automático, root com a senha da conta e acesso remoto ---------------------
 Etapa 'MariaDB' {
     $maria = Get-ChildItem -Path 'C:\Program Files\MariaDB*' -Directory -ErrorAction Ignore | Select-Object -First 1
     if (-not $maria) { throw 'não instalado (MariaDB.Server falhou no winget?)' }
@@ -863,7 +1021,7 @@ Etapa 'MariaDB' {
     }
 }
 
-# --- 19. Fonte Cascadia Mono (máquina), console e VS Code ---------------------------------------------
+# --- 22. Fonte Cascadia Mono (máquina), console e VS Code ---------------------------------------------
 Etapa 'Cascadia Mono, console e VS Code' {
     $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/cascadia-code/releases/latest' -Headers @{ 'User-Agent' = 'PowerShell' }
     $asset = $rel.assets | Where-Object { $_.name -like 'CascadiaCode-*.zip' } | Select-Object -First 1
@@ -915,7 +1073,7 @@ Etapa 'Cascadia Mono, console e VS Code' {
     Passo "VS Code: $vsArq"
 }
 
-# --- 20. Perfil do PowerShell (powershell\profile.ps1) -----------------------------------------------
+# --- 23. Perfil do PowerShell (powershell\profile.ps1) -----------------------------------------------
 Etapa 'Perfil do PowerShell' {
     $docs = [Environment]::GetFolderPath('MyDocuments')
     New-Item -ItemType Directory -Path (Join-Path $docs 'PowerShell'), (Join-Path $docs 'WindowsPowerShell') -Force | Out-Null
@@ -924,7 +1082,7 @@ Etapa 'Perfil do PowerShell' {
     Passo "$docs\PowerShell\profile.ps1 (o do Windows PowerShell aponta para ele)"
 }
 
-# --- 21. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" ---------------
+# --- 24. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" ---------------
 Etapa 'Barra de tarefas e tarefa de logon' {
     $layout = Join-Path $aqui 'taskbar\LayoutModification.xml'
     foreach ($shell in (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Shell'), 'C:\Users\Default\AppData\Local\Microsoft\Windows\Shell') {
@@ -949,7 +1107,108 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     Stop-Process -Name explorer -Force -ErrorAction Ignore
 }
 
-# --- 22. WSL com Debian (wsl\debian.sh configura por dentro) ----------------------------------------
+# --- 25. Wallpaper do monitor em pé, agora que o Explorer não reinicia mais ------------------------
+# O registro guarda UMA imagem para todos os monitores. Uma por monitor só existe pela interface COM
+# IDesktopWallpaper (Windows 8+), a mesma que a Personalização usa no "Definir para o monitor 2".
+#
+# Esta etapa vem aqui, e não junto da etapa 8, por um motivo medido: reiniciar o Explorer desfaz a
+# atribuição por monitor e devolve todos os monitores ao valor único do registro. O Explorer reinicia
+# na etapa 10 (WinSetView) e no fim da etapa 24 (barra de tarefas). Depois daqui não reinicia mais.
+#
+# Qual imagem para qual monitor: em vez de casar por nome de dispositivo, que muda de porta para porta,
+# a etapa pergunta o retângulo de cada monitor e olha a forma. Mais alto que largo é o retrato (a LG em
+# pé, girada 90 pela etapa 6) e recebe a imagem em retrato; os outros ficam com a paisagem. Funciona
+# igual se as portas trocarem, e não quebra se só um monitor estiver ligado.
+Etapa 'Wallpaper do monitor em pé' {
+    $paisagem = Join-Path $WallDir $WallPaisagem
+    $retrato  = Join-Path $WallDir $WallRetrato
+    foreach ($f in $paisagem, $retrato) { if (-not (Test-Path -LiteralPath $f)) { throw "não achei $f (a etapa 8 não copiou?)" } }
+
+    # Tudo que toca COM fica dentro do C#: o Windows PowerShell 5.1 rebaixa objeto COM para
+    # System.__ComObject e perde a interface, então chamar $dw.Metodo() do PowerShell falha com "não
+    # contém um método denominado...". Os 8 métodos estão na ordem exata da vtable, que é o que define
+    # qual slot é chamado; a declaração tem de ir até o mais alto que se usa (SetPosition).
+    if (-not ('MyWinIso.Wallpaper' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+namespace MyWinIso {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left, Top, Right, Bottom; }
+
+    [ComImport, Guid("B92B56A9-8B55-4E14-9A89-0199BBB6F93B"),
+     InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IDesktopWallpaper {
+        void SetWallpaper([MarshalAs(UnmanagedType.LPWStr)] string monitorID,
+                          [MarshalAs(UnmanagedType.LPWStr)] string wallpaper);
+        [return: MarshalAs(UnmanagedType.LPWStr)] string GetWallpaper([MarshalAs(UnmanagedType.LPWStr)] string monitorID);
+        [return: MarshalAs(UnmanagedType.LPWStr)] string GetMonitorDevicePathAt(uint monitorIndex);
+        uint GetMonitorDevicePathCount();
+        RECT GetMonitorRECT([MarshalAs(UnmanagedType.LPWStr)] string monitorID);
+        void SetBackgroundColor(uint color);
+        uint GetBackgroundColor();
+        void SetPosition(int position);
+    }
+
+    public class MonitorInfo {
+        public string Id;
+        public int Width, Height, Left, Top;
+        public bool Portrait;
+    }
+
+    public static class Wallpaper {
+        static IDesktopWallpaper Novo() {
+            Type t = Type.GetTypeFromCLSID(new Guid("C2CF3110-460E-4FC1-B9D0-8A1C0C9CC4BD"));
+            // o cast tem de ser aqui, no C#: e ele que vira um QueryInterface de verdade
+            return (IDesktopWallpaper)Activator.CreateInstance(t);
+        }
+        public static MonitorInfo[] Monitores() {
+            IDesktopWallpaper dw = Novo();
+            uint n = dw.GetMonitorDevicePathCount();
+            List<MonitorInfo> lista = new List<MonitorInfo>();
+            for (uint i = 0; i < n; i++) {
+                string id = dw.GetMonitorDevicePathAt(i);
+                if (string.IsNullOrEmpty(id)) continue;
+                RECT r;
+                // monitor que ja foi ligado mas esta desconectado agora aparece na lista sem retangulo
+                try { r = dw.GetMonitorRECT(id); } catch { continue; }
+                int w = r.Right - r.Left, h = r.Bottom - r.Top;
+                if (w <= 0 || h <= 0) continue;
+                lista.Add(new MonitorInfo { Id = id, Width = w, Height = h, Left = r.Left, Top = r.Top, Portrait = h > w });
+            }
+            return lista.ToArray();
+        }
+        public static string Atual(string id) { return Novo().GetWallpaper(id); }
+        public static void Definir(string id, string imagem) { Novo().SetWallpaper(id, imagem); }
+        public static void Posicao(int p) { Novo().SetPosition(p); }
+    }
+}
+'@
+    }
+
+    [MyWinIso.Wallpaper]::Posicao(4)      # 4 = DWPOS_FILL, o equivalente ao WallpaperStyle 10 do registro
+    $monitores = [MyWinIso.Wallpaper]::Monitores()
+    Passo "$($monitores.Count) monitor(es) ligados"
+    $emPe = 0
+    foreach ($m in $monitores) {
+        $img = if ($m.Portrait) { $retrato } else { $paisagem }
+        if ($m.Portrait) { $emPe++ }
+        Passo ("  {0}x{1} em {2},{3} -> {4}" -f $m.Width, $m.Height, $m.Left, $m.Top, (Split-Path $img -Leaf))
+        try { [MyWinIso.Wallpaper]::Definir($m.Id, $img) }
+        catch { Falha ("wallpaper do monitor {0}x{1}: {2}" -f $m.Width, $m.Height, $_.Exception.Message) }
+    }
+    if ($emPe -eq 0) { Passo 'nenhum monitor em pé agora; todos ficaram com a paisagem' }
+
+    # confere lendo de volta, que é a única forma de saber se pegou
+    foreach ($m in $monitores) {
+        $esperado = if ($m.Portrait) { $retrato } else { $paisagem }
+        $agora = try { [MyWinIso.Wallpaper]::Atual($m.Id) } catch { '' }
+        if ($agora -ne $esperado) { Falha ("o monitor {0}x{1} ficou com '{2}' em vez de '{3}'" -f $m.Width, $m.Height, (Split-Path $agora -Leaf), (Split-Path $esperado -Leaf)) }
+    }
+}
+
+# --- 26. WSL com Debian (wsl\debian.sh configura por dentro) ----------------------------------------
 Etapa 'WSL com Debian e zsh' {
     Silencioso { wsl.exe --status 2>&1 | Out-Null }
     if ($LASTEXITCODE -ne 0) {
@@ -976,7 +1235,7 @@ Etapa 'WSL com Debian e zsh' {
     }
 }
 
-# --- 23. Resto dos drivers e as atualizações, pelo Windows Update -------------------------------------------------
+# --- 27. Resto dos drivers e as atualizações, pelo Windows Update -------------------------------------------------
 Etapa 'Windows Update (drivers)' {
     Silencioso { Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null }
     # O Set-PSRepository do PowerShellGet 5.1 reclama de 'PackageManagementProvider' e de 'SourceLocation'
@@ -990,7 +1249,7 @@ Etapa 'Windows Update (drivers)' {
     Get-WindowsUpdate -AcceptAll -Install -IgnoreReboot | Out-Host
 }
 
-# --- 24. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) ---------------
+# --- 28. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) ---------------
 # No Windows dá para abrir console de vários lugares (cmd, Windows PowerShell, PowerShell 7, Git Bash, WSL) e
 # cada um abria numa janela diferente. Aqui o Windows Terminal passa a ser o console padrão do sistema: tudo que
 # abrir console aparece nele, em abas, e os cinco shells ficam num menu só. O padrão é o PowerShell 7.
@@ -1014,7 +1273,7 @@ Etapa 'Windows Terminal como terminal único' {
     Passo 'qualquer console do Windows abre no Windows Terminal'
 }
 
-# --- 25. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo ---------------------
+# --- 29. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo ---------------------
 # Vem do Sophia Script (farag2), que trata isso melhor que qualquer outra ferramenta. Três tarefas agendadas
 # que rodam sozinhas, o armazenamento reservado liberado (~7 GB), o compartilhamento P2P de updates desligado
 # e as dez tarefas de telemetria que rodam em segundo plano. A pior delas, o Compatibility Appraiser, varre o
