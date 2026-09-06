@@ -380,7 +380,9 @@ Etapa 'winget' {
 # Se o Git não entrar, baixa o repositório como zip, para que o resto do setup não dependa dele; o Git é tentado
 # de novo na etapa 3, porque está no apps.json.
 $aqui = if ($PSScriptRoot) { $PSScriptRoot } elseif ($env:MYWINISO_RAIZ) { $env:MYWINISO_RAIZ } else { '' }
-$PerfilNoD = Join-Path $aqui 'manutencao\perfil.ps1'   # regra que leva o perfil de todo programa para D: (etapas 7, 13 e 28)
+# vazio quando o setup vem pelo irm, que nao tem PSScriptRoot: ai esta instancia so clona e passa o
+# bastao, e quem usa o caminho e a copia local. Join-Path com string vazia lanca.
+$PerfilNoD = if ($aqui) { Join-Path $aqui 'manutencao\perfil.ps1' } else { '' }   # regra que leva o perfil de todo programa para D: (etapas 7, 13 e 28)
 if (-not ($aqui -and (Test-Path -LiteralPath (Join-Path $aqui 'apps.json')))) {
     Etapa 'Git e clone do repositório' {
         if (-not (Get-Command git.exe -ErrorAction Ignore)) {
