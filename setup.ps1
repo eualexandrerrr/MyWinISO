@@ -1410,14 +1410,19 @@ Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
             Get-Process -Name Discord -ErrorAction Ignore | Stop-Process -Force -ErrorAction Ignore
             Push-Location $vsrc
             try {
+                # Silencioso nos três: o pnpm escreve o progresso todo em stderr, e o 2>&1 daqui faz o
+                # Windows PowerShell 5.1 virar cada linha dessas em registro de erro. Com o corepack
+                # funcionando, a etapa passou a fechar em AVISO exibindo "Successfully patched ...\Discord"
+                # como se fosse defeito. Quem diz se deu certo é o código de saída, conferido logo abaixo,
+                # e ele atravessa o Silencioso intacto.
                 Passo 'pnpm install'
-                & corepack pnpm install --frozen-lockfile 2>&1 | Out-Host
+                Silencioso { & corepack pnpm install --frozen-lockfile 2>&1 | Out-Host }
                 if ($LASTEXITCODE -ne 0) { throw "pnpm install saiu com código $LASTEXITCODE" }
                 Passo 'pnpm build'
-                & corepack pnpm build 2>&1 | Out-Host
+                Silencioso { & corepack pnpm build 2>&1 | Out-Host }
                 if ($LASTEXITCODE -ne 0) { throw "pnpm build saiu com código $LASTEXITCODE" }
                 Passo 'pnpm inject (injeta o dist local no Discord stable, sem perguntar)'
-                & corepack pnpm inject --branch stable 2>&1 | Out-Host
+                Silencioso { & corepack pnpm inject --branch stable 2>&1 | Out-Host }
                 if ($LASTEXITCODE -ne 0) { throw "pnpm inject saiu com código $LASTEXITCODE" }
             } finally { Pop-Location }
             Passo 'Vencord injetado; o Discord abre já com ele'
