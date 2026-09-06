@@ -422,6 +422,9 @@ Etapa 'Windhawk: tema Translucent' {
             if ((Test-Path -LiteralPath $src) -and -not (Test-Path -LiteralPath $dst)) { Copy-Item -LiteralPath $src -Destination $dst -Force }
         }
     }
+    if (-not (Test-Path -LiteralPath (Join-Path $pd 'Engine\Mods\64\libc++.whl'))) {
+        Falha 'não achei libc++.whl em Engine\Mods\64 (o Windhawk veio sem a pasta Compiler?); se a barra não ficar translúcida, abra o Windhawk uma vez, que ele copia essas bibliotecas'
+    }
     $mods = @(
         @{ id = 'windows-11-taskbar-styler';             settings = @{ theme = 'TranslucentTaskbar'; xamlDiagnosticsHandling = 'block' } },
         @{ id = 'windows-11-start-menu-styler';          settings = @{ theme = 'TranslucentStartMenu' } },
