@@ -441,34 +441,47 @@ Etapa 'Windhawk: tema Translucent' {
     foreach ($m in $mods) {
         $id  = $m.id
         $src = Join-Path $pd "ModsSource\$id.wh.cpp"
-        Baixar "https://raw.githubusercontent.com/ramensoftware/windhawk-mods/main/mods/$id.wh.cpp" $src
-        $meta = @{}
-        foreach ($l in (Get-Content -LiteralPath $src -Encoding UTF8 -TotalCount 80)) {
-            if ($l -match '^//\s*==/WindhawkMod==') { break }
-            if ($l -match '^//\s*@(\w+)\s+(.+?)\s*$') { $meta[$Matches[1]] = @($meta[$Matches[1]]) + $Matches[2] }
+        $dll = $null
+        try {
+            # fonte e DLL do mesmo servidor: o raw do GitHub pode anunciar uma versão que o mods.windhawk.net
+            # ainda não compilou, e aí a URL da DLL daria 404
+            $tmpSrc = Join-Path $env:TEMP "$id.wh.cpp"
+            Baixar "https://mods.windhawk.net/mods/$id.wh.cpp" $tmpSrc
+            $meta = @{}
+            foreach ($l in (Get-Content -LiteralPath $tmpSrc -Encoding UTF8 -TotalCount 80)) {
+                if ($l -match '^//\s*==/WindhawkMod==') { break }
+                if ($l -match '^//\s*@(\w+)\s+(.+?)\s*$') { $meta[$Matches[1]] = @($meta[$Matches[1]]) + $Matches[2] }
+            }
+            $ver  = "$($meta['version'])".Trim()
+            $arch = "$($meta['architecture'])".Trim()
+            if (-not $ver) { throw "não achei @version no .wh.cpp" }
+            $inc  = @($meta['include'] | Where-Object { $_ }) -join '|'
+            $exc  = @($meta['exclude'] | Where-Object { $_ }) -join '|'
+            $k    = "HKLM:\SOFTWARE\Windhawk\Engine\Mods\$id"
+            $dllAntes = (Get-ItemProperty -LiteralPath $k -Name LibraryFileName -ErrorAction Ignore).LibraryFileName
+            $verAntes = (Get-ItemProperty -LiteralPath $k -Name Version -ErrorAction Ignore).Version
+            if (-not $dllAntes -or $verAntes -ne $ver) {
+                $dll  = "${id}_${ver}_$(Get-Random -Minimum 100000 -Maximum 999999).dll"
+                $bits = if ($arch -eq 'x86-64') { @('64') } else { @('64', '32') }
+                foreach ($b in $bits) { Baixar "https://mods.windhawk.net/mods/$id/${ver}_$b.dll" (Join-Path $pd "Engine\Mods\$b\$dll") }
+            } else { $dll = $dllAntes; Passo "$id $ver já registrado; só conferindo settings" }
+            # a fonte só vai para ModsSource depois que a DLL existe, senão a interface lista uma versão que não roda
+            Move-Item -LiteralPath $tmpSrc -Destination $src -Force
+            Set-Reg $k 'Include'      $inc  'String'
+            Set-Reg $k 'Exclude'      $exc  'String'
+            Set-Reg $k 'Architecture' $arch 'String'
+            Set-Reg $k 'Version'      $ver  'String'
+            Set-Reg $k 'Disabled'     0
+            foreach ($nome in $m.settings.Keys) { Set-Reg "$k\Settings" $nome $m.settings[$nome] 'String' }
+            Set-Reg $k 'SettingsChangeTime' ([int]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -band 0x7fffffff))
+            Set-Reg $k 'LibraryFileName' $dll 'String'
+            Passo ("{0} {1}: {2}{3}" -f $id, $ver, $(if ($m.settings.theme) { "tema $($m.settings.theme)" } else { 'ativo' }), $(if ($inc) { " em $inc" } else { '' }))
+        } catch {
+            # um mod que falha não leva os outros; DLL pela metade sai para não acumular lixo
+            if ($dll) { Remove-Item -Path (Join-Path $pd "Engine\Mods\*\$dll") -Force -ErrorAction Ignore }
+            Falha ("{0}: {1}" -f $id, $_.Exception.Message)
+            continue
         }
-        $ver  = "$($meta['version'])".Trim()
-        $arch = "$($meta['architecture'])".Trim()
-        if (-not $ver) { throw "${id}: não achei @version no .wh.cpp" }
-        $inc  = @($meta['include'] | Where-Object { $_ }) -join '|'
-        $exc  = @($meta['exclude'] | Where-Object { $_ }) -join '|'
-        $k    = "HKLM:\SOFTWARE\Windhawk\Engine\Mods\$id"
-        $dll  = (Get-ItemProperty -LiteralPath $k -Name LibraryFileName -ErrorAction Ignore).LibraryFileName
-        $verAntes = (Get-ItemProperty -LiteralPath $k -Name Version -ErrorAction Ignore).Version
-        if (-not $dll -or $verAntes -ne $ver) {
-            $dll  = "${id}_${ver}_$(Get-Random -Minimum 100000 -Maximum 999999).dll"
-            $bits = if ($arch -eq 'x86-64') { @('64') } else { @('64', '32') }
-            foreach ($b in $bits) { Baixar "https://mods.windhawk.net/mods/$id/${ver}_$b.dll" (Join-Path $pd "Engine\Mods\$b\$dll") }
-        } else { Passo "$id $ver já registrado; só conferindo settings" }
-        Set-Reg $k 'Include'      $inc  'String'
-        Set-Reg $k 'Exclude'      $exc  'String'
-        Set-Reg $k 'Architecture' $arch 'String'
-        Set-Reg $k 'Version'      $ver  'String'
-        Set-Reg $k 'Disabled'     0
-        foreach ($nome in $m.settings.Keys) { Set-Reg "$k\Settings" $nome $m.settings[$nome] 'String' }
-        Set-Reg $k 'SettingsChangeTime' ([int]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -band 0x7fffffff))
-        Set-Reg $k 'LibraryFileName' $dll 'String'
-        Passo ("{0} {1}: {2}{3}" -f $id, $ver, $(if ($m.settings.theme) { "tema $($m.settings.theme)" } else { 'ativo' }), $(if ($inc) { " em $inc" } else { '' }))
     }
     # serviço e ícone da bandeja; o instalador silencioso pode não subir os dois na hora
     Start-Service -Name Windhawk -ErrorAction SilentlyContinue
