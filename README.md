@@ -29,7 +29,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
 | 6 | `primeiro-logon.ps1` | baixa o `setup.ps1` deste repositório e roda; deixa `mywiniso-setup.cmd` na área de trabalho |
-| 7 | `setup.ps1` | as 21 etapas abaixo |
+| 7 | `setup.ps1` | as 22 etapas abaixo |
 
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção. No WinPE,
@@ -53,7 +53,7 @@ Cada script mostra o estado real, não uma barra decorativa:
 - **specialize**: cada bloco aparece como `-> nome`, com os pacotes removidos um a um, e termina em `OK` ou `ERRO` com a mensagem.
 - **primeiro logon**: uma janela de console que diz o que está fazendo (espera pela rede com contagem de tentativas,
   download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela.
-- **setup.ps1**: cada etapa como `[n/21] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
+- **setup.ps1**: cada etapa como `[n/22] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
   `já instalado` ou `FALHOU (código)`, e no fim de cada etapa `OK`, `AVISO` (erros não fatais, listados) ou
   `ERRO` (a etapa parou, a mensagem aparece). Uma etapa com erro não derruba as seguintes. No final, um resumo
   de todas as etapas com tempo, a lista de programas que falharam e o caminho do log.
@@ -68,7 +68,7 @@ Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou 
 |:--|:--|
 | 1 | garante que o winget funciona e, se a ISO trouxe um velho (o 1.9 não fala mais com a msstore), instala o release atual do GitHub |
 | 2 | instala o Git e clona este repositório em `~\Projetos\mywiniso`; sem Git, baixa o zip e segue |
-| 3 | programas do `apps.json`, um a um, com resultado na tela: 43 do winget, e WhatsApp e Bloco de Notas da Loja |
+| 3 | programas do `apps.json`, um a um, com resultado na tela: 44 do winget, e WhatsApp e Bloco de Notas da Loja |
 | 4 | RedM na área de trabalho (o instalador não tem modo silencioso) |
 | 5 | `git config` com nome e e-mail |
 | 6 | preferências do usuário (tabela abaixo) |
@@ -78,15 +78,16 @@ Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou 
 | 10 | wallpaper nos dois monitores e na tela de bloqueio |
 | 11 | foto do perfil da conta (`perfil/avatar.png`) no Iniciar e na tela de login |
 | 12 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
-| 13 | energia: plano Desempenho Máximo, nunca suspende, nunca apaga a tela, sem hibernação |
+| 13 | energia: plano Desempenho Máximo, nunca suspende nem hiberna, tela apaga em 5 minutos |
 | 14 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
 | 15 | MariaDB como serviço, root com a senha da conta e acesso remoto |
 | 16 | fonte Cascadia Mono na máquina, no console e no terminal do VS Code |
 | 17 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
 | 18 | barra de tarefas com Explorer, Firefox, Discord, VS Code, WinSCP e Chrome; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar |
-| 19 | WSL com Debian: usuário `alexandre`, sudo sem senha, systemd (`wsl/debian.sh`) |
+| 19 | WSL com Debian: usuário `alexandre` com zsh, sudo sem senha, systemd (`wsl/debian.sh`) |
 | 20 | drivers e atualizações pelo Windows Update |
 | 21 | monitores: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`) |
+| 22 | Windows Terminal instalado, atualizado e como console padrão do sistema, com cinco shells em abas (`terminal/settings.json`) |
 
 ## Programas
 
@@ -98,7 +99,7 @@ Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou 
 | Jogos | Steam, Radmin VPN, OBS Studio, RedM (área de trabalho), NVIDIA App |
 | Visual | Windhawk com Taskbar, Start Menu e Notification Center Styler (m417z) nos temas Translucent, Dark mode context menus, Invisible Window Borders |
 | Dev | Git, GitHub CLI, VS Code, Claude Code, PowerShell 7, Node.js, Bun, Python 3.13, uv, cloudflared, MariaDB, HeidiSQL, WinSCP |
-| CLI | starship, zoxide, fzf, bat, fd, ripgrep, eza, jq, ffmpeg, rclone, JetBrainsMono Nerd Font |
+| CLI | Windows Terminal, starship, zoxide, fzf, bat, fd, ripgrep, eza, jq, ffmpeg, rclone, JetBrainsMono Nerd Font |
 | Android | Temurin JDK 17, Android Studio, Platform Tools, scrcpy |
 | Office | Word, Excel, PowerPoint (sem Access, Outlook, OneNote, Publisher, Lync, OneDrive) |
 
@@ -119,6 +120,7 @@ Insync e Maestro não existem no winget; Google Drive oficial entra no lugar do 
 | `taskbar/LayoutModification.xml` | pinos da barra de tarefas |
 | `explorer/WinSetView/` | WinSetView (Les Ferch, MIT) com o modo de exibição do Explorer em `AppData/Win10.ini`; ver o README da pasta |
 | `monitores/` | `monitores.json` com resolução, Hz, orientação e posição de cada monitor, e o `monitores.ps1` que aplica |
+| `terminal/settings.json` | perfis do Windows Terminal: PowerShell 7 (padrão), Windows PowerShell, Prompt de Comando, Debian com zsh e Git Bash |
 | `perfil/avatar.png` | foto da conta, redimensionada pelo setup para os tamanhos que o Windows usa |
 | `startup/startup-onlogon.ps1` | tarefa de logon: maximiza o Discord, posiciona duas janelas do Chrome no monitor vertical, backup do histórico do terminal |
 | `vscode/settings.json` | o que o `setup.ps1` mescla no `settings.json` do VS Code |
@@ -202,16 +204,17 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 | Tema | escuro desde o primeiro boot, cor de destaque puxada do wallpaper; barra, Iniciar e central de notificações translúcidos pelo Windhawk (TranslucentTaskbar, TranslucentStartMenu, TranslucentShell), menus escuros, janelas sem borda |
 | Desligar | apps travados são encerrados sozinhos (`AutoEndTasks`), sem "este aplicativo está impedindo o desligamento" |
 | Entrar | reabre os apps que estavam abertos (`RestartApps`), NumLock ligado, tarefa de logon arruma as janelas |
-| Teclado | repetição no máximo, cursor piscando rápido, Print Screen não abre a Ferramenta de Captura (fica para o Lightshot), atalhos de Teclas de Aderência, Alternância e Filtragem desligados |
+| Teclado | só o layout ABNT2, sem nenhum em inglês; repetição no máximo aplicada na hora, cursor piscando rápido, Print Screen não abre a Ferramenta de Captura (fica para o Lightshot), atalhos de Teclas de Aderência, Alternância e Filtragem desligados |
 | Mouse | sem aceleração |
 | Jogos | Game DVR desligado |
 | Área de transferência | histórico Win+V ligado, ações sugeridas desligadas |
 | Privacidade | sem experiências personalizadas, ID de anúncio, dados de digitação, fala online, localização, Encontrar meu dispositivo |
 | Região | Brasil, pt-BR |
 | Sons | esquema "Sem sons" |
-| Energia | Desempenho Máximo, nunca suspende, nunca apaga a tela, sem hibernação |
+| Energia | Desempenho Máximo, nunca suspende nem hiberna; a tela apaga depois de 5 minutos parada |
 | RDP | ligado como host com autenticação de rede; precisa da senha da conta |
-| WSL | Debian com usuário `alexandre`, sudo sem senha, systemd; precisa de um reinício na primeira vez |
+| WSL | Debian com usuário `alexandre` usando zsh, sudo sem senha, systemd; precisa de um reinício na primeira vez |
+| Terminal | Windows Terminal é o console padrão do sistema; tudo abre nele em abas. PowerShell 7 é o padrão, e o menu tem Windows PowerShell, Prompt de Comando, Debian com zsh e Git Bash |
 | Monitores | ASUS XG27ACS em 2560x1440 a 180 Hz como principal; LG UltraGear em 1920x1080 a 144 Hz, de pé, à esquerda e 262 px acima. Casados pelo nome do EDID, então trocar de porta não embaralha |
 | Conta | foto do perfil do `perfil/avatar.png` no Iniciar e na tela de login |
 

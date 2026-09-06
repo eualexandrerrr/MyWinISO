@@ -6,21 +6,21 @@
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
 
-  O console mostra cada etapa como [n/21], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
+  O console mostra cada etapa como [n/22], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
   listados) ou ERRO (a etapa parou; a mensagem aparece). Nenhuma etapa derruba as seguintes. No final sai um
   resumo de todas as etapas e dos programas que falharam. Tudo vai também para ~\mywiniso-setup.log.
 
    1. garante que o winget funciona          12. Área de Trabalho Remota e política de senha
-   2. Git e clone em ~\Projetos\mywiniso     13. energia: Desempenho Máximo, nunca suspender
+   2. Git e clone em ~\Projetos\mywiniso     13. energia: tela apaga em 5 min, PC nunca dorme
    3. programas do apps.json, um a um        14. NVIDIA App (instalador silencioso)
    4. RedM na área de trabalho               15. MariaDB: serviço e root
    5. git config                             16. fonte Cascadia Mono, console e VS Code
    6. preferências do usuário                17. perfil do PowerShell
    7. Explorer em Detalhes (WinSetView)      18. barra de tarefas e tarefa de logon
-   8. Windhawk: tema Translucent             19. WSL com Debian
+   8. Windhawk: tema Translucent             19. WSL com Debian e zsh
    9. Office                                 20. Windows Update (drivers)
   10. wallpaper                              21. monitores: resolução, Hz e posição
-  11. foto do perfil
+  11. foto do perfil                         22. Windows Terminal como terminal único
   10. wallpaper
 #>
 param([string] $Senha = $env:MYWINISO_SENHA)
@@ -52,7 +52,7 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$TotalEtapas = 21
+$TotalEtapas = 22
 $NumEtapa    = 0
 $Resultado   = New-Object System.Collections.Generic.List[object]
 $Falhas      = New-Object System.Collections.Generic.List[string]
@@ -322,6 +322,28 @@ Etapa 'Preferências do usuário' {
     Set-Reg 'Registry::HKU\.DEFAULT\Control Panel\Keyboard' 'InitialKeyboardIndicators' '2' 'String'
     Set-Reg 'HKCU:\Control Panel\Desktop' 'CursorBlinkRate' '200' 'String'
     Set-Reg $kbd 'PrintScreenKeyForSnippingEnabled' 0
+    # o registro só vale no próximo logon; SystemParametersInfo faz valer agora
+    if (-not ('MyWinIsoTeclado' -as [type])) {
+        Add-Type -Name MyWinIsoTeclado -Namespace Win32 -MemberDefinition '
+            [DllImport("user32.dll", SetLastError = true)]
+            public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, System.IntPtr pvParam, uint fWinIni);'
+    }
+    [void][Win32.MyWinIsoTeclado]::SystemParametersInfo(0x0017, 0, [IntPtr]0, 3)   # SPI_SETKEYBOARDDELAY = mais curto
+    [void][Win32.MyWinIsoTeclado]::SystemParametersInfo(0x000B, 31, [IntPtr]0, 3)  # SPI_SETKEYBOARDSPEED = mais rápido
+    Passo 'só o teclado ABNT2 (Português do Brasil); nenhum layout em inglês'
+    try {
+        $idiomas = New-WinUserLanguageList -Language pt-BR
+        $idiomas[0].InputMethodTips.Clear()
+        $idiomas[0].InputMethodTips.Add('0416:00010416')   # ABNT2
+        Set-WinUserLanguageList -LanguageList $idiomas -Force
+        Set-WinUILanguageOverride -Language pt-BR
+        Set-WinSystemLocale -SystemLocale pt-BR
+        Set-Culture -CultureInfo pt-BR
+    } catch { Falha "teclado: $($_.Exception.Message)" }
+    # o mesmo para a tela de login e para contas novas
+    Set-Reg 'Registry::HKU\.DEFAULT\Keyboard Layout\Preload' '1' '00010416' 'String'
+    Set-Reg 'Registry::HKU\.DEFAULT\Control Panel\Keyboard' 'KeyboardDelay' '0' 'String'
+    Set-Reg 'Registry::HKU\.DEFAULT\Control Panel\Keyboard' 'KeyboardSpeed' '31' 'String'
     Passo 'desligar sem travar em app aberto; reabrir apps ao entrar'
     $desk = 'HKCU:\Control Panel\Desktop'
     Set-Reg $desk 'AutoEndTasks'         '1'    'String'
@@ -590,10 +612,10 @@ Etapa 'Energia' {
         else { $guid = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'; Passo 'Desempenho Máximo não disponível; usando Alto desempenho' }
     }
     powercfg.exe /setactive $guid
-    Passo 'nunca suspender, nunca apagar a tela, hibernação desligada'
+    Passo 'a máquina nunca suspende nem hiberna; a tela apaga depois de 5 minutos parada'
     powercfg.exe /change standby-timeout-ac 0
     powercfg.exe /change hibernate-timeout-ac 0
-    powercfg.exe /change monitor-timeout-ac 0
+    powercfg.exe /change monitor-timeout-ac 5
     powercfg.exe /hibernate off
     Passo ((powercfg.exe /getactivescheme) -join ' ')
 }
@@ -732,7 +754,7 @@ Etapa 'Barra de tarefas e tarefa de logon' {
 }
 
 # --- 19. WSL com Debian (wsl\debian.sh configura por dentro) ---------------------------------------
-Etapa 'WSL com Debian' {
+Etapa 'WSL com Debian e zsh' {
     wsl.exe --status 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Passo 'WSL ainda não instalado; instalando sem distro (precisa reiniciar depois)'
@@ -778,6 +800,30 @@ Etapa 'Monitores (resolução, Hz, posição)' {
     Passo 'ASUS XG27ACS em 2560x1440 a 180 Hz como principal; LG UltraGear em 1920x1080 a 144 Hz, de pé, à esquerda'
     & $mon -Arquivo $json
     if ($LASTEXITCODE -ne 0) { Falha "monitores: $LASTEXITCODE monitor(es) não ficaram como no monitores.json; confira o driver da placa e rode de novo" }
+}
+
+# --- 22. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) --------------
+# No Windows dá para abrir console de vários lugares (cmd, Windows PowerShell, PowerShell 7, Git Bash, WSL) e
+# cada um abria numa janela diferente. Aqui o Windows Terminal passa a ser o console padrão do sistema: tudo que
+# abrir console aparece nele, em abas, e os cinco shells ficam num menu só. O padrão é o PowerShell 7.
+Etapa 'Windows Terminal como terminal único' {
+    winget.exe install --id Microsoft.WindowsTerminal --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189) { Falha "winget não instalou o Windows Terminal (código $LASTEXITCODE)" }
+    Passo 'procurando versão mais nova'
+    winget.exe upgrade --id Microsoft.WindowsTerminal --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+    $pacote = Get-AppxPackage -Name 'Microsoft.WindowsTerminal' -ErrorAction Ignore | Select-Object -First 1
+    if ($pacote) { Passo "Windows Terminal $($pacote.Version)" } else { throw 'o Windows Terminal não aparece instalado' }
+
+    $estado = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState'
+    New-Item -ItemType Directory -Path $estado -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $aqui 'terminal\settings.json') -Destination (Join-Path $estado 'settings.json') -Force
+    Passo "perfis: PowerShell 7 (padrão), Windows PowerShell, Prompt de Comando, Debian com zsh e Git Bash"
+
+    # console padrão do Windows: os dois CLSIDs são do Windows Terminal
+    $inicio = 'HKCU:\Console\%%Startup'
+    Set-Reg $inicio 'DelegationConsole'  '{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}' 'String'
+    Set-Reg $inicio 'DelegationTerminal' '{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}' 'String'
+    Passo 'qualquer console do Windows abre no Windows Terminal'
 }
 
 # --- Resumo -----------------------------------------------------------------------------------------
