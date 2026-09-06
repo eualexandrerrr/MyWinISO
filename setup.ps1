@@ -89,8 +89,14 @@ function Refresh-Path {
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 }
 function Set-Reg([string] $Path, [string] $Name, $Value, [string] $Type = 'DWord') {
-    if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force | Out-Null }
-    Set-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -Type $Type -Force
+    # tolerante: valor protegido (TaskbarDa depois de o pacote Widgets sair, por exemplo) entra na lista de falhas
+    # com nome e motivo, em vez de sujar $Error e virar um AVISO sem contexto no fim da etapa
+    try {
+        if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force -ErrorAction Stop | Out-Null }
+        Set-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -Type $Type -Force -ErrorAction Stop
+    } catch {
+        Falha ("registro {0}\{1}: {2}" -f ($Path -replace '^HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\', 'HKCU:...\'), $Name, $_.Exception.Message)
+    }
 }
 function Baixar([string] $Url, [string] $Destino) {
     Passo "baixando $Url"
