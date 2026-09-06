@@ -1554,7 +1554,11 @@ Etapa 'MariaDB' {
     Passo "serviço: $((Get-Service -Name MariaDB).Status)"
     if ($Senha) {
         $sql = "ALTER USER 'root'@'localhost' IDENTIFIED BY '$Senha'; CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '$Senha'; GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION; FLUSH PRIVILEGES;"
-        & (Join-Path $bin 'mysql.exe') -u root -e $sql 2>$null                          # root ainda sem senha
+        # Silencioso, e não só 2>$null: quando o root já tem senha esta primeira tentativa TEM de falhar,
+        # e o 2>$null esconde a linha da tela mas o Windows PowerShell 5.1 guarda o stderr do programa
+        # nativo em $Error do mesmo jeito. A etapa então fechava em AVISO com o "ERROR 1045 Access denied"
+        # logo depois de ter escrito que o root ficou com senha, que é justamente o contrário do ocorrido.
+        Silencioso { & (Join-Path $bin 'mysql.exe') -u root -e $sql 2>$null }            # root ainda sem senha
         if ($LASTEXITCODE -ne 0) { & (Join-Path $bin 'mysql.exe') -u root "-p$Senha" -e $sql }   # já configurado antes
         if ($LASTEXITCODE -ne 0) { throw 'não consegui definir a senha do root' }
         Passo 'root com senha, acesso local e remoto'
