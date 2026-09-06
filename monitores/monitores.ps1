@@ -149,7 +149,10 @@ function Get-MonitoresLigados {
                 if ($m.Instancia -and $id.InstanceName -like "$($m.Instancia)*") { $m.Nome = $amigavel.Trim() }
             }
         }
-    } catch { }
+    } catch {
+        # monitor genérico (VM) não responde a WmiMonitorID; sem o nome do EDID o casamento cai no plano B ou C
+        if ($Error.Count) { $Error.RemoveAt(0) }
+    }
     $lista
 }
 
