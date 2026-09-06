@@ -726,11 +726,41 @@ Etapa 'Preferências do usuário' {
     }
     Passo 'Bloco de Notas sem o banner da Loja'
     Set-Reg 'HKCU:\Software\Microsoft\Notepad' 'ShowStoreBanner' 0
-    Passo 'Modo Jogo ligado, apps em segundo plano desligados, cor de destaque puxada do wallpaper'
+    Passo 'Modo Jogo ligado, apps em segundo plano desligados'
     Set-Reg 'HKCU:\Software\Microsoft\GameBar' 'AutoGameModeEnabled' 1
     Set-Reg 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode'   1
     Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled' 1
-    Set-Reg 'HKCU:\Control Panel\Desktop' 'AutoColorization' 1
+
+    # Cor de destaque fixa, e não puxada do wallpaper: a automática tirava um roxo sujo da paisagem. Um
+    # vermelho profundo, o mesmo tom do RedM e do tema dark-red do YouTube que o Alexandre usa. O Windows
+    # guarda a cor em três lugares: a AccentPalette (8 tons RGBA, da clara para a escura, a 4ª é a base) e
+    # os dois menus em ABGR, mais o DWM. Trocar aqui e o Explorer, o Iniciar e as Configurações pegam junto.
+    $AccentColor = '#D6002B'
+    Passo "cor de destaque fixa: $AccentColor"
+    $rgb = [Convert]::ToInt32($AccentColor.TrimStart('#'), 16)
+    $cr = ($rgb -shr 16) -band 0xFF; $cg = ($rgb -shr 8) -band 0xFF; $cb = $rgb -band 0xFF
+    function Tom([int] $f) {   # f > 0 clareia (mistura com branco), f < 0 escurece (com preto); em centésimos
+        $alvo = if ($f -gt 0) { 255 } else { 0 }; $p = [Math]::Abs($f) / 100
+        [byte[]]@([Math]::Round($cr + ($alvo - $cr) * $p), [Math]::Round($cg + ($alvo - $cg) * $p), [Math]::Round($cb + ($alvo - $cb) * $p), 0)
+    }
+    $pal = New-Object byte[] 32
+    $i = 0
+    foreach ($f in 60, 40, 20, 0, -20, -40, -60, -80) { $t = Tom $f; [Array]::Copy($t, 0, $pal, $i * 4, 4); $i++ }
+    function Abgr([byte[]] $t) { [uint32](0xFF000000 -bor ([uint32]$t[2] -shl 16) -bor ([uint32]$t[1] -shl 8) -bor [uint32]$t[0]) }
+    $acc = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent'
+    Set-Reg $acc 'AccentPalette'   $pal 'Binary'
+    Set-Reg $acc 'AccentColorMenu' (Abgr (Tom 0))   'DWord'
+    Set-Reg $acc 'StartColorMenu'  (Abgr (Tom -20)) 'DWord'
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\DWM' 'AccentColor'         (Abgr (Tom 0)) 'DWord'
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\DWM' 'ColorizationColor'   ([uint32](0xC4000000 -bor $rgb)) 'DWord'
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\DWM' 'ColorizationAfterglow' ([uint32](0xC4000000 -bor $rgb)) 'DWord'
+    Set-Reg 'HKCU:\Control Panel\Desktop' 'AutoColorization' 0
+    # avisa quem está aberto (Explorer, Configurações) que a cor mudou
+    if (-not ('Win32.Aviso' -as [type])) {
+        Add-Type -Namespace Win32 -Name Aviso -MemberDefinition '[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessageTimeout(IntPtr h, uint m, UIntPtr w, string l, uint f, uint t, out UIntPtr r);'
+    }
+    $res = [UIntPtr]::Zero
+    [void][Win32.Aviso]::SendMessageTimeout([IntPtr]0xFFFF, 0x1A, [UIntPtr]::Zero, 'ImmersiveColorSet', 2, 1000, [ref]$res)
     Passo 'região Brasil; ícone do Edge fora da área de trabalho'
     Set-WinHomeLocation -GeoId 32
     Remove-Item -LiteralPath (Join-Path $desktop 'Microsoft Edge.lnk'), 'C:\Users\Public\Desktop\Microsoft Edge.lnk' -Force -ErrorAction Ignore
@@ -1068,6 +1098,22 @@ Etapa 'Energia' {
     powercfg.exe /change monitor-timeout-ac 5
     powercfg.exe /hibernate off
     Passo ((powercfg.exe /getactivescheme) -join ' ')
+
+    # Memória, pelo hardware. 32 GB de RAM: pagefile fixo de 16 GB no C: (início = máximo, então nunca cresce
+    # nem fragmenta no meio de um jogo, e ainda cabe um dump de kernel) e compressão de memória desligada (ela
+    # gasta CPU para poupar RAM, que sobra). O que o Intelligent Standby List Cleaner faz, a limpeza da
+    # standby list quando a RAM livre cai, é a tarefa 'Standby list' da etapa 28. Pagefile e compressão só
+    # valem depois de reiniciar.
+    $ramGB = [Math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
+    $pfMB  = [Math]::Max(4096, [Math]::Min(16384, [int]($ramGB * 512)))    # metade da RAM, entre 4 e 16 GB
+    Passo "memória: $ramGB GB de RAM, pagefile fixo de $($pfMB / 1024) GB no C:, sem compressão de memória"
+    $cs = Get-CimInstance Win32_ComputerSystem
+    if ($cs.AutomaticManagedPagefile) { $cs | Set-CimInstance -Property @{ AutomaticManagedPagefile = $false } }
+    Get-CimInstance Win32_PageFileSetting | Where-Object Name -notlike 'C:*' | Remove-CimInstance
+    $pf = Get-CimInstance Win32_PageFileSetting | Where-Object Name -like 'C:*'
+    if ($pf) { $pf | Set-CimInstance -Property @{ InitialSize = $pfMB; MaximumSize = $pfMB } }
+    else { New-CimInstance -ClassName Win32_PageFileSetting -Property @{ Name = 'C:\pagefile.sys'; InitialSize = $pfMB; MaximumSize = $pfMB } | Out-Null }
+    Silencioso { Disable-MMAgent -MemoryCompression }
 }
 
 # --- 13. Programas, um a um, com resultado ----------------------------------------------------------
@@ -1558,6 +1604,19 @@ Etapa 'Manutenção e telemetria de fundo' {
             -Action  (New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$arq`"") | Out-Null
         Passo "tarefa '$($t.Nome)': a cada $($t.Dias) dias, 21h"
     }
+
+    # O que o Intelligent Standby List Cleaner faz, sem instalar nada: a cada minuto, se a RAM livre caiu
+    # abaixo de um quarto e a standby list passou de 1 GB, manutencao\standby.ps1 esvazia a standby list
+    # pela mesma chamada que o ISLC usa (NtSetSystemInformation, MemoryPurgeStandbyList). Evita a engasgada
+    # em jogo quando o Windows fica segurando cache velho em vez de entregar a memória.
+    $standby = Join-Path $tarefasDir 'standby.ps1'
+    if (Test-Path -LiteralPath $standby) {
+        $gatilho = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
+        $cfg = New-ScheduledTaskSettingsSet -Compatibility Win8 -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 2) -Hidden
+        Register-ScheduledTask -TaskName 'Standby list' -TaskPath '\mywiniso' -Force -Settings $cfg -Principal $principal -Trigger $gatilho `
+            -Action (New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$standby`"") | Out-Null
+        Passo "tarefa 'Standby list': a cada minuto, limpa a standby list quando a RAM livre cai (o que o ISLC faz)"
+    } else { Falha "não achei $standby" }
 }
 
 # --- Resumo -----------------------------------------------------------------------------------------
