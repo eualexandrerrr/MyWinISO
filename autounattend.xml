@@ -54,7 +54,8 @@
           <Description>Pular checagem de CPU</Description>
           <Path>reg.exe add HKLM\SYSTEM\Setup\LabConfig /v BypassCPUCheck /t REG_DWORD /d 1 /f</Path>
         </RunSynchronousCommand>
-        <!-- O WinPE do instalador nao tem PowerShell, e cada <Path> tem no maximo 255 caracteres.
+        <!-- O WinPE do instalador nao tem PowerShell, e cada <Path> de qualquer passo tem no maximo 255 caracteres
+             (o motor de unattend rejeita o arquivo inteiro como invalido se passar).
              Os comandos abaixo gravam X:\mywiniso\extrai.vbs por echo, linha a linha. Fonte legivel:
                Option Explicit
                On Error Resume Next
@@ -159,7 +160,7 @@
         <RunSynchronousCommand wcm:action="add">
           <Order>1</Order>
           <Description>Extrair os scripts embutidos para C:\Windows\Setup\Scripts</Description>
-          <Path>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$x = [xml]::new(); $x.Load('C:\Windows\Panther\unattend.xml'); Invoke-Command -ScriptBlock ([scriptblock]::Create($x.GetElementsByTagName('ExtractScript')[0].InnerText)) -ArgumentList $x, 'specialize'"</Path>
+          <Path>powershell.exe -nop -ep Bypass -c "$x=[xml]::new();$x.Load('C:\Windows\Panther\unattend.xml');icm ([scriptblock]::Create($x.GetElementsByTagName('ExtractScript')[0].InnerText)) -Args $x,'specialize'"</Path>
         </RunSynchronousCommand>
         <RunSynchronousCommand wcm:action="add">
           <Order>2</Order>

@@ -34,7 +34,8 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção. No WinPE,
 que não tem PowerShell, um extrator em VBScript gravado por `echo` (cada `<Path>` tem no máximo 255
-caracteres) lê o XML pelo MSXML e solta o `instala.vbs`; nos passos seguintes o PowerShell já existe.
+caracteres, em qualquer passo; o motor de unattend rejeita o arquivo inteiro se um passar) lê o XML pelo MSXML e
+solta o `instala.vbs`; nos passos seguintes o PowerShell já existe.
 
 Por que o `instala.vbs` substitui o Setup: o Setup novo do Windows 11 (24H2 em diante) reescreve o arquivo
 de resposta para os passos seguintes com só o que ele entende (conta local e bypass) e descarta o resto:
