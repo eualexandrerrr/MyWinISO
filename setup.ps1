@@ -520,7 +520,9 @@ Etapa 'Preferências do usuário' {
             @{ de = "$env:APPDATA\obsidian";                     para = 'obsidian' },
             @{ de = "$env:APPDATA\obs-studio";                   para = 'obs-studio' },     # cenas, perfis, chaves de stream
             @{ de = "$env:APPDATA\GitHub CLI";                   para = 'GitHub CLI' },     # gh: hosts.yml (o token é DPAPI, pede login)
-            @{ de = "$env:USERPROFILE\.claude";                  para = '.claude' },        # Claude Code: memória, projetos, configurações
+            @{ de = "$env:USERPROFILE\.claude";                  para = '.claude' },        # Claude Code: memória, projetos, transcrições, configurações
+            @{ de = "$env:USERPROFILE\.engram";                  para = '.engram' },        # engram.db do Claude
+            @{ de = "$env:APPDATA\Claude Code";                  para = 'Claude Code' },    # host nativo da extensão do Chrome
             @{ de = "$env:USERPROFILE\.ssh";                     para = '.ssh' },
             @{ de = "$env:USERPROFILE\.config";                  para = '.config' })) {     # starship e afins
             $para = Join-Path $perfil $j.para
