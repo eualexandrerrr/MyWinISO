@@ -357,7 +357,7 @@ Faz 'Bloatware: pacotes provisionados' {
     # Paint e Ferramenta de Captura saem (Lightshot no lugar). Bloco de Notas fica.
     $bloat = @(
         'Clipchamp.Clipchamp', 'Microsoft.549981C3F5F10', 'Microsoft.BingNews', 'Microsoft.BingSearch',
-        'Microsoft.BingWeather', 'Microsoft.Copilot', 'Microsoft.Edge.GameAssist', 'Microsoft.GamingApp',
+        'Microsoft.BingWeather', 'Microsoft.Copilot', 'Microsoft.Edge.GameAssist', 'Microsoft.GamingApp', 'Microsoft.GamingServices',
         'Microsoft.GetHelp', 'Microsoft.Getstarted', 'Microsoft.Microsoft3DViewer', 'Microsoft.MicrosoftOfficeHub',
         'Microsoft.MicrosoftSolitaireCollection', 'Microsoft.MicrosoftStickyNotes', 'Microsoft.MixedReality.Portal',
         'Microsoft.MSPaint', 'Microsoft.Office.OneNote', 'Microsoft.OutlookForWindows', 'Microsoft.Paint',
@@ -368,7 +368,7 @@ Faz 'Bloatware: pacotes provisionados' {
         'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone', 'Microsoft.ZuneMusic',
         'Microsoft.ZuneVideo', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
         'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps',
-        'MicrosoftWindows.Client.WebExperience', 'Microsoft.WidgetsPlatformRuntime', 'MicrosoftWindows.CrossDevice',
+        'MicrosoftWindows.Client.WebExperience', 'Microsoft.WidgetsPlatformRuntime',
         'Microsoft.SecureAssessmentBrowser'
     )
     $n = 0
@@ -385,7 +385,7 @@ Faz 'Capacidades (recursos sob demanda)' {
         'App.StepsRecorder', 'App.Support.QuickAssist', 'Browser.InternetExplorer', 'Hello.Face.18967', 'Hello.Face.20134',
         'Hello.Face.Migration.18967', 'Language.Handwriting', 'Language.Speech', 'Language.TextToSpeech', 'MathRecognizer',
         'Media.WindowsMediaPlayer', 'Microsoft.Windows.MSPaint', 'Microsoft.Windows.PowerShell.ISE',
-        'Microsoft.Windows.SnippingTool', 'Microsoft.Windows.WordPad', 'OneCoreUAP.OneSync', 'OpenSSH.Client', 'Print.Fax.Scan'
+        'Microsoft.Windows.SnippingTool', 'Microsoft.Windows.WordPad', 'OneCoreUAP.OneSync', 'Print.Fax.Scan'
     )
     foreach ($c in Get-WindowsCapability -Online | Where-Object { $_.State -notin 'NotPresent', 'Removed' -and $capacidades -contains ($_.Name -split '~')[0] }) {
         Write-Host "   removendo $($c.Name)"
@@ -394,13 +394,15 @@ Faz 'Capacidades (recursos sob demanda)' {
     }
 }
 
-Faz 'Recursos opcionais: PowerShell 2.0, cliente RDP (mstsc), Recall, Captura' {
-    # MediaPlayback fica: jogos e apps usam para vídeo.
-    foreach ($f in 'MicrosoftWindowsPowerShellV2Root', 'Microsoft-RemoteDesktopConnection', 'Recall', 'Microsoft-SnippingTool') {
+Faz 'Recursos opcionais: PowerShell 2.0, Recall, Captura' {
+    # MediaPlayback fica: jogos e apps usam para vídeo. O cliente RDP (mstsc) fica: o repo liga o RDP como host,
+    # e sem o cliente não dá para sair desta máquina para outra. Nada de -Remove: ele apaga o payload e só volta
+    # com fonte de instalação; desligar já basta.
+    foreach ($f in 'MicrosoftWindowsPowerShellV2Root', 'Recall', 'Microsoft-SnippingTool') {
         $r = Get-WindowsOptionalFeature -Online -FeatureName $f -ErrorAction Ignore
         if ($r -and $r.State -notin 'Disabled', 'DisabledWithPayloadRemoved') {
             Write-Host "   desligando $f"
-            try { Disable-WindowsOptionalFeature -Online -FeatureName $f -Remove -NoRestart | Out-Null }
+            try { Disable-WindowsOptionalFeature -Online -FeatureName $f -NoRestart | Out-Null }
             catch { Write-Host "   FALHOU ${f}: $($_.Exception.Message)" -ForegroundColor Yellow }
         }
     }

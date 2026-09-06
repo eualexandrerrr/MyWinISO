@@ -6,21 +6,22 @@
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
 
-  O console mostra cada etapa como [n/22], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
+  O console mostra cada etapa como [n/24], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
   listados) ou ERRO (a etapa parou; a mensagem aparece). Nenhuma etapa derruba as seguintes. No final sai um
   resumo de todas as etapas e dos programas que falharam. Tudo vai também para ~\mywiniso-setup.log.
 
-   1. garante que o winget funciona          12. Área de Trabalho Remota e política de senha
-   2. Git e clone em ~\Projetos\mywiniso     13. energia: tela apaga em 5 min, PC nunca dorme
-   3. programas do apps.json, um a um        14. NVIDIA App (instalador silencioso)
-   4. RedM na área de trabalho               15. MariaDB: serviço e root
-   5. git config                             16. fonte Cascadia Mono, console e VS Code
-   6. preferências do usuário                17. perfil do PowerShell
-   7. Explorer em Detalhes (WinSetView)      18. barra de tarefas e tarefa de logon
-   8. Windhawk: tema Translucent             19. WSL com Debian e zsh
-   9. Office                                 20. Windows Update (drivers)
-  10. wallpaper                              21. monitores: resolução, Hz e posição
-  11. foto do perfil                         22. Windows Terminal como terminal único
+   1. ponto de restauração antes de mexer    13. Área de Trabalho Remota e política de senha
+   2. garante que o winget funciona          14. energia: tela apaga em 5 min, PC nunca dorme
+   3. Git e clone em ~\Projetos\mywiniso     15. NVIDIA App (instalador silencioso)
+   4. programas do apps.json, um a um        16. MariaDB: serviço e root
+   5. RedM na área de trabalho               17. fonte Cascadia Mono, console e VS Code
+   6. git config                             18. perfil do PowerShell
+   7. preferências do usuário                19. barra de tarefas e tarefa de logon
+   8. Explorer em Detalhes (WinSetView)      20. WSL com Debian e zsh
+   9. Windhawk: tema Translucent             21. Windows Update (drivers)
+  10. Office                                 22. monitores: resolução, Hz e posição
+  11. wallpaper                              23. Windows Terminal como terminal único
+  12. foto do perfil                         24. manutenção: limpeza automática e telemetria
   10. wallpaper
 #>
 param([string] $Senha = $env:MYWINISO_SENHA)
@@ -52,7 +53,7 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$TotalEtapas = 22
+$TotalEtapas = 24
 $NumEtapa    = 0
 $Resultado   = New-Object System.Collections.Generic.List[object]
 $Falhas      = New-Object System.Collections.Generic.List[string]
@@ -112,7 +113,21 @@ if (-not $eu.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 }
 Write-Host "mywiniso setup | $(Get-Date -Format 'dd/MM/yyyy HH:mm') | usuário $env:USERNAME | senha: $(if ($Senha) { 'sim' } else { 'não' }) | log: $Log"
 
-# --- 1. winget -------------------------------------------------------------------------------------
+# --- 1. Ponto de restauração antes de mexer em qualquer coisa ---------------------------------------
+# O setup grava mais de cem valores de registro. Um ponto de restauração é a única forma barata de voltar
+# atrás se algo sair errado. O Sophia Script e o WinUtil fazem isso como primeira ação, e por isso está aqui.
+Etapa 'Ponto de restauração' {
+    $sr = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
+    Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction Stop
+    Set-Reg $sr 'SystemRestorePointCreationFrequency' 0      # sem o limite de um ponto a cada 24 h
+    Passo 'criando o ponto (pode levar um minuto)'
+    Checkpoint-Computer -Description 'mywiniso: antes do setup' -RestorePointType MODIFY_SETTINGS
+    Set-Reg $sr 'SystemRestorePointCreationFrequency' 1440   # volta ao padrão
+    $ponto = Get-ComputerRestorePoint -ErrorAction Ignore | Select-Object -Last 1
+    if ($ponto) { Passo "ponto $($ponto.SequenceNumber): $($ponto.Description)" }
+}
+
+# --- 2. winget -------------------------------------------------------------------------------------
 # A ISO traz um App Installer velho (1.9 na 25H2) que não fala mais com a fonte msstore (certificado, 0x8a15005e)
 # e faz qualquer "winget install" sem --source parar pedindo para escolher fonte. Então, além de garantir que o
 # winget existe, esta etapa o troca pelo release atual do GitHub quando ele estiver mais de uma versão atrás.
@@ -175,7 +190,7 @@ Etapa 'winget' {
     winget.exe source update --disable-interactivity | Out-Null
 }
 
-# --- 2. Git e clone ---------------------------------------------------------------------------------
+# --- 3. Git e clone ---------------------------------------------------------------------------------
 # Rodando pelo irm/-File (sem apps.json ao lado): instala o Git, clona o repositório e continua pela cópia clonada.
 # Se o Git não entrar, baixa o repositório como zip, para que o resto do setup não dependa dele; o Git é tentado
 # de novo na etapa 3, porque está no apps.json.
@@ -239,7 +254,7 @@ Etapa 'Git e clone do repositório' {
     } else { Passo 'cópia sem .git ou sem Git; nada a atualizar' }
 }
 
-# --- 3. Programas, um a um, com resultado ----------------------------------------------------------
+# --- 4. Programas, um a um, com resultado ----------------------------------------------------------
 Etapa 'Programas (apps.json)' {
     $lista = Get-Content -LiteralPath (Join-Path $aqui 'apps.json') -Raw | ConvertFrom-Json
     $pacotes = @()
@@ -259,14 +274,14 @@ Etapa 'Programas (apps.json)' {
     Refresh-Path
 }
 
-# --- 4. RedM ----------------------------------------------------------------------------------------
+# --- 5. RedM ----------------------------------------------------------------------------------------
 $desktop = [Environment]::GetFolderPath('Desktop')
 Etapa 'RedM na área de trabalho' {
     Baixar 'https://runtime.fivem.net/redm/RedM.exe' (Join-Path $desktop 'RedM.exe')
     Passo 'o instalador não tem modo silencioso: abra o RedM.exe uma vez'
 }
 
-# --- 5. Git -----------------------------------------------------------------------------------------
+# --- 6. Git -----------------------------------------------------------------------------------------
 Etapa 'git config' {
     git.exe config --global user.name  'Alexandre Rangel'
     git.exe config --global user.email 'mamutal91@gmail.com'
@@ -274,7 +289,7 @@ Etapa 'git config' {
     Passo "user.name=$(git.exe config --global user.name) user.email=$(git.exe config --global user.email)"
 }
 
-# --- 6. Preferências do usuário ---------------------------------------------------------------------
+# --- 7. Preferências do usuário ---------------------------------------------------------------------
 Etapa 'Preferências do usuário' {
     Passo 'Explorer: extensões, Este Computador, menu de contexto clássico'
     $adv = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
@@ -287,6 +302,16 @@ Etapa 'Preferências do usuário' {
     Set-Reg $adv 'TaskbarDa'          0
     Set-Reg $adv 'ShowCopilotButton'  0
     Set-Reg $adv 'MMTaskbarEnabled'  0      # barra de tarefas só no monitor principal
+    # O driver UCPD (24H2+) recusa escrita em TaskbarDa quando quem grava se chama powershell.exe ou reg.exe.
+    # Contorno do Sophia Script: gravar por uma cópia renomeada do próprio powershell.
+    $psOrig = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+    $psCopia = Join-Path $env:TEMP 'mywiniso-ps.exe'
+    try {
+        Copy-Item -LiteralPath $psOrig -Destination $psCopia -Force
+        & $psCopia -NoProfile -Command "New-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name TaskbarDa -PropertyType DWord -Value 0 -Force | Out-Null"
+        Passo 'widgets fora da barra (gravado por cópia do powershell, senão o driver UCPD recusa)'
+    } catch { Falha "TaskbarDa: $($_.Exception.Message)" }
+    finally { Remove-Item -LiteralPath $psCopia -Force -ErrorAction Ignore }
     Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Search' 'SearchboxTaskbarMode' 0
     Set-Reg "$adv\TaskbarDeveloperSettings" 'TaskbarEndTask' 1
     Passo 'Iniciar: mais fixados, sem recomendações'
@@ -321,6 +346,7 @@ Etapa 'Preferências do usuário' {
     Set-Reg $kbd 'InitialKeyboardIndicators' '2'  'String'
     Set-Reg 'Registry::HKU\.DEFAULT\Control Panel\Keyboard' 'InitialKeyboardIndicators' '2' 'String'
     Set-Reg 'HKCU:\Control Panel\Desktop' 'CursorBlinkRate' '200' 'String'
+    Set-Reg 'HKCU:\Control Panel\Desktop' 'JPEGImportQuality' 100      # o wallpaper é JPG; 100 tira o artefato de compressão
     Set-Reg $kbd 'PrintScreenKeyForSnippingEnabled' 0
     # o registro só vale no próximo logon; SystemParametersInfo faz valer agora
     if (-not ('MyWinIsoTeclado' -as [type])) {
@@ -375,7 +401,7 @@ Etapa 'Preferências do usuário' {
     Passo 'apps de bloatware já instalados para este usuário (mesma lista do XML) e provider do Copilot'
     $bloat = @(
         'Clipchamp.Clipchamp', 'Microsoft.549981C3F5F10', 'Microsoft.BingNews', 'Microsoft.BingSearch', 'Microsoft.BingWeather',
-        'Microsoft.Copilot', 'Microsoft.Edge.GameAssist', 'Microsoft.GamingApp', 'Microsoft.GetHelp', 'Microsoft.Getstarted',
+        'Microsoft.Copilot', 'Microsoft.Edge.GameAssist', 'Microsoft.GamingApp', 'Microsoft.GamingServices', 'Microsoft.GetHelp', 'Microsoft.Getstarted',
         'Microsoft.Microsoft3DViewer', 'Microsoft.MicrosoftOfficeHub', 'Microsoft.MicrosoftSolitaireCollection',
         'Microsoft.MicrosoftStickyNotes', 'Microsoft.MixedReality.Portal', 'Microsoft.MSPaint', 'Microsoft.Office.OneNote',
         'Microsoft.OutlookForWindows', 'Microsoft.Paint', 'Microsoft.People', 'Microsoft.PowerAutomateDesktop',
@@ -385,7 +411,7 @@ Etapa 'Preferências do usuário' {
         'Microsoft.XboxGameOverlay', 'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone',
         'Microsoft.ZuneMusic', 'Microsoft.ZuneVideo', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
         'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps', 'MicrosoftWindows.Client.WebExperience',
-        'Microsoft.WidgetsPlatformRuntime', 'MicrosoftWindows.CrossDevice', 'Microsoft.SecureAssessmentBrowser',
+        'Microsoft.WidgetsPlatformRuntime', 'Microsoft.SecureAssessmentBrowser',
         'Microsoft.Windows.Ai.Copilot.Provider'
     )
     foreach ($app in Get-AppxPackage | Where-Object { $bloat -contains $_.Name }) {
@@ -411,7 +437,7 @@ Etapa 'Preferências do usuário' {
     Remove-Item -LiteralPath (Join-Path $desktop 'Microsoft Edge.lnk'), 'C:\Users\Public\Desktop\Microsoft Edge.lnk' -Force -ErrorAction Ignore
 }
 
-# --- 7. Explorer em Detalhes (WinSetView) ------------------------------------------------------------
+# --- 8. Explorer em Detalhes (WinSetView) ------------------------------------------------------------
 # WinSetView (Les Ferch, MIT) grava em HKCU os padrões de exibição de todos os tipos de pasta e reinicia o Explorer.
 # O INI é o do Alexandre (explorer\WinSetView\README.md). Roda em outro processo: o script mexe em Set-Location e
 # solta dezenas de linhas do reg.exe, que vão para um log próprio em vez do console.
@@ -432,7 +458,7 @@ Etapa 'Explorer em Detalhes (WinSetView)' {
     Passo 'aplicado; o Explorer foi reiniciado'
 }
 
-# --- 8. Windhawk: barra, Iniciar e central de notificações translúcidos, menus escuros, sem bordas --------
+# --- 9. Windhawk: barra, Iniciar e central de notificações translúcidos, menus escuros, sem bordas --------
 # Windhawk (winget) mais 5 mods, sem abrir a interface: desde o 1.7 os mods vêm precompilados de mods.windhawk.net e o
 # motor lê HKLM\SOFTWARE\Windhawk\Engine\Mods\<id> e carrega o mod na hora, em todos os processos já injetados. Os temas
 # Translucent (Undisputed00x) já vêm dentro dos Styler do m417z; só o setting "theme" precisa ser gravado. Cada mod:
@@ -514,7 +540,7 @@ Etapa 'Windhawk: tema Translucent' {
     Passo "serviço Windhawk: $((Get-Service -Name Windhawk -ErrorAction SilentlyContinue).Status)"
 }
 
-# --- 9. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) ------------------------
+# --- 10. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) ------------------------
 Etapa 'Office' {
     $odt = Join-Path $env:TEMP 'odt'
     New-Item -ItemType Directory -Path $odt -Force | Out-Null
@@ -526,7 +552,7 @@ Etapa 'Office' {
     Passo 'instalado'
 }
 
-# --- 10. Wallpaper nos dois monitores e na tela de bloqueio ------------------------------------------
+# --- 11. Wallpaper nos dois monitores e na tela de bloqueio ------------------------------------------
 Etapa 'Wallpaper' {
     $wallDir = Join-Path $env:SystemRoot 'Web\Wallpaper\mywiniso'     # legível pelo SYSTEM, que desenha a tela de bloqueio
     New-Item -ItemType Directory -Path $wallDir -Force | Out-Null
@@ -545,7 +571,7 @@ Etapa 'Wallpaper' {
     Set-Reg $csp 'LockScreenImageStatus' 1
 }
 
-# --- 11. Foto do perfil da conta (perfil\avatar.png) -----------------------------------------------
+# --- 12. Foto do perfil da conta (perfil\avatar.png) -----------------------------------------------
 # O Windows guarda a foto da conta em tamanhos fixos dentro de C:\Users\Public\AccountPictures\<SID> e
 # aponta cada um no registro, por SID. Sem esses valores a tela de login e o Iniciar mostram o boneco padrão.
 Etapa 'Foto do perfil' {
@@ -580,7 +606,7 @@ Etapa 'Foto do perfil' {
     Passo 'foto da conta aplicada; aparece no Iniciar e na tela de login'
 }
 
-# --- 12. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados ----------
+# --- 13. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados ----------
 Etapa 'Área de Trabalho Remota e contas' {
     Passo 'RDP ligado com autenticação de rede; regra de firewall'
     Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' 'fDenyTSConnections' 0
@@ -598,7 +624,7 @@ Etapa 'Área de Trabalho Remota e contas' {
     }
 }
 
-# --- 13. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação ----------
+# --- 14. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação ----------
 Etapa 'Energia' {
     # Desempenho Máximo (Ultimate Performance) vem oculto no Windows 11; /duplicatescheme cria uma cópia visível.
     # Se a cópia já existe (segunda execução), reaproveita em vez de criar outra.
@@ -620,7 +646,7 @@ Etapa 'Energia' {
     Passo ((powercfg.exe /getactivescheme) -join ' ')
 }
 
-# --- 14. NVIDIA App (não está no winget; instalador silencioso com /s) -----------------------------
+# --- 15. NVIDIA App (não está no winget; instalador silencioso com /s) -----------------------------
 Etapa 'NVIDIA App' {
     $url = 'https://us.download.nvidia.com/nvapp/client/11.0.9.251/NVIDIA_app_v11.0.9.251.exe'   # reserva, caso a página mude
     try {
@@ -637,7 +663,7 @@ Etapa 'NVIDIA App' {
     else { Passo 'NVIDIA App instalado' }
 }
 
-# --- 15. MariaDB: serviço automático, root com a senha da conta e acesso remoto --------------------
+# --- 16. MariaDB: serviço automático, root com a senha da conta e acesso remoto --------------------
 Etapa 'MariaDB' {
     $maria = Get-ChildItem -Path 'C:\Program Files\MariaDB*' -Directory -ErrorAction Ignore | Select-Object -First 1
     if (-not $maria) { throw 'não instalado (MariaDB.Server falhou no winget?)' }
@@ -667,7 +693,7 @@ Etapa 'MariaDB' {
     }
 }
 
-# --- 16. Fonte Cascadia Mono (máquina), console e VS Code --------------------------------------------
+# --- 17. Fonte Cascadia Mono (máquina), console e VS Code --------------------------------------------
 Etapa 'Cascadia Mono, console e VS Code' {
     $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/cascadia-code/releases/latest' -Headers @{ 'User-Agent' = 'PowerShell' }
     $asset = $rel.assets | Where-Object { $_.name -like 'CascadiaCode-*.zip' } | Select-Object -First 1
@@ -719,7 +745,7 @@ Etapa 'Cascadia Mono, console e VS Code' {
     Passo "VS Code: $vsArq"
 }
 
-# --- 17. Perfil do PowerShell (powershell\profile.ps1) ----------------------------------------------
+# --- 18. Perfil do PowerShell (powershell\profile.ps1) ----------------------------------------------
 Etapa 'Perfil do PowerShell' {
     $docs = [Environment]::GetFolderPath('MyDocuments')
     New-Item -ItemType Directory -Path (Join-Path $docs 'PowerShell'), (Join-Path $docs 'WindowsPowerShell') -Force | Out-Null
@@ -728,7 +754,7 @@ Etapa 'Perfil do PowerShell' {
     Passo "$docs\PowerShell\profile.ps1 (o do Windows PowerShell aponta para ele)"
 }
 
-# --- 18. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" --------------
+# --- 19. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" --------------
 Etapa 'Barra de tarefas e tarefa de logon' {
     $layout = Join-Path $aqui 'taskbar\LayoutModification.xml'
     foreach ($shell in (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Shell'), 'C:\Users\Default\AppData\Local\Microsoft\Windows\Shell') {
@@ -753,7 +779,7 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     Stop-Process -Name explorer -Force -ErrorAction Ignore
 }
 
-# --- 19. WSL com Debian (wsl\debian.sh configura por dentro) ---------------------------------------
+# --- 20. WSL com Debian (wsl\debian.sh configura por dentro) ---------------------------------------
 Etapa 'WSL com Debian e zsh' {
     wsl.exe --status 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
@@ -780,7 +806,7 @@ Etapa 'WSL com Debian e zsh' {
     }
 }
 
-# --- 20. Drivers e atualizações pelo Windows Update ------------------------------------------------
+# --- 21. Drivers e atualizações pelo Windows Update ------------------------------------------------
 Etapa 'Windows Update (drivers)' {
     Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null
     Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
@@ -790,7 +816,7 @@ Etapa 'Windows Update (drivers)' {
     Get-WindowsUpdate -AcceptAll -Install -IgnoreReboot | Out-Host
 }
 
-# --- 21. Monitores: resolução, frequência, orientação e posição (monitores\monitores.json) --------
+# --- 22. Monitores: resolução, frequência, orientação e posição (monitores\monitores.json) --------
 # Depois do Windows Update de propósito: 180 Hz e 1440p só aparecem com o driver da placa instalado.
 # Se rodar antes, o driver genérico recusa o modo e a etapa avisa; rodar o setup de novo resolve.
 Etapa 'Monitores (resolução, Hz, posição)' {
@@ -802,7 +828,7 @@ Etapa 'Monitores (resolução, Hz, posição)' {
     if ($LASTEXITCODE -ne 0) { Falha "monitores: $LASTEXITCODE monitor(es) não ficaram como no monitores.json; confira o driver da placa e rode de novo" }
 }
 
-# --- 22. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) --------------
+# --- 23. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) --------------
 # No Windows dá para abrir console de vários lugares (cmd, Windows PowerShell, PowerShell 7, Git Bash, WSL) e
 # cada um abria numa janela diferente. Aqui o Windows Terminal passa a ser o console padrão do sistema: tudo que
 # abrir console aparece nele, em abas, e os cinco shells ficam num menu só. O padrão é o PowerShell 7.
@@ -824,6 +850,76 @@ Etapa 'Windows Terminal como terminal único' {
     Set-Reg $inicio 'DelegationConsole'  '{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}' 'String'
     Set-Reg $inicio 'DelegationTerminal' '{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}' 'String'
     Passo 'qualquer console do Windows abre no Windows Terminal'
+}
+
+# --- 24. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo --------------------
+# Vem do Sophia Script (farag2), que trata isso melhor que qualquer outra ferramenta. Três tarefas agendadas
+# que rodam sozinhas, o armazenamento reservado liberado (~7 GB), o compartilhamento P2P de updates desligado
+# e as dez tarefas de telemetria que rodam em segundo plano. A pior delas, o Compatibility Appraiser, varre o
+# disco inteiro e trava a máquina por minutos.
+Etapa 'Manutenção e telemetria de fundo' {
+    Passo 'tarefas de telemetria e diagnóstico que rodam em segundo plano'
+    $paradas = 0
+    foreach ($t in 'MareBackup', 'Microsoft Compatibility Appraiser', 'Microsoft Compatibility Appraiser Exp',
+                   'StartupAppTask', 'Proxy', 'Consolidator', 'UsbCeip', 'BthSQM', 'AitAgent', 'ProgramDataUpdater',
+                   'Microsoft-Windows-DiskDiagnosticDataCollector', 'MapsToastTask', 'MapsUpdateTask',
+                   'QueueReporting', 'Device', 'Device User', 'KernelCeipTask', 'Uploader') {
+        $tarefa = Get-ScheduledTask -TaskName $t -ErrorAction Ignore
+        if ($tarefa) { $tarefa | Disable-ScheduledTask -ErrorAction Ignore | Out-Null; $paradas++ }
+    }
+    Passo "$paradas tarefas desabilitadas"
+
+    Passo 'armazenamento reservado liberado (uns 7 GB)'
+    try { Set-WindowsReservedStorageState -State Disabled -ErrorAction Stop }
+    catch { Falha "armazenamento reservado em uso; rode de novo depois de um reinício: $($_.Exception.Message)" }
+
+    Passo 'sem compartilhar updates com a internet (o Windows para de servir bytes para desconhecidos)'
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' 'DODownloadMode' 0
+    Set-Reg 'Registry::HKEY_USERS\S-1-5-20\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Settings' 'DownloadMode' 0
+
+    Passo 'backup periódico do registro (voltou a existir; a Microsoft desligou no 1803)'
+    Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Configuration Manager' 'EnablePeriodicBackup' 1
+    Remove-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance' -Name MaintenanceDisabled -Force -ErrorAction Ignore
+    Get-ScheduledTask -TaskName RegIdleBackup -ErrorAction Ignore | Enable-ScheduledTask -ErrorAction Ignore | Out-Null
+
+    Passo 'Sensor de Armazenamento: esvazia a Lixeira depois de 30 dias'
+    $ss = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy'
+    Set-Reg $ss '01'   1
+    Set-Reg $ss '04'   1
+    Set-Reg $ss '2048' 30
+
+    Passo 'nada de "desbloquear" arquivo baixado da internet'
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\Attachments' 'SaveZoneInformation' 1
+
+    Passo 'miniaturas não são apagadas pela limpeza de disco'
+    Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Thumbnail Cache' 'Autorun' 0
+
+    # As três tarefas de limpeza. Os scripts ficam no clone, então o git pull atualiza o que elas fazem.
+    $tarefasDir = Join-Path $aqui 'manutencao'
+    if (-not (Test-Path -LiteralPath $tarefasDir)) { throw "não achei $tarefasDir" }
+    Passo 'marcando os caches que a limpeza de disco deve tratar'
+    foreach ($c in 'BranchCache', 'Delivery Optimization Files', 'Device Driver Packages', 'Language Pack',
+                   'Previous Installations', 'Setup Log Files', 'System error memory dump files',
+                   'System error minidump files', 'Temporary Files', 'Temporary Setup Files', 'Update Cleanup',
+                   'Upgrade Discarded Files', 'Windows Defender', 'Windows ESD installation files',
+                   'Windows Upgrade Log Files') {
+        Set-Reg "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\$c" 'StateFlags1337' 2
+    }
+    $sid       = ([Security.Principal.NTAccount]"$env:USERDOMAIN\$env:USERNAME").Translate([Security.Principal.SecurityIdentifier]).Value
+    $config    = New-ScheduledTaskSettingsSet -Compatibility Win8 -StartWhenAvailable
+    $principal = New-ScheduledTaskPrincipal -UserId $sid -RunLevel Highest
+    foreach ($t in @(
+        @{ Nome = 'Limpeza do Windows';  Arq = 'limpeza.ps1';              Dias = 30 },
+        @{ Nome = 'Cache do Update';     Arq = 'cache-do-update.ps1';      Dias = 90 },
+        @{ Nome = 'Arquivos temporários'; Arq = 'temporarios.ps1';         Dias = 60 })) {
+        $arq = Join-Path $tarefasDir $t.Arq
+        if (-not (Test-Path -LiteralPath $arq)) { Falha "não achei $arq"; continue }
+        # conhost --headless: a tarefa roda sem piscar janela de console
+        Register-ScheduledTask -TaskName $t.Nome -TaskPath '\mywiniso' -Force -Settings $config -Principal $principal `
+            -Trigger (New-ScheduledTaskTrigger -Daily -DaysInterval $t.Dias -At 9pm) `
+            -Action  (New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$arq`"") | Out-Null
+        Passo "tarefa '$($t.Nome)': a cada $($t.Dias) dias, 21h"
+    }
 }
 
 # --- Resumo -----------------------------------------------------------------------------------------
