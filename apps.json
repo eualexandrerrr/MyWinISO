@@ -42,7 +42,6 @@
         { "PackageIdentifier": "Oven-sh.Bun" },
         { "PackageIdentifier": "Python.Python.3.13" },
         { "PackageIdentifier": "astral-sh.uv" },
-        { "PackageIdentifier": "Docker.DockerDesktop" },
         { "PackageIdentifier": "Cloudflare.cloudflared" },
         { "PackageIdentifier": "MariaDB.Server" },
         { "PackageIdentifier": "HeidiSQL.HeidiSQL" },

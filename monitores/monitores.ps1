@@ -170,6 +170,8 @@ $aplicar = @()
 foreach ($q in $cfg.monitores) {
     $alvo = $ligados | Where-Object { $_.Nome -and $_.Nome -eq $q.nome } | Select-Object -First 1
     if (-not $alvo) { $alvo = $ligados | Where-Object { $_.Pnp -eq $q.pnp } | Select-Object -First 1 }
+    # plano C: monitor sem nome no EDID (genérico, VM); casa pelo nome que o driver reporta
+    if (-not $alvo) { $alvo = $ligados | Where-Object { $_.Monitor -eq $q.nome } | Select-Object -First 1 }
     if (-not $alvo) {
         Write-Host "  AVISO: '$($q.nome)' ($($q.apelido)) não está ligado; pulando" -ForegroundColor Yellow
         $erros++

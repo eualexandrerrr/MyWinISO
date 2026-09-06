@@ -68,7 +68,7 @@ Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou 
 |:--|:--|
 | 1 | garante que o winget funciona e, se a ISO trouxe um velho (o 1.9 não fala mais com a msstore), instala o release atual do GitHub |
 | 2 | instala o Git e clona este repositório em `~\Projetos\mywiniso`; sem Git, baixa o zip e segue |
-| 3 | programas do `apps.json`, um a um, com resultado na tela: 44 do winget, e WhatsApp e Bloco de Notas da Loja |
+| 3 | programas do `apps.json`, um a um, com resultado na tela: 43 do winget, e WhatsApp e Bloco de Notas da Loja |
 | 4 | RedM na área de trabalho (o instalador não tem modo silencioso) |
 | 5 | `git config` com nome e e-mail |
 | 6 | preferências do usuário (tabela abaixo) |
@@ -97,7 +97,7 @@ Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou 
 | Dia a dia | Chrome, Firefox, Google Drive, Discord, WhatsApp, Spotify, Obsidian, VLC, Lightshot, WinRAR, 7-Zip, Bloco de Notas |
 | Jogos | Steam, Radmin VPN, OBS Studio, RedM (área de trabalho), NVIDIA App |
 | Visual | Windhawk com Taskbar, Start Menu e Notification Center Styler (m417z) nos temas Translucent, Dark mode context menus, Invisible Window Borders |
-| Dev | Git, GitHub CLI, VS Code, Claude Code, PowerShell 7, Node.js, Bun, Python 3.13, uv, Docker Desktop, cloudflared, MariaDB, HeidiSQL, WinSCP |
+| Dev | Git, GitHub CLI, VS Code, Claude Code, PowerShell 7, Node.js, Bun, Python 3.13, uv, cloudflared, MariaDB, HeidiSQL, WinSCP |
 | CLI | starship, zoxide, fzf, bat, fd, ripgrep, eza, jq, ffmpeg, rclone, JetBrainsMono Nerd Font |
 | Android | Temurin JDK 17, Android Studio, Platform Tools, scrcpy |
 | Office | Word, Excel, PowerPoint (sem Access, Outlook, OneNote, Publisher, Lync, OneDrive) |
