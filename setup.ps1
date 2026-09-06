@@ -519,7 +519,6 @@ Etapa 'Preferências do usuário' {
             @{ de = "$env:USERPROFILE\.vscode";                  para = '.vscode' },        # VS Code: extensões
             @{ de = "$env:APPDATA\obsidian";                     para = 'obsidian' },
             @{ de = "$env:APPDATA\obs-studio";                   para = 'obs-studio' },     # cenas, perfis, chaves de stream
-            @{ de = "$env:APPDATA\vlc";                          para = 'vlc' },
             @{ de = "$env:APPDATA\GitHub CLI";                   para = 'GitHub CLI' },     # gh: hosts.yml (o token é DPAPI, pede login)
             @{ de = "$env:USERPROFILE\.claude";                  para = '.claude' },        # Claude Code: memória, projetos, configurações
             @{ de = "$env:USERPROFILE\.ssh";                     para = '.ssh' },
@@ -1533,6 +1532,11 @@ Etapa 'WSL com Debian e zsh' {
             Passo "rodando wsl/debian.sh como root dentro do Debian"
             wsl.exe --distribution Debian --user root -- bash "$aquiWsl/wsl/debian.sh"
             if ($LASTEXITCODE -ne 0) { throw "debian.sh saiu com código $LASTEXITCODE" }
+            if ($Senha) {
+                # a mesma senha da conta para o usuário do Debian (sudo continua sem senha); vem do pendrive, não do repo
+                wsl.exe --distribution Debian --user root -- bash -c "echo 'alexandre:$($Senha.Replace("'", "'\''"))' | chpasswd"
+                Passo 'usuário alexandre do Debian com a senha da conta'
+            }
             wsl.exe --terminate Debian
             Passo 'Debian configurado: usuário alexandre, sudo sem senha, systemd'
         }

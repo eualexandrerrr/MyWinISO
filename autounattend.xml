@@ -294,6 +294,22 @@ Function PedeSenha()
   PedeSenha = ""
 End Function
 
+' Le a senha que ja estiver no primeiro <Password><Value> do arquivo de resposta (o pendrive.ps1 -Senha
+' preenche os dois). Vazio = nao ha senha gravada. Erro de leitura conta como vazio: ai a pergunta acontece.
+Function SenhaNoArquivo(caminho)
+  Dim x, nd
+  SenhaNoArquivo = ""
+  On Error Resume Next
+  Set x = CreateObject("Msxml2.DOMDocument.6.0")
+  x.async = False
+  x.setProperty "SelectionLanguage", "XPath"
+  If x.load(caminho) Then
+    Set nd = x.selectSingleNode("//*[local-name()='Password']/*[local-name()='Value']")
+    If Not nd Is Nothing Then SenhaNoArquivo = nd.text
+  End If
+  On Error GoTo 0
+End Function
+
 ' Copia o arquivo de resposta para o disco ja com a senha dentro.
 ' Por MSXML e nao por fso.CopyFile porque o XML e UTF-8 com acentos e o FileSystemObject so escreve ASCII
 ' ou UTF-16; ler e reescrever como texto corromperia o arquivo. O MSXML ja e usado por este XML (o
@@ -344,12 +360,19 @@ End Sub
 ' De proposito no WinPE: assim o autounattend.xml gravado no pendrive fica com <Value></Value> vazio e a
 ' senha nunca encosta na midia. Quem recebe a senha e so a copia que vai para o disco
 ' (W:\Windows\Panther\unattend.xml), e o proprio primeiro-logon.ps1 apaga essa copia no fim.
+' Se o pendrive.ps1 -Senha ja gravou a senha no arquivo de resposta, nada e perguntado: o Alexandre nao
+' quer digitar senha. So pergunta quando o arquivo esta com <Value></Value> vazio.
 Dim senha
-senha = PedeSenha()
-If senha = "" Then
-  Escreve "senha: nenhuma (a conta fica sem senha e a Area de Trabalho Remota nao aceita login)"
+senha = ""
+If SenhaNoArquivo(xml) <> "" Then
+  Escreve "senha: ja esta no arquivo de resposta do pendrive; nao pergunto"
 Else
-  Escreve "senha: definida, " & Len(senha) & " caracteres (nao vai para o log nem para o pendrive)"
+  senha = PedeSenha()
+  If senha = "" Then
+    Escreve "senha: nenhuma (a conta fica sem senha e a Area de Trabalho Remota nao aceita login)"
+  Else
+    Escreve "senha: definida, " & Len(senha) & " caracteres (nao vai para o log nem para o pendrive)"
+  End If
 End If
 
 ' 1. arquivo de resposta (o Ventoy grava o caminho no registro) e imagem do Windows (a ISO montada)

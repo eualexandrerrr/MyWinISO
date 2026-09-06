@@ -15,13 +15,11 @@
         { "PackageIdentifier": "Spotify.Spotify" },
         { "PackageIdentifier": "Obsidian.Obsidian" },
         { "PackageIdentifier": "Valve.Steam" },
-        { "PackageIdentifier": "VideoLAN.VLC" },
         { "PackageIdentifier": "Skillbrains.Lightshot" },
         { "PackageIdentifier": "Proton.ProtonPass" },
         { "PackageIdentifier": "OBSProject.OBSStudio" },
         { "PackageIdentifier": "Famatech.RadminVPN" },
         { "PackageIdentifier": "RARLab.WinRAR" },
-        { "PackageIdentifier": "WinSCP.WinSCP" },
 
         { "PackageIdentifier": "Microsoft.PowerShell" },
         { "PackageIdentifier": "Microsoft.WindowsTerminal" },

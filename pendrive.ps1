@@ -4,10 +4,11 @@
     powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E:                     # letra do pendrive
     powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: win11.iso           # mais de uma ISO: diga qual
 
-  -Senha NÃO é mais necessário: o instala.vbs pergunta a senha no WinPE, logo no começo da instalação, e
-  grava só na cópia do arquivo de resposta que vai para o disco. Assim o pendrive nunca carrega a senha.
-  O parâmetro continua existindo para instalação sem ninguém na frente da máquina, mas aí a senha fica em
-  texto no pendrive, que é justamente o que a pergunta no WinPE evita. Prefira não usar.
+  Dois jeitos de dar a senha da conta (e do root do MariaDB, e do usuário do Debian):
+    com -Senha     ela é gravada no autounattend.xml DO PENDRIVE (nunca no repositório, que é público) e o
+                   instalador não pergunta nada: instalação sem digitar uma tecla. É o que o Alexandre usa.
+    sem -Senha     o pendrive fica com os campos vazios e o instala.vbs pergunta a senha no WinPE, duas
+                   vezes, antes de mexer no disco; ela vai só para a cópia do arquivo que fica no disco.
 
   Dois tipos de pendrive são aceitos:
     Ventoy             copia autounattend.xml e ventoy.json para \ventoy, apontando para a ISO do Windows
@@ -76,7 +77,7 @@ Write-Host ("pendrive: {0}, {1} GB" -f $disco.FriendlyName, [math]::Round($disco
 
 $xmlTexto = Set-SenhaXml (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'autounattend.xml') -Raw -Encoding UTF8) $Senha
 $modelo = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'ventoy\ventoy.json') -Raw -Encoding UTF8
-if ($Senha) { Write-Warning 'com -Senha a senha vai em texto para o pendrive. O instala.vbs pergunta no WinPE; considere rodar sem.' }
+if ($Senha) { Write-Host 'com -Senha: a senha vai para o autounattend.xml do pendrive (não para o repositório) e o instalador não pergunta nada' }
 else { Write-Host 'sem -Senha: o instala.vbs pergunta a senha no WinPE, e o pendrive fica sem ela' }
 
 $ehVentoy = [bool](Get-Partition -DiskNumber $disco.Number |
