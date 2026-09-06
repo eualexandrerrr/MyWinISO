@@ -375,8 +375,10 @@ Etapa 'Explorer em Detalhes (WinSetView)' {
     Passo 'Detalhes em todas as pastas: Nome, Caminho, Data de modificação, Tipo, Tamanho; por nome, sem agrupar; extensões visíveis; menu clássico'
     Passo "log: $logWsv"
     # Start-Process em vez de chamar direto: as dezenas de linhas do reg.exe não entram em $Error (viraria AVISO)
+    # WaitForExit em vez de -Wait: -Wait espera também os descendentes, e o WinSetView termina abrindo um Explorer
     $p = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$ps1`"", "`"$ini`"" `
-        -Wait -PassThru -NoNewWindow -RedirectStandardOutput $logWsv -RedirectStandardError "$logWsv.err"
+        -PassThru -NoNewWindow -RedirectStandardOutput $logWsv -RedirectStandardError "$logWsv.err"
+    $p.WaitForExit()
     if ($p.ExitCode -ne 0) { throw "WinSetView.ps1 saiu com código $($p.ExitCode); veja $logWsv" }
     Passo 'aplicado; o Explorer foi reiniciado'
 }
