@@ -473,7 +473,16 @@ Etapa 'Preferências do usuário' {
             $hr = [Win32.KnownFolders]::SHSetKnownFolderPath([ref]$g, 0, [IntPtr]::Zero, $alvo)
             if ($hr -ne 0) { Falha ("pasta {0} -> {1}: SHSetKnownFolderPath devolveu 0x{2:X8}" -f $kf.pasta, $alvo, $hr) }
         }
-        New-Item -ItemType Directory -Path (Join-Path $Dados 'Jogos') -Force | Out-Null   # Projetos em D: é o Alexandre quem cria
+        New-Item -ItemType Directory -Path (Join-Path $Dados 'Jogos'), (Join-Path $Dados 'WSL') -Force | Out-Null   # Projetos em D: é o Alexandre quem cria
+        # Android SDK, emuladores e o .android em D:, para não baixar de novo a cada formatação. O Android
+        # Studio lê ANDROID_HOME no assistente inicial e propõe esse caminho para o SDK; o AVD e o .android
+        # seguem as variáveis próprias. Variáveis de máquina, então valem para qualquer conta e terminal.
+        Passo 'Android SDK e emuladores em D:\Android (ANDROID_HOME, ANDROID_AVD_HOME, ANDROID_USER_HOME)'
+        foreach ($par in @(@('ANDROID_HOME', 'Android\Sdk'), @('ANDROID_SDK_ROOT', 'Android\Sdk'), @('ANDROID_AVD_HOME', 'Android\avd'), @('ANDROID_USER_HOME', 'Android\.android'))) {
+            $alvo = Join-Path $Dados $par[1]
+            New-Item -ItemType Directory -Path $alvo -Force | Out-Null
+            [Environment]::SetEnvironmentVariable($par[0], $alvo, 'Machine')
+        }
     }
     Passo 'Explorer: extensões, Este Computador, menu de contexto clássico'
     $adv = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
@@ -1301,17 +1310,38 @@ Etapa 'WSL com Debian e zsh' {
         Passo 'reinicie e rode mywiniso-setup.cmd de novo para instalar e configurar o Debian'
     } else {
         $distros = ((wsl.exe --list --quiet 2>$null) -join "`n") -replace "`0", ''
+        # Com a partição Dados, o disco do Debian (ext4.vhdx) mora em D:\WSL\Debian e sobrevive à formatação.
+        # Na reinstalação ele está lá e volta inteiro com --import-in-place, sem copiar nada: pacotes, home,
+        # zsh e o /etc/wsl.conf (usuário padrão e systemd) já estão dentro dele, então o debian.sh nem roda.
+        $vhdx = if ($Dados) { Join-Path $Dados 'WSL\Debian\ext4.vhdx' } else { $null }
+        $voltou = $false
         if ($distros -notmatch 'Debian') {
-            Passo 'instalando a distro Debian'
-            wsl.exe --install --distribution Debian --no-launch
-            if ($LASTEXITCODE -ne 0) { throw "wsl --install -d Debian saiu com código $LASTEXITCODE" }
+            if ($vhdx -and (Test-Path -LiteralPath $vhdx)) {
+                Passo "Debian de antes da formatação achado em $vhdx; registrando no lugar"
+                wsl.exe --import-in-place Debian $vhdx
+                if ($LASTEXITCODE -ne 0) { throw "wsl --import-in-place saiu com código $LASTEXITCODE" }
+                $voltou = $true
+            } else {
+                Passo ('instalando a distro Debian' + $(if ($vhdx) { " em $(Split-Path $vhdx -Parent)" } else { '' }))
+                if ($vhdx) {
+                    New-Item -ItemType Directory -Path (Split-Path $vhdx -Parent) -Force | Out-Null
+                    wsl.exe --install --distribution Debian --no-launch --location (Split-Path $vhdx -Parent)
+                } else {
+                    wsl.exe --install --distribution Debian --no-launch
+                }
+                if ($LASTEXITCODE -ne 0) { throw "wsl --install -d Debian saiu com código $LASTEXITCODE" }
+            }
         } else { Passo 'Debian já instalado' }
-        $aquiWsl = '/mnt/' + $aqui.Substring(0, 1).ToLower() + ($aqui.Substring(2) -replace '\\', '/')
-        Passo "rodando wsl/debian.sh como root dentro do Debian"
-        wsl.exe --distribution Debian --user root -- bash "$aquiWsl/wsl/debian.sh"
-        if ($LASTEXITCODE -ne 0) { throw "debian.sh saiu com código $LASTEXITCODE" }
-        wsl.exe --terminate Debian
-        Passo 'Debian configurado: usuário alexandre, sudo sem senha, systemd'
+        if ($voltou) {
+            Passo 'Debian voltou de D: com usuário, zsh e systemd; nada a configurar'
+        } else {
+            $aquiWsl = '/mnt/' + $aqui.Substring(0, 1).ToLower() + ($aqui.Substring(2) -replace '\\', '/')
+            Passo "rodando wsl/debian.sh como root dentro do Debian"
+            wsl.exe --distribution Debian --user root -- bash "$aquiWsl/wsl/debian.sh"
+            if ($LASTEXITCODE -ne 0) { throw "debian.sh saiu com código $LASTEXITCODE" }
+            wsl.exe --terminate Debian
+            Passo 'Debian configurado: usuário alexandre, sudo sem senha, systemd'
+        }
     }
 }
 

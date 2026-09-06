@@ -27,7 +27,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | Passo | Quem faz | O quê |
 |:--|:--|:--|
 | 1 | Ventoy | mostra a ISO; em 5 s aplica o `autounattend.xml` sozinho |
-| 2 | `instala.vbs` (WinPE) | faz a fase inteira no lugar do Setup: pula TPM/CPU/RAM, procura o disco pelo serial ou modelo via WMI, particiona (EFI 300 MB, MSR, Windows 256 GB, Recovery 1 GB e Dados com o resto; numa reinstalação recria só as quatro primeiras e deixa Dados em paz), aplica a imagem `Windows 11 Pro` com o DISM, grava o boot, copia o XML completo para `C:\Windows\Panther` e reinicia pelo disco |
+| 2 | `instala.vbs` (WinPE) | faz a fase inteira no lugar do Setup: pula TPM/CPU/RAM, procura o disco pelo serial ou modelo via WMI, particiona (EFI 300 MB, MSR, Windows 120 GB, Recovery 1 GB e Dados com o resto; numa reinstalação recria só as quatro primeiras e deixa Dados em paz), aplica a imagem `Windows 11 Pro` com o DISM, grava o boot, copia o XML completo para `C:\Windows\Panther` e reinicia pelo disco |
 | 3 | Windows | primeiro boot pelo disco; o Setup novo da ISO nunca chega a instalar |
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
@@ -103,7 +103,7 @@ perde a imagem dele; com ela, sobrevive. Medido nesta máquina, não suposto.
 | 22 | fonte Cascadia Mono na máquina, no console e no terminal do VS Code |
 | 23 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
 | 24 | barra de tarefas, nesta ordem: **Explorer, Chrome, RedM, Discord, VS Code**; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar. Depois dos programas, porque os pinos precisam dos atalhos existindo (o do VS Code fica em `%AppData%`, porque o winget o instala por usuário) |
-| 25 | WSL com Debian: usuário `alexandre` com zsh, sudo sem senha, systemd (`wsl/debian.sh`) |
+| 25 | WSL com Debian: usuário `alexandre` com zsh, sudo sem senha, systemd (`wsl/debian.sh`). Com a partição Dados o disco do Debian fica em `D:\WSL\Debian` e, na reinstalação, volta como estava sem rodar nada |
 | 26 | resto dos drivers e as atualizações, pelo Windows Update (o de vídeo já veio na etapa 5) |
 | 27 | Windows Terminal instalado, atualizado e como console padrão do sistema, com cinco shells em abas (`terminal/settings.json`) |
 | 28 | manutenção: três tarefas de limpeza que rodam sozinhas, armazenamento reservado liberado, sem compartilhar updates com a internet, backup do registro e as tarefas de telemetria de fundo desligadas |
@@ -187,7 +187,7 @@ disk*, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). Ou desligue o Secure Boot na UEFI s
 
 | | Valor | Onde mudar |
 |:--|:--|:--|
-| Disco | serial `6479A7AABAC014A3` ou modelo `MP700 ELITE`; Windows com 256 GB (`WINDOWS_MB`) e o resto vira a partição `Dados` (`DADOS`), que nunca é apagada | `SERIAL` e `MODELO` no `instala.vbs`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
+| Disco | serial `6479A7AABAC014A3` ou modelo `MP700 ELITE`; Windows com 120 GB (`WINDOWS_MB`; o C: é descartável, a máquina é formatada a cada três meses) e o resto vira a partição `Dados` (`DADOS`), que nunca é apagada | `SERIAL` e `MODELO` no `instala.vbs`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
 | Edição | `Windows 11 Pro`, pelo nome da imagem dentro do `install.wim` | `EDICAO` no `instala.vbs`; `dism /Get-WimInfo` lista os nomes |
 | Ativação | licença digital gravada na placa-mãe | |
 | ISO | Windows 11 em Português (Brasil), da Microsoft | |
@@ -226,7 +226,7 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 | Explorer | extensões visíveis, abre em Este Computador, menu de contexto clássico; Detalhes em todas as pastas com Nome, Caminho, Data de modificação, Tipo e Tamanho (WinSetView) |
 | Barra e Iniciar | ícones centralizados e só no monitor principal (a LG de pé fica sem barra), sem busca, Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito; pinos fixos |
 | Tema | escuro desde o primeiro boot, cor de destaque puxada do wallpaper; barra, Iniciar e central de notificações translúcidos pelo Windhawk (TranslucentTaskbar, TranslucentStartMenu, TranslucentShell), Explorer no escuro padrão do Windows, menus escuros, janelas sem borda. A barra leva um `controlStyles` por cima do tema com `TintColor #CC101010`, senão ela fica clara demais sobre wallpaper claro |
-| Disco | duas partições que importam: `C:` com o Windows e os programas (256 GB) e `D:` **Dados** com o resto. Em D: moram os jogos (`D:\Jogos`: biblioteca do Steam e RedM) e as pastas Documentos, Downloads, Imagens, Vídeos e Músicas, redirecionadas pelo caminho oficial (`SHSetKnownFolderPath`). Projetos em D: é o Alexandre quem cria; este clone segue em `~\Projetos`. A instalação nunca toca em D:: o `instala.vbs` só apaga as partições do Windows, confere a numeração pelo próprio diskpart (o WMI não lista a MSR), recusa qualquer layout que não reconheça e para antes do DISM se Dados sumir |
+| Disco | duas partições que importam: `C:` com o Windows e os programas (120 GB; formatado a cada três meses, então não precisa de mais) e `D:` **Dados** com o resto. Em D: mora tudo que não se quer refazer a cada formatação: os jogos (`D:\Jogos`: biblioteca do Steam e RedM), o Debian do WSL (`D:\WSL\Debian\ext4.vhdx`, que volta inteiro por `wsl --import-in-place`), o Android SDK e os emuladores (`D:\Android`, por `ANDROID_HOME`/`ANDROID_AVD_HOME`) e as pastas Documentos, Downloads, Imagens, Vídeos e Músicas, redirecionadas pelo caminho oficial (`SHSetKnownFolderPath`). Projetos em D: é o Alexandre quem cria; este clone segue em `~\Projetos`. A instalação nunca toca em D:: o `instala.vbs` só apaga as partições do Windows, confere a numeração pelo próprio diskpart (o WMI não lista a MSR), recusa qualquer layout que não reconheça e para antes do DISM se Dados sumir |
 | Área de trabalho | **sem ícone nenhum** (`HideIcons`). Os arquivos continuam lá, o `RedM.exe` inclusive; para chegar neles, Win+E e ir na pasta Área de Trabalho |
 | Notificações | os avisos que aparecem no canto ficam **desligados**. A central de notificações em si continua de pé, de propósito: no Windows 11 o calendário mora dentro dela, e clicar no relógio abre esse painel. A política `DisableNotificationCenter` levaria o calendário junto, então ela fica de fora |
 | Print Screen | `Shift+PrintScreen` chama o Lightshot para selecionar área, e é o único atalho dele ligado; os de "salvar tela toda" e "enviar tela toda" ficam desligados |

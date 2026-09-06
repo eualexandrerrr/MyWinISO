@@ -242,7 +242,7 @@ Option Explicit
 Const SERIAL = "6479A7AABAC014A3"   ' Get-Disk | Select-Object FriendlyName, SerialNumber; Limpo() tira os "_" e o "."
 Const MODELO = "MP700 ELITE"
 Const EDICAO = "Windows 11 Pro"   ' nome da imagem dentro do install.wim (dism /Get-WimInfo)
-Const WINDOWS_MB = 262144         ' 256 GB para o Windows e os programas; o resto do disco vira "Dados"
+Const WINDOWS_MB = 122880         ' 120 GB para o Windows e os programas (o C: e descartavel: formata a cada 3 meses); o resto vira "Dados"
 Const DADOS = "Dados"             ' rotulo da particao que sobrevive a formatacao (projetos, jogos, Documentos...)
 Const ARQLOG = "X:\mywiniso\instala.log"
 Dim fso, sh, wmi, d, dr, alvo, n, script, ts, rc, xml, img
