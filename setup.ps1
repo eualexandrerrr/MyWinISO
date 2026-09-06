@@ -643,7 +643,7 @@ Etapa 'Preferências do usuário' {
             [Environment]::SetEnvironmentVariable($par[0], $alvo, 'Machine')
         }
     }
-    Passo 'Explorer: extensões, Este Computador, menu de contexto clássico'
+    Passo 'Explorer: extensões, Este Computador, menu de contexto moderno'
     $adv = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
     Set-Reg $adv 'HideFileExt'        0
     Set-Reg $adv 'LaunchTo'           1
@@ -673,7 +673,14 @@ Etapa 'Preferências do usuário' {
     # pasta Área de Trabalho. O Explorer relê isso quando reiniciar, na etapa 10.
     Passo 'área de trabalho sem nenhum ícone (os arquivos ficam, só não aparecem)'
     Set-Reg $adv 'HideIcons'          1
-    Set-Reg 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32' '(Default)' '' 'String'
+    # Menu de contexto moderno, e não o clássico. O moderno é WinUI: já nasce com o acrílico e os cantos
+    # arredondados do menu Iniciar, que é o visual do resto do sistema aqui, e ainda responde ao
+    # windows-11-file-explorer-styler. O clássico é Win32 puro, fica chapado e de borda clara, e não há
+    # jeito mantido de dar o mesmo visual a ele: o TranslucentFlyouts, único que fazia isso, está
+    # arquivado desde 2024, e o dark-menus só força o escuro. O preço é que Git Bash, NVIDIA App e 7-Zip
+    # passam a viver em "Mostrar mais opções" (ou no Shift+F10, que abre o clássico direto).
+    # Remove em vez de só não escrever: numa máquina que já rodou o setup de antes a chave está lá.
+    Remove-Item -LiteralPath 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}' -Recurse -Force -ErrorAction Ignore
     Passo 'barra: ícones centralizados, só no monitor principal, sem busca, Visão de Tarefas, widgets e Copilot; "Finalizar tarefa"'
     Set-Reg $adv 'TaskbarAl'          1      # 1 = ícones centralizados
     Set-Reg $adv 'ShowTaskViewButton' 0
