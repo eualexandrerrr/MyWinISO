@@ -559,7 +559,11 @@ Start-Transcript -Path 'C:\Windows\Setup\Scripts\especializar.log' -Force | Out-
 # imprimir nada. Uma thread a parte escreve uma linha a cada 10 s de silencio com o bloco atual, ha
 # quanto tempo ele esta rodando e a hora. O Write-Host abaixo e um proxy do cmdlet real: so marca a
 # hora da ultima saida e repassa, entao toda linha impressa ja conta como sinal de vida.
-$Pulso = [hashtable]::Synchronized(@{ Nome = 'iniciando'; Desde = Get-Date; Ultimo = Get-Date; Ligado = $true })
+# $global: e nao $script:. Hoje este script so chama scriptblock proprio e programa externo, entao o
+# $script: resolveria certo -- mas o mesmo padrao no setup.ps1 derrubou duas etapas inteiras assim que
+# alguem invocou um .ps1 de fora, porque dentro dele $script: passa a ser o escopo DAQUELE arquivo e
+# $script:Pulso vira $null. Aqui e o script de primeiro boot: e o pior lugar para deixar essa armadilha.
+$global:Pulso = [hashtable]::Synchronized(@{ Nome = 'iniciando'; Desde = Get-Date; Ultimo = Get-Date; Ligado = $true })
 
 function Write-Host {
     [CmdletBinding()]
@@ -571,7 +575,7 @@ function Write-Host {
         [System.ConsoleColor] $BackgroundColor
     )
     process {
-        $script:Pulso.Ultimo = Get-Date
+        if ($global:Pulso) { $global:Pulso.Ultimo = Get-Date }
         Microsoft.PowerShell.Utility\Write-Host @PSBoundParameters
     }
 }
@@ -604,14 +608,14 @@ try {
     [void]$PulsoPS.BeginInvoke()
 } catch { $Pulso.Ligado = $false }
 Write-Host "mywiniso specialize | $(Get-Date -Format 'dd/MM/yyyy HH:mm')" -ForegroundColor Cyan
-$script:Erros = 0
+$global:Erros = 0
 
 function Faz([string] $Nome, [scriptblock] $Corpo) {
-    $script:Pulso.Nome  = $Nome
-    $script:Pulso.Desde = Get-Date
+    $global:Pulso.Nome  = $Nome
+    $global:Pulso.Desde = Get-Date
     Write-Host ("-> $Nome | {0}" -f (Get-Date -Format 'HH:mm:ss')) -ForegroundColor Cyan
-    try { & $Corpo; Write-Host ("   OK ({0} s)" -f [int]((Get-Date) - $script:Pulso.Desde).TotalSeconds) -ForegroundColor Green }
-    catch { $script:Erros++; Write-Host "   ERRO: $($_.Exception.Message)" -ForegroundColor Red }
+    try { & $Corpo; Write-Host ("   OK ({0} s)" -f [int]((Get-Date) - $global:Pulso.Desde).TotalSeconds) -ForegroundColor Green }
+    catch { $global:Erros++; Write-Host "   ERRO: $($_.Exception.Message)" -ForegroundColor Red }
 }
 function Set-Reg([string] $Path, [string] $Name, $Value, [string] $Type = 'DWord') {
     if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force | Out-Null }
@@ -814,7 +818,7 @@ Faz 'Energia: Alto desempenho já no primeiro boot (o setup.ps1 troca para Desem
 
 $Pulso.Ligado = $false
 if ($PulsoPS) { try { $PulsoPS.Runspace.Close() } catch { } }
-Write-Host ("specialize terminou com {0} bloco(s) com erro em {1}. Log: C:\Windows\Setup\Scripts\especializar.log" -f $script:Erros, (Get-Date -Format 'HH:mm:ss')) -ForegroundColor $(if ($script:Erros) { 'Red' } else { 'Green' })
+Write-Host ("specialize terminou com {0} bloco(s) com erro em {1}. Log: C:\Windows\Setup\Scripts\especializar.log" -f $global:Erros, (Get-Date -Format 'HH:mm:ss')) -ForegroundColor $(if ($global:Erros) { 'Red' } else { 'Green' })
 Stop-Transcript | Out-Null
 exit 0
 ]]></File>
