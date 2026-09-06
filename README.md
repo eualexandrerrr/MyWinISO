@@ -120,7 +120,8 @@ powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: Win11_pt-BR_unattend.
   pendrive**; o `autounattend.xml` do repositório continua sem senha, e o repositório é público.
   Sem `-Senha` a conta fica sem senha e a Área de Trabalho Remota não aceita login.
 - **Ventoy**: copia `autounattend.xml` e `ventoy.json` para `\ventoy`. Um `ventoy.json` que já exista
-  é preservado (cópia em `.bak`) e só a entrada desta ISO é trocada.
+  é preservado (cópia em `.bak`); só a entrada desta ISO é trocada e ela vira a padrão do menu, então o
+  boot vai direto para a instalação sem apertar nada.
 - **Windows extraído** (Rufus, Media Creation Tool): copia `autounattend.xml` para a raiz, que é onde o Setup procura.
 - O script monta a ISO, confere `sources\lang.ini` e para se não tiver pt-BR.
 - A ISO que já está no pendrive traz um `autounattend.xml` antigo embutido. Ele não atrapalha: o Windows

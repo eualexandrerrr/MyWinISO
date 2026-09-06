@@ -40,15 +40,18 @@ function Set-SenhaXml([string] $Texto, [string] $Senha) {
     return $Texto
 }
 
-# ventoy.json: preserva o que já existe no pendrive e só troca a entrada auto_install desta ISO.
+# ventoy.json: preserva o que já existe no pendrive, troca só a entrada auto_install desta ISO e deixa
+# esta ISO como entrada padrão do menu (VTOY_DEFAULT_IMAGE), assim o boot vai direto sem apertar nada.
 function Merge-VentoyJson([string] $ModeloJson, [string] $Existente, [string] $Imagem) {
     $novo = $ModeloJson | ConvertFrom-Json
     $novo.auto_install[0].image = $Imagem
-    if (-not $Existente) { return ($novo | ConvertTo-Json -Depth 10) }
-    $atual = $Existente | ConvertFrom-Json
+    $atual = if ($Existente) { $Existente | ConvertFrom-Json } else { $novo }
     $lista = @($atual.auto_install | Where-Object { $_ -and $_.image -ne $Imagem }) + @($novo.auto_install)
     if ($atual.PSObject.Properties['auto_install']) { $atual.auto_install = $lista }
     else { $atual | Add-Member -NotePropertyName 'auto_install' -NotePropertyValue $lista }
+    $controle = @($atual.control | Where-Object { $_ -and -not $_.PSObject.Properties['VTOY_DEFAULT_IMAGE'] }) + @([pscustomobject]@{ VTOY_DEFAULT_IMAGE = $Imagem })
+    if ($atual.PSObject.Properties['control']) { $atual.control = $controle }
+    else { $atual | Add-Member -NotePropertyName 'control' -NotePropertyValue $controle }
     return ($atual | ConvertTo-Json -Depth 10)
 }
 
