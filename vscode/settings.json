@@ -1,3 +1,8 @@
 {
-  "terminal.integrated.fontFamily": "Cascadia Mono, CaskaydiaCove Nerd Font Mono, Cascadia Code, Consolas, monospace"
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.fontFamily": "JetBrainsMono Nerd Font, JetBrainsMono NF, Cascadia Mono, Consolas, monospace",
+  "terminal.integrated.fontSize": 12,
+  "terminal.integrated.cursorStyle": "block",
+  "terminal.integrated.cursorBlinking": false,
+  "terminal.integrated.scrollback": 100000
 }

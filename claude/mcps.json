@@ -1,0 +1,30 @@
+[
+  { "nome": "chrome-devtools", "npm": "chrome-devtools-mcp",
+    "servidor": { "type": "stdio", "command": "node", "args": ["{npm}\\chrome-devtools-mcp\\build\\src\\bin\\chrome-devtools-mcp.js"] } },
+
+  { "nome": "playwright", "npm": "@playwright/mcp",
+    "servidor": { "type": "stdio", "command": "node", "args": ["{npm}\\@playwright\\mcp\\cli.js", "--user-data-dir", "{claude}\\.secrets\\perfil-navegador"] } },
+
+  { "nome": "firecrawl", "segredo": "firecrawl.env",
+    "servidor": { "type": "http", "url": "https://mcp.firecrawl.dev/{FIRECRAWL_API_KEY}/v2/mcp" } },
+
+  { "nome": "obsidian", "npm": "obsidian-mcp@2",
+    "servidor": { "type": "stdio", "command": "node", "args": ["{npm}\\obsidian-mcp\\dist\\main.js", "serve", "--vault", "cerebro={claude}\\Obsidian\\Cérebro"] } },
+
+  { "nome": "whatsapp", "npm": "@kaptionai/mcp-extension",
+    "servidor": { "type": "stdio", "command": "node", "args": ["{npm}\\@kaptionai\\mcp-extension\\dist\\index.js"] } },
+
+  { "nome": "n8n", "npm": "n8n-mcp",
+    "servidor": { "type": "stdio", "command": "node", "args": ["{npm}\\n8n-mcp\\dist\\mcp\\stdio-wrapper.js"],
+                  "env": { "MCP_MODE": "stdio", "LOG_LEVEL": "error", "DISABLE_CONSOLE_OUTPUT": "true" } } },
+
+  { "nome": "shadcn", "npm": "shadcn",
+    "servidor": { "type": "stdio", "command": "node", "args": ["{npm}\\shadcn\\dist\\index.js", "mcp"] } },
+
+  { "nome": "maestro",
+    "servidor": { "type": "stdio", "command": "{home}\\.maestro\\bin\\maestro.bat", "args": ["mcp"],
+                  "env": { "JAVA_HOME": "{java}", "MAESTRO_CLI_NO_ANALYTICS": "1", "MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED": "true",
+                           "MAESTRO_DISABLE_UPDATE_CHECK": "true", "MAESTRO_DRIVER_STARTUP_TIMEOUT": "60000" } } },
+
+  { "nome": "firebase-tools (o MCP do plugin firebase sobe por ele; com npx @latest estourava os 30 s)", "npm": "firebase-tools" }
+]

@@ -6,7 +6,7 @@
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
 
-  O console mostra cada etapa como [n/28], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
+  O console mostra cada etapa como [n/29], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
   listados) ou ERRO (a etapa parou; a mensagem aparece). Nenhuma etapa derruba as seguintes. No final sai um
   resumo de todas as etapas e dos programas que falharam. Tudo vai também para ~\mywiniso-setup.log.
 
@@ -15,26 +15,30 @@
   vê (driver, monitores, tema, wallpaper, barra), e só então vêm os programas, que sozinhos levam uns
   treze minutos. Em uns cinco minutos a máquina já está na cara certa e o resto instala por baixo.
 
-   1. ponto de restauração antes de mexer    15. Chrome (Proton Pass) e Discord (Vencord do fork)
-   2. garante que o winget funciona          16. Jogos: RedM e biblioteca do Steam em D:
-   3. Git e clone em ~\Projetos\MyWinISO     17. git config
-   4. Claude Code (CLI)                      18. Office
-   5. driver de vídeo, direto da NVIDIA      19. Área de Trabalho Remota e política de senha
-   6. monitores: resolução, Hz e posição     20. NVIDIA App (instalador silencioso)
-   7. preferências do usuário (tema escuro)  21. MariaDB: serviço e root
-   8. wallpaper, um por monitor              22. fonte Cascadia Mono, console e VS Code
-   9. foto do perfil                         23. perfil do PowerShell
-  10. Explorer em Detalhes (WinSetView)      24. barra de tarefas e tarefa de logon
-  11. Windhawk: tema Translucent             25. WSL com Debian e zsh
-  12. energia: tela apaga em 5 min           26. Windows Update (resto dos drivers)
-  13. programas do apps.json, um a um        27. Windows Terminal como terminal único
-  14. Lightshot: só Shift+PrintScreen        28. manutenção: limpeza e telemetria
+   1. ponto de restauração antes de mexer    16. Chrome (Proton Pass) e Discord (Vencord do fork)
+   2. garante que o winget funciona          17. Jogos: RedM e biblioteca do Steam em D:
+   3. Git e clone em ~\Projetos\MyWinISO     18. git config
+   4. Claude Code (CLI)                      19. Office
+   5. driver de vídeo, direto da NVIDIA      20. Área de Trabalho Remota e política de senha
+   6. monitores: resolução, Hz e posição     21. NVIDIA App (instalador silencioso)
+   7. preferências do usuário (tema escuro)  22. MariaDB: serviço e root
+   8. wallpaper, um por monitor              23. fontes, console e VS Code
+   9. foto do perfil                         24. um perfil só para todo PowerShell
+  10. Explorer em Detalhes (WinSetView)      25. barra de tarefas e tarefa de logon
+  11. Windhawk: tema Translucent             26. WSL com Debian e zsh (o mesmo prompt)
+  12. energia: tela apaga em 5 min           27. Windows Update (resto dos drivers)
+  13. programas do apps.json, um a um        28. Windows Terminal como terminal único
+  14. Claude Code: MCPs, plugins e skills    29. manutenção: limpeza e telemetria
+  15. Lightshot: só Shift+PrintScreen
+
+  -So 'nome da etapa'[,'outra']: roda só essas (as outras saem como puladas, com a numeração de sempre) e não
+  arma reinício. Para testar uma etapa sem esperar as 29.
 
   A etapa 8 termina esperando o Explorer gravar o TranscodedImageCache. Sem essa espera, o reinício do
   Explorer na etapa 10 desfaz a atribuição de wallpaper por monitor e o monitor em pé perde a imagem
   dele. Com ela, sobrevive. Medido, não suposto.
 #>
-param([string] $Senha = $env:MYWINISO_SENHA)
+param([string] $Senha = $env:MYWINISO_SENHA, [string[]] $So = $(if ($env:MYWINISO_SO) { $env:MYWINISO_SO -split ';' }))
 
 # Este arquivo é UTF-8 sem BOM: com BOM, "irm | iex" no Windows PowerShell engasga no primeiro caractere. Só que
 # sem BOM o Windows PowerShell lê .ps1 pelo -File (ou por &) como ANSI e os acentos viram "Ã¡". Se o texto chegou
@@ -44,6 +48,7 @@ param([string] $Senha = $env:MYWINISO_SENHA)
 if ($PSCommandPath -and 'á'.Length -ne 1) {
     $env:MYWINISO_SENHA = $Senha
     $env:MYWINISO_RAIZ  = $PSScriptRoot
+    $env:MYWINISO_SO    = ($So -join ';')   # a releitura não repassa parâmetros
     # dot-source, não &: com & o bloco roda em escopo filho e $script:Resultado/$script:Falhas das funções ficam nulos
     . ([scriptblock]::Create([System.IO.File]::ReadAllText($PSCommandPath, [System.Text.Encoding]::UTF8)))
     exit $LASTEXITCODE
@@ -62,7 +67,7 @@ try { $Host.UI.RawUI.WindowTitle = 'mywiniso: setup' } catch { }
 # ja conta como sinal de vida sem precisar mudar nenhuma chamada.
 # ---------------------------------------------------------------------------------------------------
 # $global: e nao $script:. O proxy do Write-Host logo abaixo tambem e chamado de dentro dos .ps1 filhos
-# (& $mon na etapa 6, & $PerfilNoD nas 7/13/28, o WinSetView na 10), e ali $script: resolve o escopo
+# (& $mon na etapa 6, & $PerfilNoD nas 7/13/29, o WinSetView na 10), e ali $script: resolve o escopo
 # DAQUELE arquivo, onde Pulso nao existe: $script:Pulso virava $null e a atribuicao morria com "a
 # propriedade 'Ultimo' nao foi encontrada neste objeto", derrubando a etapa inteira em ERRO.
 $global:Pulso = [hashtable]::Synchronized(@{ Nome = 'iniciando'; Desde = Get-Date; Ultimo = Get-Date; Ligado = $true })
@@ -142,7 +147,8 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$global:TotalEtapas = 28
+$global:TotalEtapas = 29
+$global:So          = $So
 $global:NumEtapa    = 0
 $global:Resultado   = New-Object System.Collections.Generic.List[object]
 $global:Falhas      = New-Object System.Collections.Generic.List[string]
@@ -153,6 +159,10 @@ function Passo([string] $m) { Write-Host "  - $m" -ForegroundColor Gray }
 function Falha([string] $m) { Write-Host "  FALHOU: $m" -ForegroundColor Red; $global:Falhas.Add($m) }
 function Etapa([string] $Nome, [scriptblock] $Corpo) {
     $global:NumEtapa++
+    if ($global:So -and $global:So -notcontains $Nome) {
+        Write-Host ("[{0}/{1}] {2} | pulada (-So)" -f $global:NumEtapa, $global:TotalEtapas, $Nome) -ForegroundColor DarkGray
+        return
+    }
     $global:Pulso.Nome  = "[$($global:NumEtapa)/$($global:TotalEtapas)] $Nome"
     $global:Pulso.Desde = Get-Date
     Write-Host ''
@@ -388,7 +398,7 @@ Etapa 'winget' {
 $aqui = if ($PSScriptRoot) { $PSScriptRoot } elseif ($env:MYWINISO_RAIZ) { $env:MYWINISO_RAIZ } else { '' }
 # vazio quando o setup vem pelo irm, que nao tem PSScriptRoot: ai esta instancia so clona e passa o
 # bastao, e quem usa o caminho e a copia local. Join-Path com string vazia lanca.
-$PerfilNoD = if ($aqui) { Join-Path $aqui 'manutencao\perfil.ps1' } else { '' }   # regra que leva o perfil de todo programa para D: (etapas 7, 13 e 28)
+$PerfilNoD = if ($aqui) { Join-Path $aqui 'manutencao\perfil.ps1' } else { '' }   # regra que leva o perfil de todo programa para D: (etapas 7, 13 e 29)
 if (-not ($aqui -and (Test-Path -LiteralPath (Join-Path $aqui 'apps.json')))) {
     Etapa 'Git e clone do repositório' {
         if (-not (Get-Command git.exe -ErrorAction Ignore)) {
@@ -473,19 +483,19 @@ Etapa 'Claude Code (CLI)' {
 # --- 5. Driver de vídeo da NVIDIA, direto da NVIDIA --------------------------------------------------
 # Primeira coisa que o setup faz depois de ter o repositório na mão, e de propósito: sem o driver da placa
 # o Windows fica no adaptador básico da Microsoft, numa resolução baixa, e a etapa dos monitores não tem
-# como pedir 1440p a 180 Hz nem girar a LG. O Windows Update também traz o driver, mas só na etapa 23 e
+# como pedir 1440p a 180 Hz nem girar a LG. O Windows Update também traz o driver, mas só na etapa 27 e
 # sempre atrasado (o que ele entregou nesta máquina tinha oito meses). Aqui o driver vem da própria NVIDIA,
 # pela mesma API que a página de download usa, e é o mais novo que existe.
 #   psid = série da placa, pfid = modelo dentro da série. A NVIDIA não expõe mais o lookup desses dois
 #   (o endpoint lookupValueSearch responde 404), então ficam nesta tabela; placa que não estiver aqui cai
-#   no Windows Update da etapa 23, que é lento mas funciona sozinho.
+#   no Windows Update da etapa 27, que é lento mas funciona sozinho.
 $NvidiaProdutos = @{
     'RTX 3090' = @{ psid = 120; pfid = 934 }
 }
 Etapa 'Driver de vídeo (NVIDIA)' {
     $gpu = @(Get-CimInstance Win32_VideoController -ErrorAction Ignore | Where-Object { $_.Name -match 'NVIDIA' })[0]
     if (-not $gpu) {
-        Passo 'nenhuma placa NVIDIA à vista; o vídeo fica com o que o Windows Update trouxer na etapa 23'
+        Passo 'nenhuma placa NVIDIA à vista; o vídeo fica com o que o Windows Update trouxer na etapa 27'
         return
     }
     Passo "placa: $($gpu.Name)"
@@ -503,7 +513,7 @@ Etapa 'Driver de vídeo (NVIDIA)' {
 
     $chave = @($NvidiaProdutos.Keys | Where-Object { $gpu.Name -match [regex]::Escape($_) })[0]
     if (-not $chave) {
-        Falha "a placa '$($gpu.Name)' não está no NvidiaProdutos do setup.ps1; o driver fica para o Windows Update da etapa 23"
+        Falha "a placa '$($gpu.Name)' não está no NvidiaProdutos do setup.ps1; o driver fica para o Windows Update da etapa 27"
         return
     }
     $prod = $NvidiaProdutos[$chave]
@@ -518,11 +528,11 @@ Etapa 'Driver de vídeo (NVIDIA)' {
         $resposta = Invoke-RestMethod -UseBasicParsing -UserAgent 'Mozilla/5.0' -Uri $api -TimeoutSec 60
         $info = @($resposta.IDS)[0].downloadInfo
     } catch {
-        Falha "a API da NVIDIA não respondeu ($($_.Exception.Message)); o driver fica para o Windows Update da etapa 23"
+        Falha "a API da NVIDIA não respondeu ($($_.Exception.Message)); o driver fica para o Windows Update da etapa 27"
         return
     }
     if (-not $info.DownloadURL) {
-        Falha 'a API da NVIDIA respondeu sem DownloadURL; o driver fica para o Windows Update da etapa 23'
+        Falha 'a API da NVIDIA respondeu sem DownloadURL; o driver fica para o Windows Update da etapa 27'
         return
     }
     Passo "mais novo na NVIDIA: $($info.Version), de $($info.ReleaseDateTime)"
@@ -635,6 +645,11 @@ Etapa 'Preferências do usuário' {
                 -Action (New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$PerfilNoD`" -Quieto") | Out-Null
             Passo "tarefa 'Perfil no D': a cada logon e de hora em hora, leva para D: o perfil de programa novo"
         } else { Falha "não achei $PerfilNoD" }
+        # D:\Perfil veio de antes da formatação com dono no SID da conta velha. O Windows lê e grava assim
+        # mesmo, mas o git recusa todo repositório dali ("dubious ownership") -- e os marketplaces de plugin
+        # do Claude são clones git dentro de ~\.claude. Uma passada do icacls resolve (52 mil arquivos, 5 s).
+        Silencioso { icacls.exe (Join-Path $Dados 'Perfil') /setowner "$env:USERDOMAIN\$env:USERNAME" /T /C /Q 2>&1 | Out-Null }
+        Passo 'D:\Perfil com dono na conta atual (senão o git recusa os repositórios de lá)'
         # Android SDK, emuladores e o .android em D:, para não baixar de novo a cada formatação. O Android
         # Studio lê ANDROID_HOME no assistente inicial e propõe esse caminho para o SDK; o AVD e o .android
         # seguem as variáveis próprias. Variáveis de máquina, então valem para qualquer conta e terminal.
@@ -914,7 +929,7 @@ Etapa 'Preferências do usuário' {
 #
 # A espera no fim não é decorativa. O Explorer só grava a atribuição por monitor em
 # Control Panel\Desktop\TranscodedImageCache_00N alguns segundos depois do SetWallpaper. Se ele morrer
-# antes disso, e ele reinicia na etapa 10 e no fim da etapa 24, volta todos os monitores para o valor
+# antes disso, e ele reinicia na etapa 10 e no fim da etapa 25, volta todos os monitores para o valor
 # único do registro e o monitor em pé perde a imagem. Medido nesta máquina: sem a espera desfaz, com a
 # espera sobrevive. Por isso a etapa só termina depois de ver as chaves no registro.
 $WallPaisagem = 'Jason_and_Lucia_Robbery_landscape.jpg'
@@ -1241,7 +1256,7 @@ Etapa 'Energia' {
     # Memória, pelo hardware. 32 GB de RAM: pagefile fixo de 16 GB no C: (início = máximo, então nunca cresce
     # nem fragmenta no meio de um jogo, e ainda cabe um dump de kernel) e compressão de memória desligada (ela
     # gasta CPU para poupar RAM, que sobra). O que o Intelligent Standby List Cleaner faz, a limpeza da
-    # standby list quando a RAM livre cai, é a tarefa 'Standby list' da etapa 28. Pagefile e compressão só
+    # standby list quando a RAM livre cai, é a tarefa 'Standby list' da etapa 29. Pagefile e compressão só
     # valem depois de reiniciar.
     $ramGB = [Math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
     $pfMB  = [Math]::Max(4096, [Math]::Min(16384, [int]($ramGB * 512)))    # metade da RAM, entre 4 e 16 GB
@@ -1319,7 +1334,185 @@ Etapa 'Programas (apps.json)' {
     }
 }
 
-# --- 14. Lightshot: um atalho só, Shift+PrintScreen -----------------------------------------------
+# --- 14. Claude Code: MCPs, plugins e skills (claude\mcps.json) ------------------------------------
+# A etapa 4 instala o CLI; esta liga o que ele usa. Os MCPs de escopo user ficam em ~\.claude.json, que a
+# etapa 7 já pôs em D: -- mas a formatação de 06/09/2026 mostrou que só isso não basta: o arquivo voltou sem
+# nenhum mcpServers, e os pacotes npm globais de que eles dependem (Roaming\npm\node_modules) vieram vazios.
+# A lista, então, é o repo (claude\mcps.json) e a etapa é determinística: instala o pacote npm de cada um se
+# faltar, remove e registra de novo com claude mcp add-json. Pacote global e entrypoint pelo node, nunca
+# npx @latest: o npx revalida na rede a cada partida e estoura o timeout de 30 s do Claude Code (medido no
+# shadcn: 37 s). A chave do firecrawl vem de D:\Claude\.secrets\firecrawl.env, nunca do repo. Depois: o
+# binário do engram (o plugin engram sobe por ele), o maestro (CLI de teste no emulador; ~\.maestro já fica
+# em D: pela regra do perfil), os 4 marketplaces e plugins, e a conferência das skills, que moram em
+# ~\.claude\skills e sobrevivem em D:. Fecha com claude mcp list, que tenta conectar em cada um.
+Etapa 'Claude Code: MCPs, plugins e skills' {
+    Refresh-Path
+    if (-not (Get-Command claude -ErrorAction Ignore)) { throw 'o claude não está no PATH (etapa 4)' }
+    $npmCmd = Get-Command npm.cmd -ErrorAction Ignore
+    if (-not $npmCmd) { throw 'npm.cmd não está no PATH (o Node.js vem do apps.json, etapa 13)' }
+    $central = if ($Dados) { Join-Path $Dados 'Claude' } else { $null }
+    if ($central -and -not (Test-Path -LiteralPath $central)) { Falha "não achei $central (a central de orientações); obsidian e playwright ficam de fora"; $central = $null }
+    if ($central) {
+        # veio de antes da formatação com dono no SID da conta velha; sem isto o git recusa o repositório
+        Silencioso { icacls.exe $central /setowner "$env:USERDOMAIN\$env:USERNAME" /T /C /Q 2>&1 | Out-Null }
+    }
+    $npmRaiz = Join-Path $env:APPDATA 'npm\node_modules'
+    $java = [Environment]::GetEnvironmentVariable('JAVA_HOME', 'User')
+    if (-not $java) { $java = [Environment]::GetEnvironmentVariable('JAVA_HOME', 'Machine') }
+    $java = ([string]$java).TrimEnd('\')   # barra no fim não serve para nada e ainda vira escape dentro do JSON
+    if (-not $java) {
+        # o maestro só aceita JDK 17 ou 21; o 17 vem do apps.json (Temurin)
+        $jdk = Get-ChildItem -LiteralPath 'C:\Program Files\Eclipse Adoptium' -Directory -Filter 'jdk-17*' -ErrorAction Ignore | Select-Object -First 1
+        if ($jdk) { $java = $jdk.FullName; [Environment]::SetEnvironmentVariable('JAVA_HOME', $java, 'User'); Passo "JAVA_HOME = $java (usuário)" }
+        else { Falha 'JAVA_HOME vazio e nenhum JDK 17 da Temurin em Program Files; o maestro fica sem Java' }
+    }
+    $lista = Get-Content -LiteralPath (Join-Path $aqui 'claude\mcps.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+
+    # 1. pacotes npm, globais (a pasta Roaming\npm também é de D: pela regra do perfil)
+    foreach ($m in $lista | Where-Object { $_.npm }) {
+        $pasta = Join-Path $npmRaiz ($m.npm -replace '@[\d^~.]+$', '')
+        if (Test-Path -LiteralPath $pasta) { Passo "$($m.npm): já instalado"; continue }
+        Passo "npm install -g $($m.npm)"
+        Silencioso { & $npmCmd.Source install -g $m.npm --no-fund --no-audit --loglevel=error 2>&1 | Out-Host }
+        if (-not (Test-Path -LiteralPath $pasta)) { Falha "npm não instalou $($m.npm)" }
+    }
+
+    # 2. engram: escrito em Go, mas o release traz o binário pronto. Vai para ~\.local\bin, que a regra do perfil leva para D:
+    $bin = Join-Path $env:USERPROFILE '.local\bin'
+    New-Item -ItemType Directory -Path $bin -Force | Out-Null
+    if (Test-Path -LiteralPath (Join-Path $bin 'engram.exe')) { Passo 'engram: já instalado' }
+    else {
+        try {
+            $rel   = Invoke-RestMethod -Uri 'https://api.github.com/repos/Gentleman-Programming/engram/releases/latest' -Headers @{ 'User-Agent' = 'PowerShell' }
+            $asset = $rel.assets | Where-Object { $_.name -like 'engram_*_windows_amd64.zip' } | Select-Object -First 1
+            $zip   = Join-Path $env:TEMP 'engram.zip'
+            $tmp   = Join-Path $env:TEMP 'engram'
+            Baixar $asset.browser_download_url $zip
+            if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
+            Expand-Archive -Path $zip -DestinationPath $tmp -Force
+            $exe = Get-ChildItem -LiteralPath $tmp -Recurse -Filter 'engram.exe' | Select-Object -First 1
+            Copy-Item -LiteralPath $exe.FullName -Destination $bin -Force
+            Passo "engram $($rel.tag_name) em $bin"
+        } catch { Falha "engram: $($_.Exception.Message)" }
+    }
+
+    # 3. maestro em ~\.maestro (também em D: pela regra). São 315 MB: só quando falta.
+    $maestroBin = Join-Path $env:USERPROFILE '.maestro\bin'
+    if (Test-Path -LiteralPath (Join-Path $maestroBin 'maestro.bat')) { Passo 'maestro: já instalado' }
+    else {
+        try {
+            $rel   = Invoke-RestMethod -Uri 'https://api.github.com/repos/mobile-dev-inc/maestro/releases/latest' -Headers @{ 'User-Agent' = 'PowerShell' }
+            $asset = $rel.assets | Where-Object { $_.name -eq 'maestro.zip' } | Select-Object -First 1
+            $zip   = Join-Path $env:TEMP 'maestro.zip'
+            $tmp   = Join-Path $env:TEMP 'maestro-zip'
+            Baixar $asset.browser_download_url $zip
+            if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
+            Expand-Archive -Path $zip -DestinationPath $tmp -Force
+            $raiz = if (Test-Path -LiteralPath (Join-Path $tmp 'maestro\bin')) { Join-Path $tmp 'maestro' } else { $tmp }
+            $dest = Split-Path $maestroBin -Parent
+            New-Item -ItemType Directory -Path $dest -Force | Out-Null
+            foreach ($sub in 'bin', 'lib') {
+                Remove-Item -LiteralPath (Join-Path $dest $sub) -Recurse -Force -ErrorAction Ignore
+                Copy-Item -LiteralPath (Join-Path $raiz $sub) -Destination $dest -Recurse -Force
+            }
+            Passo "maestro $($rel.tag_name) em $dest"
+        } catch { Falha "maestro: $($_.Exception.Message)" }
+    }
+    # os dois no Path do usuário (o profile.ps1 também os põe na sessão)
+    $pathUser = [Environment]::GetEnvironmentVariable('Path', 'User')
+    foreach ($p in $bin, $maestroBin) { if (($pathUser -split ';') -notcontains $p) { $pathUser = "$pathUser;$p" } }
+    [Environment]::SetEnvironmentVariable('Path', $pathUser.Trim(';'), 'User')
+    Refresh-Path
+
+    # 4. registro dos MCPs, escopo user
+    $segredos = if ($central) { Join-Path $central '.secrets' } else { $null }
+    # O JSON vai para o claude mcp add-json por -EncodedCommand do pwsh 7, e não como argumento daqui. Motivo,
+    # medido: o setup roda no Windows PowerShell 5.1, e o 5.1 não entrega inteiro um argumento que tenha aspas
+    # E espaço -- o add-json responde "Invalid configuration: : Invalid input". Vale para as duas formas, JSON
+    # cru e com as aspas escapadas. Sete dos oito passavam por acaso (nenhum valor deles tem espaço); só o
+    # maestro caía, pelo JAVA_HOME em "C:\Program Files\...". O -EncodedCommand é base64 de UTF-16: não passa
+    # por parser de linha de comando nenhum, então espaço, aspas e acento chegam como estão. O pwsh 7 vem do
+    # apps.json, na etapa 13, que roda antes desta.
+    $pwsh = (Get-Command pwsh.exe -ErrorAction Ignore).Source
+    if (-not $pwsh) { Falha 'pwsh 7 não está no PATH (vem do apps.json, etapa 13); MCP com espaço no valor pode não registrar' }
+    $registrados = @()
+    foreach ($m in $lista | Where-Object { $_.servidor }) {
+        $json = $m.servidor | ConvertTo-Json -Compress -Depth 5
+        if ($m.segredo) {
+            $arq = if ($segredos) { Join-Path $segredos $m.segredo } else { '' }
+            if (-not ($arq -and (Test-Path -LiteralPath $arq))) { Falha "$($m.nome): sem $($m.segredo) em D:\Claude\.secrets; fica de fora"; continue }
+            foreach ($linha in Get-Content -LiteralPath $arq) {
+                if ($linha -match '^\s*([A-Za-z0-9_]+)\s*=\s*(.+?)\s*$') { $json = $json.Replace('{' + $Matches[1] + '}', $Matches[2]) }
+            }
+        }
+        if ($json.Contains('{claude}') -and -not $central) { Falha "$($m.nome): precisa de D:\Claude; fica de fora"; continue }
+        # as barras dobram porque a troca é no texto do JSON
+        $json = $json.Replace('{npm}', $npmRaiz.Replace('\', '\\')).Replace('{home}', $env:USERPROFILE.Replace('\', '\\')).Replace('{java}', ([string]$java).Replace('\', '\\'))
+        if ($central) { $json = $json.Replace('{claude}', $central.Replace('\', '\\')) }
+        Silencioso { claude mcp remove $m.nome -s user 2>&1 | Out-Null }
+        if ($pwsh) {
+            # aspas simples dobradas: é assim que uma aspa simples entra numa string literal do PowerShell
+            $cmd = "claude mcp add-json '$($m.nome)' '$($json.Replace("'", "''"))' -s user"
+            $b64 = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
+            $saida = Silencioso { & $pwsh -NoProfile -EncodedCommand $b64 2>&1 | Out-String }
+        } else {
+            $saida = Silencioso { claude mcp add-json $m.nome $json.Replace('"', '\"') -s user 2>&1 | Out-String }
+        }
+        if ($saida -match 'Added') { $registrados += $m.nome } else { Falha "$($m.nome): claude mcp add-json não confirmou ($(($saida -split "`n")[0]))" }
+    }
+    Passo "registrados: $($registrados -join ', ')"
+
+    # 5. marketplaces e plugins: as pastas em ~\.claude\plugins\marketplaces já estão em D:; o que se perde é o registro
+    foreach ($mk in 'JuliusBrussee/caveman', 'Gentleman-Programming/engram', 'firebase/agent-skills', 'expo/skills') {
+        Silencioso { claude plugin marketplace add $mk 2>&1 | Out-Null }
+    }
+    foreach ($pl in 'caveman@caveman', 'engram@engram', 'firebase@firebase', 'expo@expo-plugins') {
+        Silencioso { claude plugin install $pl 2>&1 | Out-Null }
+        Silencioso { claude plugin enable  $pl 2>&1 | Out-Null }
+    }
+    # o MCP do plugin firebase sobe com "npx -y firebase-tools@latest": 30 s de partida nesta máquina, o
+    # limite exato do Claude Code, e ele entrava como Failed. Apontar o entrypoint pelo node (o pacote já foi
+    # instalado global acima) baixa para 18 s. O arquivo é do cache do plugin e volta ao original quando o
+    # plugin atualiza -- por isso a correção é reaplicada a cada rodada, e não uma vez só.
+    $fbEntry = Join-Path $npmRaiz 'firebase-tools\lib\bin\firebase.js'
+    foreach ($mcpArq in Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.claude\plugins\cache\firebase') -Recurse -Filter '.mcp.json' -ErrorAction Ignore) {
+        if (-not (Test-Path -LiteralPath $fbEntry)) { Falha 'firebase-tools global não está no lugar; o MCP do plugin firebase segue pelo npx'; break }
+        $cfg = Get-Content -LiteralPath $mcpArq.FullName -Raw | ConvertFrom-Json
+        if ($cfg.mcpServers.firebase.command -eq 'node') { Passo 'plugin firebase: já aponta para o node'; continue }
+        $cfg.mcpServers.firebase.command = 'node'
+        $cfg.mcpServers.firebase.args    = @($fbEntry, 'mcp', '--dir', '.')
+        # WriteAllText e não Set-Content -Encoding UTF8: o do Windows PowerShell grava BOM, e com BOM o
+        # carregador de plugin do Claude Code não lê o .mcp.json -- o servidor não falha, ele simplesmente
+        # some da lista, que é pior de perceber. Medido nesta máquina.
+        [IO.File]::WriteAllText($mcpArq.FullName, ($cfg | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
+        Passo "plugin firebase: $($mcpArq.FullName) apontado para o node (npx @latest estourava os 30 s)"
+    }
+
+    $known = Join-Path $env:USERPROFILE '.claude\plugins\known_marketplaces.json'
+    $nomes = if (Test-Path -LiteralPath $known) { (Get-Content -LiteralPath $known -Raw | ConvertFrom-Json).PSObject.Properties.Name } else { @() }
+    Passo "marketplaces: $($nomes -join ', ')"
+    $cfgClaude = Join-Path $env:USERPROFILE '.claude\settings.json'
+    $ligados = if (Test-Path -LiteralPath $cfgClaude) { $e = (Get-Content -LiteralPath $cfgClaude -Raw | ConvertFrom-Json).enabledPlugins; if ($e) { $e.PSObject.Properties | Where-Object { $_.Value } | ForEach-Object Name } }
+    Passo "plugins ligados: $(if ($ligados) { $ligados -join ', ' } else { 'nenhum' })"
+
+    # 6. skills: globais em ~\.claude\skills (D:); as de projeto vivem em cada repositório
+    $skills = Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.claude\skills') -Directory -ErrorAction Ignore
+    if ($skills) { Passo "skills: $($skills.Name -join ', ')" } else { Falha 'nenhuma skill em ~\.claude\skills: o D:\Perfil\Home\.claude não voltou?' }
+
+    # 7. prova: o claude mcp list tenta conectar em cada um (os do claude.ai vêm com a conta)
+    Passo 'claude mcp list (conecta em cada um; demora um pouco)'
+    $lista2 = Silencioso { claude mcp list 2>&1 | Out-String }
+    foreach ($l in ($lista2 -split "`n")) {
+        if ($l -match '^(.+?):\s.*-\s.*(Connected|Failed|Needs authentication)') {
+            $nome = $Matches[1].Trim(); $estado = $Matches[2]
+            if ($estado -eq 'Connected') { Passo "  $nome`: conectado" }
+            elseif ($estado -eq 'Needs authentication') { Passo "  $nome`: pede login (/mcp no Claude Code)" }
+            else { Falha "$nome`: não conectou" }
+        }
+    }
+}
+
+# --- 15. Lightshot: um atalho só, Shift+PrintScreen -----------------------------------------------
 # O Lightshot guarda tudo em HKCU\Software\Skillbrains\lightshot, e lê esses valores quando inicia.
 # Tem três atalhos: o principal (selecionar área), salvar a tela toda e enviar a tela toda para o site.
 # Aqui fica só o principal, em Shift+PrintScreen, e os outros dois desligados.
@@ -1353,7 +1546,7 @@ Etapa 'Lightshot: só Shift+PrintScreen' {
     }
 }
 
-# --- 15. Chrome: senhas só no Proton Pass, e as duas extensões já instaladas -----------------------
+# --- 16. Chrome: senhas só no Proton Pass, e as duas extensões já instaladas -----------------------
 # Por política de máquina (HKLM\SOFTWARE\Policies\Google\Chrome), que o Chrome lê no início:
 #   PasswordManagerEnabled 0  desliga o cofre do Chrome inteiro: não oferece salvar, não preenche e
 #                             não sugere senha forte. É o que faz o Proton Pass ficar sendo o único.
@@ -1443,7 +1636,7 @@ Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
     }
 }
 
-# --- 16. RedM ----------------------------------------------------------------------------------------
+# --- 17. RedM ----------------------------------------------------------------------------------------
 # O RedM.exe do site é um bootstrapper: no primeiro clique ele cria o RedM.app ao lado de si mesmo e
 # baixa o jogo, uns GB, numa janela própria. Não existe instalação silenciosa: o binário só entende
 # -ctracpkm, nada de /S nem /quiet, e a página do CitizenFX não documenta nenhum. Então o setup faz o que
@@ -1502,7 +1695,7 @@ Etapa 'Jogos: RedM e biblioteca do Steam' {
     }
 }
 
-# --- 17. Git -----------------------------------------------------------------------------------------
+# --- 18. Git -----------------------------------------------------------------------------------------
 Etapa 'git config' {
     git.exe config --global user.name  'Alexandre Rangel'
     git.exe config --global user.email 'mamutal91@gmail.com'
@@ -1510,7 +1703,7 @@ Etapa 'git config' {
     Passo "user.name=$(git.exe config --global user.name) user.email=$(git.exe config --global user.email)"
 }
 
-# --- 18. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) -------------------------
+# --- 19. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) -------------------------
 Etapa 'Office' {
     $odt = Join-Path $env:TEMP 'odt'
     New-Item -ItemType Directory -Path $odt -Force | Out-Null
@@ -1522,7 +1715,7 @@ Etapa 'Office' {
     Passo 'instalado'
 }
 
-# --- 19. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados -----------
+# --- 20. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados -----------
 Etapa 'Área de Trabalho Remota e contas' {
     Passo 'RDP ligado com autenticação de rede; regra de firewall'
     Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' 'fDenyTSConnections' 0
@@ -1540,7 +1733,7 @@ Etapa 'Área de Trabalho Remota e contas' {
     }
 }
 
-# --- 20. NVIDIA App (não está no winget; instalador silencioso com /s) ------------------------------
+# --- 21. NVIDIA App (não está no winget; instalador silencioso com /s) ------------------------------
 Etapa 'NVIDIA App' {
     $url = 'https://us.download.nvidia.com/nvapp/client/11.0.9.251/NVIDIA_app_v11.0.9.251.exe'   # reserva, caso a página mude
     try {
@@ -1557,7 +1750,7 @@ Etapa 'NVIDIA App' {
     else { Passo 'NVIDIA App instalado' }
 }
 
-# --- 21. MariaDB: serviço automático, root com a senha da conta e acesso remoto ---------------------
+# --- 22. MariaDB: serviço automático, root com a senha da conta e acesso remoto ---------------------
 Etapa 'MariaDB' {
     $maria = Get-ChildItem -Path 'C:\Program Files\MariaDB*' -Directory -ErrorAction Ignore | Select-Object -First 1
     if (-not $maria) { throw 'não instalado (MariaDB.Server falhou no winget?)' }
@@ -1624,8 +1817,8 @@ Etapa 'MariaDB' {
     }
 }
 
-# --- 22. Fonte Cascadia Mono (máquina), console e VS Code ---------------------------------------------
-Etapa 'Cascadia Mono, console e VS Code' {
+# --- 23. Fonte Cascadia Mono (máquina), console e VS Code ---------------------------------------------
+Etapa 'Fontes, console e VS Code' {
     $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/cascadia-code/releases/latest' -Headers @{ 'User-Agent' = 'PowerShell' }
     $asset = $rel.assets | Where-Object { $_.name -like 'CascadiaCode-*.zip' } | Select-Object -First 1
     Passo "microsoft/cascadia-code release $($rel.tag_name): $($asset.name)"
@@ -1677,16 +1870,29 @@ Etapa 'Cascadia Mono, console e VS Code' {
     Passo "VS Code: $vsArq"
 }
 
-# --- 23. Perfil do PowerShell (powershell\profile.ps1) -----------------------------------------------
-Etapa 'Perfil do PowerShell' {
+# --- 24. Um perfil só para todo PowerShell (powershell\profile.ps1) ---------------------------------
+# O 5.1 e o 7, em qualquer host (Windows Terminal, VS Code, console solto, elevado ou não), carregam o mesmo
+# arquivo: o do 7 é a cópia do repo, e o do Windows PowerShell só aponta para ele -- pelo $PSScriptRoot, porque
+# Documentos está em D: e "$HOME\Documents" não existe (era assim, e o 5.1 abria sem perfil nenhum). O
+# starship.toml, o mesmo do zsh do Debian, vai para D:\Perfil\Home\.config, onde o profile.ps1 e o zshrc o
+# procuram; o histórico do PSReadLine também fica em D:\Perfil\Home, um arquivo para todos os hosts.
+Etapa 'Um perfil só para todo PowerShell' {
     $docs = [Environment]::GetFolderPath('MyDocuments')
     New-Item -ItemType Directory -Path (Join-Path $docs 'PowerShell'), (Join-Path $docs 'WindowsPowerShell') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $aqui 'powershell\profile.ps1') -Destination (Join-Path $docs 'PowerShell\profile.ps1') -Force
-    Set-Content -LiteralPath (Join-Path $docs 'WindowsPowerShell\profile.ps1') -Value '. "$HOME\Documents\PowerShell\profile.ps1"' -Encoding UTF8
-    Passo "$docs\PowerShell\profile.ps1 (o do Windows PowerShell aponta para ele)"
+    Set-Content -LiteralPath (Join-Path $docs 'WindowsPowerShell\profile.ps1') -Value '. "$PSScriptRoot\..\PowerShell\profile.ps1"' -Encoding UTF8
+    Passo "$docs\PowerShell\profile.ps1; o do Windows PowerShell aponta para ele"
+    if ($Dados) {
+        $cfg = Join-Path $Dados 'Perfil\Home\.config'
+        New-Item -ItemType Directory -Path $cfg -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $aqui 'terminal\starship.toml') -Destination (Join-Path $cfg 'starship.toml') -Force
+        Passo "$cfg\starship.toml: o prompt do PowerShell 5.1, do 7 e do zsh do Debian"
+        Passo "histórico: $(Join-Path $Dados 'Perfil\Home\.ps_history'), um só para todos os hosts"
+    } else { Passo 'sem a partição Dados: starship com o prompt padrão dele e histórico por host' }
+    if (-not (Get-Command starship -ErrorAction Ignore)) { Falha 'starship não está no PATH (vem do apps.json, etapa 13); o perfil cai no prompt simples' }
 }
 
-# --- 24. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" ---------------
+# --- 25. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" ---------------
 Etapa 'Barra de tarefas e tarefa de logon' {
     $layout = Join-Path $aqui 'taskbar\LayoutModification.xml'
     foreach ($shell in (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Shell'), 'C:\Users\Default\AppData\Local\Microsoft\Windows\Shell') {
@@ -1711,7 +1917,7 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     Stop-Process -Name explorer -Force -ErrorAction Ignore
 }
 
-# --- 25. WSL com Debian (wsl\debian.sh configura por dentro) ----------------------------------------
+# --- 26. WSL com Debian (wsl\debian.sh configura por dentro) ----------------------------------------
 Etapa 'WSL com Debian e zsh' {
     # Os dois componentes primeiro, e pelo DISM. O wsl.exe do System32 não liga mais nada sozinho: com os
     # componentes desligados ele apenas escreve "o WSL não está instalado" e sai com 1 -- que esta etapa
@@ -1728,7 +1934,8 @@ Etapa 'WSL com Debian e zsh' {
         }
     }
     Silencioso { wsl.exe --status 2>&1 | Out-Null }
-    if ($LASTEXITCODE -ne 0) {
+    $wslPronto = ($LASTEXITCODE -eq 0)
+    if (-not $wslPronto) {
         if ($faltam) {
             Passo 'componentes ligados; o Debian entra depois do reinício'
             $global:PedeReinicio = $true
@@ -1736,11 +1943,16 @@ Etapa 'WSL com Debian e zsh' {
             # componentes já ligados e o wsl.exe ainda não responde: o que falta é o app do WSL
             Passo 'componentes já ligados; instalando o app do WSL'
             Silencioso { wsl.exe --install --no-distribution 2>&1 | Out-Host }
-            if ($LASTEXITCODE -ne 0) { Passo "wsl --install saiu com código $LASTEXITCODE; o Debian entra depois do reinício" }
-            else { Passo 'app do WSL instalado; o Debian entra depois do reinício' }
-            $global:PedeReinicio = $true
+            # Medido em 06/09/2026: com os componentes ligados, o app instala e o wsl.exe passa a responder na hora,
+            # e o Debian entra nesta mesma rodada. Adiar para o reinício seguinte, como era, gastava uma das três
+            # retomadas à toa. Só fica para depois se ele continuar mudo.
+            Silencioso { wsl.exe --status 2>&1 | Out-Null }
+            $wslPronto = ($LASTEXITCODE -eq 0)
+            if ($wslPronto) { Passo 'app do WSL instalado e respondendo; o Debian entra agora' }
+            else { Passo 'app do WSL instalado, mas o wsl.exe ainda não responde; o Debian entra depois do reinício'; $global:PedeReinicio = $true }
         }
-    } else {
+    }
+    if ($wslPronto) {
         $distros = ((wsl.exe --list --quiet 2>$null) -join "`n") -replace "`0", ''
         # Com a partição Dados, o disco do Debian (ext4.vhdx) mora em D:\WSL\Debian e sobrevive à formatação.
         # Na reinstalação ele está lá e volta inteiro com --import-in-place, sem copiar nada: pacotes, home,
@@ -1764,25 +1976,23 @@ Etapa 'WSL com Debian e zsh' {
                 if ($LASTEXITCODE -ne 0) { throw "wsl --install -d Debian saiu com código $LASTEXITCODE" }
             }
         } else { Passo 'Debian já instalado' }
-        if ($voltou) {
-            Passo 'Debian voltou de D: com usuário, zsh e systemd; nada a configurar'
-        } else {
-            $aquiWsl = '/mnt/' + $aqui.Substring(0, 1).ToLower() + ($aqui.Substring(2) -replace '\\', '/')
-            Passo "rodando wsl/debian.sh como root dentro do Debian"
-            wsl.exe --distribution Debian --user root -- bash "$aquiWsl/wsl/debian.sh"
-            if ($LASTEXITCODE -ne 0) { throw "debian.sh saiu com código $LASTEXITCODE" }
-            if ($Senha) {
-                # a mesma senha da conta para o usuário do Debian (sudo continua sem senha); vem do pendrive, não do repo
-                wsl.exe --distribution Debian --user root -- bash -c "echo 'alexandre:$($Senha.Replace("'", "'\''"))' | chpasswd"
-                Passo 'usuário alexandre do Debian com a senha da conta'
-            }
-            wsl.exe --terminate Debian
-            Passo 'Debian configurado: usuário alexandre, sudo sem senha, systemd'
+        if ($voltou) { Passo 'Debian voltou de D: com usuário, pacotes e systemd; o debian.sh só atualiza e reaplica o zshrc' }
+        # sempre, mesmo quando voltou de D:: o wsl/zshrc é o único .zshrc, e é o debian.sh quem o põe no lugar
+        $aquiWsl = '/mnt/' + $aqui.Substring(0, 1).ToLower() + ($aqui.Substring(2) -replace '\\', '/')
+        Passo "rodando wsl/debian.sh como root dentro do Debian"
+        wsl.exe --distribution Debian --user root -- bash "$aquiWsl/wsl/debian.sh"
+        if ($LASTEXITCODE -ne 0) { throw "debian.sh saiu com código $LASTEXITCODE" }
+        if ($Senha -and -not $voltou) {
+            # a mesma senha da conta para o usuário do Debian (sudo continua sem senha); vem do pendrive, não do repo
+            wsl.exe --distribution Debian --user root -- bash -c "echo 'alexandre:$($Senha.Replace("'", "'\''"))' | chpasswd"
+            Passo 'usuário alexandre do Debian com a senha da conta'
         }
+        wsl.exe --terminate Debian
+        Passo 'Debian configurado: usuário alexandre com zsh + starship (o mesmo prompt do PowerShell), sudo sem senha, systemd'
     }
 }
 
-# --- 26. Resto dos drivers e as atualizações, pelo Windows Update -------------------------------------------------
+# --- 27. Resto dos drivers e as atualizações, pelo Windows Update -------------------------------------------------
 Etapa 'Windows Update (drivers)' {
     Silencioso { Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null }
     # O Set-PSRepository do PowerShellGet 5.1 reclama de 'PackageManagementProvider' e de 'SourceLocation'
@@ -1794,7 +2004,7 @@ Etapa 'Windows Update (drivers)' {
     Import-Module PSWindowsUpdate
     # UpdateMicrosoftProducts (Sophia): o Microsoft Update traz também Office, .NET e o resto, não só o Windows
     Silencioso { Add-WUServiceManager -MicrosoftUpdate -Confirm:$false | Out-Null }
-    Passo 'procurando e instalando o resto das atualizações e drivers (o de vídeo já veio na etapa 4)'
+    Passo 'procurando e instalando o resto das atualizações e drivers (o de vídeo já veio na etapa 5)'
     Get-WindowsUpdate -MicrosoftUpdate -AcceptAll -Install -IgnoreReboot | Out-Host
 
     # Ativação. Esta máquina tem licença digital do Windows 11 Pro gravada no hardware (canal Retail,
@@ -1808,7 +2018,7 @@ Etapa 'Windows Update (drivers)' {
     else { Falha "Windows ainda não ativado (status $($lic.LicenseStatus)); a licença digital reativa sozinha com rede, confira em Configurações > Sistema > Ativação" }
 }
 
-# --- 27. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) ---------------
+# --- 28. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) ---------------
 # No Windows dá para abrir console de vários lugares (cmd, Windows PowerShell, PowerShell 7, Git Bash, WSL) e
 # cada um abria numa janela diferente. Aqui o Windows Terminal passa a ser o console padrão do sistema: tudo que
 # abrir console aparece nele, em abas, e os cinco shells ficam num menu só. O padrão é o PowerShell 7.
@@ -1832,7 +2042,7 @@ Etapa 'Windows Terminal como terminal único' {
     Passo 'qualquer console do Windows abre no Windows Terminal'
 }
 
-# --- 28. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo ---------------------
+# --- 29. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo ---------------------
 # Vem do Sophia Script (farag2), que trata isso melhor que qualquer outra ferramenta. Três tarefas agendadas
 # que rodam sozinhas, o armazenamento reservado liberado (~7 GB), o compartilhamento P2P de updates desligado
 # e as dez tarefas de telemetria que rodam em segundo plano. A pior delas, o Compatibility Appraiser, varre o
@@ -1957,7 +2167,7 @@ if (-not (Test-Path -LiteralPath $ChaveMy)) { New-Item -Path $ChaveMy -Force | O
 $jaFoi = [int](Get-ItemProperty -LiteralPath $ChaveMy -Name Retomadas -ErrorAction Ignore).Retomadas
 $armou = $false
 
-if ($querReiniciar -and $jaFoi -lt 3) {
+if ($querReiniciar -and $jaFoi -lt 3 -and -not $So) {
     $retomarPs1 = Join-Path $aqui 'manutencao\retomar.ps1'
     if (-not (Test-Path -LiteralPath $retomarPs1)) {
         Write-Host "  não achei $retomarPs1; sem retomada automática." -ForegroundColor Yellow
@@ -1997,9 +2207,11 @@ if ($querReiniciar) {
 } else {
     Write-Host '  Reinicie. Depois: abra o RedM.exe da área de trabalho.' -ForegroundColor Cyan
 }
-# nada mais pendente: a retomada não sobrevive ao fim da instalação
-Unregister-ScheduledTask -TaskName $Retomar -Confirm:$false -ErrorAction Ignore
-Set-ItemProperty -LiteralPath $ChaveMy -Name Retomadas -Value 0 -Type DWord -Force
+# nada mais pendente: a retomada não sobrevive ao fim da instalação (com -So não se mexe no estado)
+if (-not $So) {
+    Unregister-ScheduledTask -TaskName $Retomar -Confirm:$false -ErrorAction Ignore
+    Set-ItemProperty -LiteralPath $ChaveMy -Name Retomadas -Value 0 -Type DWord -Force
+}
 $Pulso.Ligado = $false
 if ($PulsoPS) { try { $PulsoPS.Runspace.Close() } catch { } }
 try { Stop-Transcript | Out-Null } catch { }

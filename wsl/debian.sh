@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Configuração inicial do Debian no WSL. Roda como root, chamado pelo setup.ps1:
+# Configuração do Debian no WSL. Roda como root, chamado pelo setup.ps1 a cada rodada:
 #   wsl -d Debian -u root -- bash /mnt/c/Users/alexandre/Projetos/mywiniso/wsl/debian.sh
-# Pode rodar de novo à vontade.
+# Idempotente: pode rodar de novo à vontade. Sempre reaplica o wsl/zshrc, que é o único .zshrc.
 set -euo pipefail
 usuario=alexandre
 aqui=$(cd "$(dirname "$0")" && pwd)
@@ -9,7 +9,8 @@ aqui=$(cd "$(dirname "$0")" && pwd)
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get -y upgrade
-apt-get -y install sudo git curl wget ca-certificates gnupg build-essential unzip zip zsh nano
+apt-get -y install sudo git curl wget ca-certificates gnupg build-essential unzip zip nano \
+    zsh zsh-autosuggestions zsh-syntax-highlighting fzf eza bat zoxide
 
 if ! id "$usuario" &>/dev/null; then
     useradd -m -s /bin/zsh "$usuario"
@@ -21,25 +22,14 @@ chmod 440 "/etc/sudoers.d/$usuario"
 
 chsh -s /bin/zsh "$usuario"                   # zsh, igual ao Arch; o bash continua disponível
 
-if [ ! -f "/home/$usuario/.zshrc" ]; then     # zshrc mínimo: histórico grande, completar com setas, c e x
-    cat > "/home/$usuario/.zshrc" <<'ZRC'
-HISTFILE=~/.zsh_history
-HISTSIZE=50000
-SAVEHIST=50000
-setopt HIST_IGNORE_ALL_DUPS SHARE_HISTORY
-autoload -Uz compinit && compinit
-autoload -Uz up-line-or-beginning-search down-line-or-beginning-search
-zle -N up-line-or-beginning-search; zle -N down-line-or-beginning-search
-bindkey '^[[A' up-line-or-beginning-search
-bindkey '^[[B' down-line-or-beginning-search
-alias c=clear
-alias x=exit
-alias ls='ls --color=auto'
-PROMPT='%F{cyan}%~%f %# '
-command -v starship >/dev/null && eval "$(starship init zsh)"
-ZRC
-    chown "$usuario:$usuario" "/home/$usuario/.zshrc"
+# starship: o mesmo prompt do PowerShell, pelo mesmo starship.toml de D: (o zshrc aponta STARSHIP_CONFIG).
+# Não está no apt do Debian; o instalador oficial põe o binário em /usr/local/bin.
+if ! command -v starship >/dev/null 2>&1; then
+    curl -sS https://starship.rs/install.sh | sh -s -- -y >/dev/null
 fi
 
+# o único .zshrc: o do repo, sempre por cima (o de antes não é versionado em lugar nenhum)
+install -o "$usuario" -g "$usuario" -m 644 "$aqui/zshrc" "/home/$usuario/.zshrc"
+
 cp "$aqui/wsl.conf" /etc/wsl.conf             # usuário padrão e systemd; vale a partir do próximo start
-echo "Debian pronto: usuário $usuario com zsh, sudo sem senha, systemd ligado."
+echo "Debian pronto: usuário $usuario com zsh + starship, sudo sem senha, systemd ligado."
