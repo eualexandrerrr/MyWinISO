@@ -399,11 +399,11 @@ Etapa 'Explorer em Detalhes (WinSetView)' {
     Passo 'Detalhes em todas as pastas: Nome, Caminho, Data de modificação, Tipo, Tamanho; por nome, sem agrupar; extensões visíveis; menu clássico'
     Passo "log: $logWsv"
     # Start-Process em vez de chamar direto: as dezenas de linhas do reg.exe não entram em $Error (viraria AVISO)
-    # WaitForExit em vez de -Wait: -Wait espera também os descendentes, e o WinSetView termina abrindo um Explorer
+    # -Wait porque só com ele o objeto traz ExitCode; a cópia versionada do WinSetView não abre janela no fim,
+    # então não há descendente para segurar a espera
     $p = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$ps1`"", "`"$ini`"" `
-        -PassThru -NoNewWindow -RedirectStandardOutput $logWsv -RedirectStandardError "$logWsv.err"
-    $p.WaitForExit()
-    if ($p.ExitCode -ne 0) { throw "WinSetView.ps1 saiu com código $($p.ExitCode); veja $logWsv" }
+        -Wait -PassThru -NoNewWindow -RedirectStandardOutput $logWsv -RedirectStandardError "$logWsv.err"
+    if ($null -ne $p.ExitCode -and $p.ExitCode -ne 0) { throw "WinSetView.ps1 saiu com código $($p.ExitCode); veja $logWsv" }
     Passo 'aplicado; o Explorer foi reiniciado'
 }
 
@@ -517,7 +517,12 @@ Etapa 'Área de Trabalho Remota e contas' {
     Passo 'senha sem validade, sem bloqueio de conta, scripts .ps1 liberados (RemoteSigned)'
     net.exe accounts /maxpwage:unlimited | Out-Null
     net.exe accounts /lockoutthreshold:0 | Out-Null
-    Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force
+    try { Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop }
+    catch {
+        if ($Error.Count) { $Error.RemoveAt(0) }
+        Passo "Set-ExecutionPolicy recusou ($($_.Exception.Message.Trim())); gravando no registro"
+        Set-Reg 'HKLM:\SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell' 'ExecutionPolicy' 'RemoteSigned' 'String'
+    }
 }
 
 # --- 12. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação ----------
@@ -555,7 +560,8 @@ Etapa 'NVIDIA App' {
     Passo 'instalando com /s (silencioso)'
     $p = Start-Process -FilePath $exe -ArgumentList '/s' -Wait -PassThru
     Remove-Item $exe -Force -ErrorAction Ignore
-    if ($p.ExitCode -ne 0) { throw "instalador da NVIDIA saiu com código $($p.ExitCode); instale pelo nvidia.com" }
+    if ($p.ExitCode -ne 0) { Falha "NVIDIA App: instalador saiu com código $($p.ExitCode) (sem placa NVIDIA é esperado); instale pelo nvidia.com" }
+    else { Passo 'NVIDIA App instalado' }
 }
 
 # --- 14. MariaDB: serviço automático, root com a senha da conta e acesso remoto --------------------
