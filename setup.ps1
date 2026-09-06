@@ -247,6 +247,33 @@ Etapa 'Preferências do usuário' {
     Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location' 'Value' 'Deny' 'String'
     Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location' 'Value' 'Deny' 'String'
     Set-Reg 'HKLM:\SOFTWARE\Microsoft\Settings\FindMyDevice' 'LocationSyncEnabled' 0
+    Passo 'apps de bloatware já instalados para este usuário (mesma lista do XML) e provider do Copilot'
+    $bloat = @(
+        'Clipchamp.Clipchamp', 'Microsoft.549981C3F5F10', 'Microsoft.BingNews', 'Microsoft.BingSearch', 'Microsoft.BingWeather',
+        'Microsoft.Copilot', 'Microsoft.Edge.GameAssist', 'Microsoft.GamingApp', 'Microsoft.GetHelp', 'Microsoft.Getstarted',
+        'Microsoft.Microsoft3DViewer', 'Microsoft.MicrosoftOfficeHub', 'Microsoft.MicrosoftSolitaireCollection',
+        'Microsoft.MicrosoftStickyNotes', 'Microsoft.MixedReality.Portal', 'Microsoft.MSPaint', 'Microsoft.Office.OneNote',
+        'Microsoft.OutlookForWindows', 'Microsoft.Paint', 'Microsoft.People', 'Microsoft.PowerAutomateDesktop',
+        'Microsoft.ScreenSketch', 'Microsoft.SkypeApp', 'Microsoft.Todos', 'Microsoft.Wallet', 'Microsoft.Windows.DevHome',
+        'Microsoft.WindowsAlarms', 'Microsoft.WindowsCamera', 'Microsoft.WindowsFeedbackHub', 'Microsoft.WindowsMaps',
+        'Microsoft.WindowsNotepad', 'Microsoft.WindowsSoundRecorder', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxApp',
+        'Microsoft.XboxGameOverlay', 'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone',
+        'Microsoft.ZuneMusic', 'Microsoft.ZuneVideo', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
+        'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps', 'MicrosoftWindows.Client.WebExperience',
+        'Microsoft.WidgetsPlatformRuntime', 'MicrosoftWindows.CrossDevice', 'Microsoft.SecureAssessmentBrowser',
+        'Microsoft.Windows.Ai.Copilot.Provider'
+    )
+    foreach ($app in Get-AppxPackage | Where-Object { $bloat -contains $_.Name }) {
+        Passo "removendo $($app.Name)"
+        Remove-AppxPackage -Package $app.PackageFullName -ErrorAction Continue
+    }
+    if (Get-Process -Name OneDrive -ErrorAction Ignore) {
+        Passo 'OneDrive rodando: desinstalando'
+        Stop-Process -Name OneDrive -Force -ErrorAction Ignore
+        foreach ($exe in "$env:SystemRoot\System32\OneDriveSetup.exe", "$env:SystemRoot\SysWOW64\OneDriveSetup.exe", "$env:LOCALAPPDATA\Microsoft\OneDrive\OneDriveSetup.exe") {
+            if (Test-Path -LiteralPath $exe) { Start-Process -FilePath $exe -ArgumentList '/uninstall' -Wait }
+        }
+    }
     Passo 'Modo Jogo ligado, apps em segundo plano desligados, cor de destaque puxada do wallpaper'
     Set-Reg 'HKCU:\Software\Microsoft\GameBar' 'AutoGameModeEnabled' 1
     Set-Reg 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode'   1

@@ -257,7 +257,9 @@ Faz 'Bloatware: pacotes provisionados' {
         'Microsoft.WindowsSoundRecorder', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxApp', 'Microsoft.XboxGameOverlay',
         'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone', 'Microsoft.ZuneMusic',
         'Microsoft.ZuneVideo', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
-        'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps'
+        'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps',
+        'MicrosoftWindows.Client.WebExperience', 'Microsoft.WidgetsPlatformRuntime', 'MicrosoftWindows.CrossDevice',
+        'Microsoft.SecureAssessmentBrowser'
     )
     $n = 0
     foreach ($pkg in Get-AppxProvisionedPackage -Online | Where-Object { $bloat -contains $_.DisplayName }) {
@@ -347,6 +349,8 @@ Faz 'Políticas: telemetria, sugestões, Copilot, widgets, anúncios, Edge, Wind
     Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\Recommended'               'BackgroundModeEnabled'          0
     Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\Recommended'               'StartupBoostEnabled'            0
     Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'       'NoAutoRebootWithLoggedOnUsers'  1
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive'                'DisableFileSyncNGSC'            1   # OneDrive não volta
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'                           'HubsSidebarEnabled'             0   # sem Copilot na barra lateral do Edge
 }
 
 Faz 'Edge desinstalável (política regional que a Microsoft aplica na Europa)' {
