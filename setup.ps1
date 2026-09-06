@@ -28,7 +28,8 @@ param([string] $Senha = $env:MYWINISO_SENHA)
 if ($PSCommandPath -and 'á'.Length -ne 1) {
     $env:MYWINISO_SENHA = $Senha
     $env:MYWINISO_RAIZ  = $PSScriptRoot
-    & ([scriptblock]::Create([System.IO.File]::ReadAllText($PSCommandPath, [System.Text.Encoding]::UTF8)))
+    # dot-source, não &: com & o bloco roda em escopo filho e $script:Resultado/$script:Falhas das funções ficam nulos
+    . ([scriptblock]::Create([System.IO.File]::ReadAllText($PSCommandPath, [System.Text.Encoding]::UTF8)))
     exit $LASTEXITCODE
 }
 
