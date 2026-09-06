@@ -61,7 +61,11 @@ try { $Host.UI.RawUI.WindowTitle = 'mywiniso: setup' } catch { }
 # so marca a hora da ultima saida e repassa, entao qualquer linha impressa por qualquer parte do script
 # ja conta como sinal de vida sem precisar mudar nenhuma chamada.
 # ---------------------------------------------------------------------------------------------------
-$Pulso = [hashtable]::Synchronized(@{ Nome = 'iniciando'; Desde = Get-Date; Ultimo = Get-Date; Ligado = $true })
+# $global: e nao $script:. O proxy do Write-Host logo abaixo tambem e chamado de dentro dos .ps1 filhos
+# (& $mon na etapa 6, & $PerfilNoD nas 7/13/28, o WinSetView na 10), e ali $script: resolve o escopo
+# DAQUELE arquivo, onde Pulso nao existe: $script:Pulso virava $null e a atribuicao morria com "a
+# propriedade 'Ultimo' nao foi encontrada neste objeto", derrubando a etapa inteira em ERRO.
+$global:Pulso = [hashtable]::Synchronized(@{ Nome = 'iniciando'; Desde = Get-Date; Ultimo = Get-Date; Ligado = $true })
 
 function Write-Host {
     [CmdletBinding()]
@@ -73,7 +77,7 @@ function Write-Host {
         [System.ConsoleColor] $BackgroundColor
     )
     process {
-        $script:Pulso.Ultimo = Get-Date
+        if ($global:Pulso) { $global:Pulso.Ultimo = Get-Date }
         Microsoft.PowerShell.Utility\Write-Host @PSBoundParameters
     }
 }
@@ -138,19 +142,19 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$TotalEtapas = 28
-$NumEtapa    = 0
-$Resultado   = New-Object System.Collections.Generic.List[object]
-$Falhas      = New-Object System.Collections.Generic.List[string]
+$global:TotalEtapas = 28
+$global:NumEtapa    = 0
+$global:Resultado   = New-Object System.Collections.Generic.List[object]
+$global:Falhas      = New-Object System.Collections.Generic.List[string]
 
 function Passo([string] $m) { Write-Host "  - $m" -ForegroundColor Gray }
-function Falha([string] $m) { Write-Host "  FALHOU: $m" -ForegroundColor Red; $script:Falhas.Add($m) }
+function Falha([string] $m) { Write-Host "  FALHOU: $m" -ForegroundColor Red; $global:Falhas.Add($m) }
 function Etapa([string] $Nome, [scriptblock] $Corpo) {
-    $script:NumEtapa++
-    $script:Pulso.Nome  = "[$($script:NumEtapa)/$TotalEtapas] $Nome"
-    $script:Pulso.Desde = Get-Date
+    $global:NumEtapa++
+    $global:Pulso.Nome  = "[$($global:NumEtapa)/$($global:TotalEtapas)] $Nome"
+    $global:Pulso.Desde = Get-Date
     Write-Host ''
-    Write-Host ("[{0}/{1}] {2} | {3}" -f $script:NumEtapa, $TotalEtapas, $Nome, (Get-Date -Format 'HH:mm:ss')) -ForegroundColor Cyan
+    Write-Host ("[{0}/{1}] {2} | {3}" -f $global:NumEtapa, $global:TotalEtapas, $Nome, (Get-Date -Format 'HH:mm:ss')) -ForegroundColor Cyan
     $antes  = $Error.Count
     $sw     = [System.Diagnostics.Stopwatch]::StartNew()
     $estado = 'OK'
@@ -173,7 +177,7 @@ function Etapa([string] $Nome, [scriptblock] $Corpo) {
     $sw.Stop()
     $cor = @{ OK = 'Green'; AVISO = 'Yellow'; ERRO = 'Red' }[$estado]
     Write-Host ("  {0} em {1:n0} s" -f $estado, $sw.Elapsed.TotalSeconds) -ForegroundColor $cor
-    $script:Resultado.Add([pscustomobject]@{ Etapa = $Nome; Estado = $estado; Segundos = [int]$sw.Elapsed.TotalSeconds; Detalhe = $detalhe })
+    $global:Resultado.Add([pscustomobject]@{ Etapa = $Nome; Estado = $estado; Segundos = [int]$sw.Elapsed.TotalSeconds; Detalhe = $detalhe })
 }
 function Refresh-Path {
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
