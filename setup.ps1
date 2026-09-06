@@ -1375,8 +1375,18 @@ Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
             else { Passo "git clone do fork em $vsrc"; git.exe clone --progress https://github.com/eualexandrerrr/Vencord $vsrc }
             if ($LASTEXITCODE -ne 0) { throw "git saiu com código $LASTEXITCODE" }
             Passo ("fork no commit " + (git.exe -C $vsrc log -1 --format='%h %ad %s' --date=format:'%d/%m/%Y %H:%M'))
-            # o pnpm vem pelo corepack do próprio Node, na versão que o package.json pede; sem prompt
+            # o pnpm vem pelo corepack, na versão que o package.json pede (packageManager); sem prompt
             $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
+            # O corepack já foi embutido no Node, mas saiu da distribuição (aqui o Node é 26 e a pasta
+            # tem só node.exe, npm e npx), e o passo morria com "o termo 'corepack' não é reconhecido".
+            # Ele continua publicado no npm, que vem junto com o Node: instala uma vez e o resto segue
+            # igual, ainda pegando do packageManager a versão do pnpm, em vez de fixar uma aqui.
+            if (-not (Get-Command corepack -ErrorAction Ignore)) {
+                Passo 'este Node não traz o corepack embutido; instalando pelo npm'
+                & npm.cmd install -g corepack 2>&1 | Out-Host
+                Refresh-Path
+                if (-not (Get-Command corepack -ErrorAction Ignore)) { throw 'corepack não entrou nem pelo npm' }
+            }
             Get-Process -Name Discord -ErrorAction Ignore | Stop-Process -Force -ErrorAction Ignore
             Push-Location $vsrc
             try {
