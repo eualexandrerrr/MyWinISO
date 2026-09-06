@@ -134,6 +134,11 @@ powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: Win11_pt-BR_unattend.
 - Pendrive novo: baixe o [Ventoy](https://www.ventoy.net), rode o `Ventoy2Disk.exe` (GPT, Secure Boot ligado),
   copie a ISO e rode o script. Isso sim apaga o pendrive.
 
+**Ordem de boot**: dê boot no pendrive pelo menu de boot da placa (F8, F11 ou F12, conforme a placa), sem
+mudar a ordem permanente da UEFI. Depois de copiar os arquivos o Windows reinicia, e se o pendrive continuar
+como primeiro da ordem ele boota de novo e o Setup pergunta se quer "continuar a atualização"; nesse caso,
+tire o pendrive e deixe reiniciar. Do primeiro reinício em diante nada mais é lido do pendrive.
+
 Secure Boot: o Ventoy pede para registrar a chave dele na primeira vez (MokManager, *Enroll key from
 disk*, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). Ou desligue o Secure Boot na UEFI só para a instalação.
 
