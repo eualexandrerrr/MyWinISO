@@ -54,6 +54,52 @@ $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 try { $Host.UI.RawUI.WindowTitle = 'mywiniso: setup' } catch { }
 
+# ---------------------------------------------------------------------------------------------------
+# Pulso: nada aqui pode parecer travado. Enquanto uma operacao longa nao imprime nada (winget baixando,
+# driver instalando, Office, WSL), uma thread a parte escreve uma linha a cada 10 s de silencio dizendo
+# em que etapa esta, ha quanto tempo e que horas sao. O Write-Host abaixo e um proxy do cmdlet real: ele
+# so marca a hora da ultima saida e repassa, entao qualquer linha impressa por qualquer parte do script
+# ja conta como sinal de vida sem precisar mudar nenhuma chamada.
+# ---------------------------------------------------------------------------------------------------
+$Pulso = [hashtable]::Synchronized(@{ Nome = 'iniciando'; Desde = Get-Date; Ultimo = Get-Date; Ligado = $true })
+
+function Write-Host {
+    [CmdletBinding()]
+    param(
+        [Parameter(Position = 0, ValueFromPipeline, ValueFromRemainingArguments)] [object[]] $Object,
+        [switch] $NoNewline,
+        [object] $Separator,
+        [System.ConsoleColor] $ForegroundColor,
+        [System.ConsoleColor] $BackgroundColor
+    )
+    process {
+        $script:Pulso.Ultimo = Get-Date
+        Microsoft.PowerShell.Utility\Write-Host @PSBoundParameters
+    }
+}
+
+$PulsoPS = $null
+try {
+    $espaco = [runspacefactory]::CreateRunspace()
+    $espaco.Open()
+    $PulsoPS = [powershell]::Create()
+    $PulsoPS.Runspace = $espaco
+    [void]$PulsoPS.AddScript({
+        param($P)
+        while ($P.Ligado) {
+            Start-Sleep -Milliseconds 500
+            try {
+                $agora = Get-Date
+                if (($agora - $P.Ultimo).TotalSeconds -ge 10) {
+                    $P.Ultimo = $agora
+                    [Console]::WriteLine(("     ... {0} | {1} s nesta etapa | {2}" -f $P.Nome, [int]($agora - $P.Desde).TotalSeconds, $agora.ToString('HH:mm:ss')))
+                }
+            } catch { }
+        }
+    }).AddArgument($Pulso)
+    [void]$PulsoPS.BeginInvoke()
+} catch { $Pulso.Ligado = $false }
+
 $Repo = 'https://github.com/eualexandrerrr/MyWinISO'
 # Disco de dados. O instala.vbs cria uma partição "Alexandre" (rótulo) no fim do disco que sobrevive à formatação, e é
 # nela que mora o que é seu: jogos, Documentos, Downloads, Imagens, Vídeos e Música. Projetos não: essa
@@ -94,8 +140,10 @@ function Passo([string] $m) { Write-Host "  - $m" -ForegroundColor Gray }
 function Falha([string] $m) { Write-Host "  FALHOU: $m" -ForegroundColor Red; $script:Falhas.Add($m) }
 function Etapa([string] $Nome, [scriptblock] $Corpo) {
     $script:NumEtapa++
+    $script:Pulso.Nome  = "[$($script:NumEtapa)/$TotalEtapas] $Nome"
+    $script:Pulso.Desde = Get-Date
     Write-Host ''
-    Write-Host ("[{0}/{1}] {2}" -f $script:NumEtapa, $TotalEtapas, $Nome) -ForegroundColor Cyan
+    Write-Host ("[{0}/{1}] {2} | {3}" -f $script:NumEtapa, $TotalEtapas, $Nome, (Get-Date -Format 'HH:mm:ss')) -ForegroundColor Cyan
     $antes  = $Error.Count
     $sw     = [System.Diagnostics.Stopwatch]::StartNew()
     $estado = 'OK'
@@ -1751,5 +1799,7 @@ $avisos = @($Resultado | Where-Object Estado -eq 'AVISO').Count
 Write-Host ''
 Write-Host ("  {0} etapas: {1} OK, {2} com aviso, {3} com erro. Log: {4}" -f $Resultado.Count, ($Resultado.Count - $erros - $avisos), $avisos, $erros, $Log) -ForegroundColor $(if ($erros) { 'Red' } elseif ($avisos) { 'Yellow' } else { 'Green' })
 Write-Host '  Reinicie. Depois: abra o RedM.exe da área de trabalho.' -ForegroundColor Cyan
+$Pulso.Ligado = $false
+if ($PulsoPS) { try { $PulsoPS.Runspace.Close() } catch { } }
 try { Stop-Transcript | Out-Null } catch { }
 exit $erros

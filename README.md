@@ -49,11 +49,17 @@ na hora, então o pendrive não envelhece quando a lista de programas muda.
 
 ## O que aparece na tela
 
-Cada script mostra o estado real, não uma barra decorativa:
+Cada script mostra o estado real, não uma barra decorativa. E nada pode parecer travado: no `specialize` e no
+`setup.ps1` uma thread à parte escreve `... bloco atual | N s | HH:MM:SS` **a cada 10 segundos de silêncio**,
+então uma remoção de pacote ou um winget baixando 600 MB continua dando sinal de vida. No WinPE, onde não há
+thread, toda linha sai com a hora e cada comando fecha com o tempo que levou e o código de saída; comando que
+roda em janela escondida avisa antes que a tela vai ficar parada. Quer dizer: se a hora parou de andar, aí sim
+travou de verdade.
 
 - **WinPE**: o `instala.vbs` mostra a janela do DISM aplicando a imagem; o resto vai para `X:\mywiniso\instala.log`,
   que fica copiado em `C:\Windows\Panther\mywiniso-instala.log`. Se falhar, o Bloco de Notas abre com o log.
-- **specialize**: cada bloco aparece como `-> nome`, com os pacotes removidos um a um, e termina em `OK` ou `ERRO` com a mensagem.
+- **specialize**: cada bloco aparece como `-> nome`, com a hora, os pacotes removidos um a um, e termina em
+  `OK (N s)` ou `ERRO` com a mensagem.
 - **primeiro logon**: uma janela de console que diz o que está fazendo (espera pela rede com contagem de tentativas,
   download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela.
 - **setup.ps1**: cada etapa como `[n/28] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,

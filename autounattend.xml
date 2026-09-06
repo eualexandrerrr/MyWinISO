@@ -251,9 +251,15 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 Set sh = CreateObject("WScript.Shell")
 Set wmi = GetObject("winmgmts:\\.\root\cimv2")
 
+' Toda linha sai com a hora, no console e no log: numa fase sem barra de progresso o relogio andando e
+' a unica prova de que a coisa esta viva, e no log ele mostra onde o tempo foi.
+Function Hora()
+  Hora = Right("0" & Hour(Now), 2) & ":" & Right("0" & Minute(Now), 2) & ":" & Right("0" & Second(Now), 2)
+End Function
 Sub Escreve(m)
-  WScript.Echo m
-  Dim t: Set t = fso.OpenTextFile(ARQLOG, 8, True): t.WriteLine m: t.Close
+  Dim l: l = Hora() & "  " & m
+  WScript.Echo l
+  Dim t: Set t = fso.OpenTextFile(ARQLOG, 8, True): t.WriteLine l: t.Close
 End Sub
 Function Limpo(v)
   Dim r, k, ch: r = ""
@@ -269,8 +275,17 @@ Sub Falha(m)
   WScript.Quit 1
 End Sub
 Function Roda(cmd, visivel)
-  Escreve "> " & cmd
+  Dim t0: t0 = Timer
+  If visivel = 0 Then
+    Escreve "> " & cmd
+    Escreve "  (janela escondida: nada aparece na tela ate este comando terminar)"
+  Else
+    Escreve "> " & cmd
+  End If
   Roda = sh.Run("cmd.exe /c " & cmd, visivel, True)
+  Dim seg: seg = Timer - t0
+  If seg < 0 Then seg = seg + 86400
+  Escreve "  terminou em " & Int(seg) & " s, codigo " & Roda
 End Function
 
 ' Pergunta a senha duas vezes e compara. Ela nao pode ser digitada errada: o login automatico usa a mesma
@@ -539,12 +554,57 @@ WScript.Quit 0
 $ErrorActionPreference = 'Stop'
 try { $Host.UI.RawUI.WindowTitle = 'mywiniso: specialize' } catch { }
 Start-Transcript -Path 'C:\Windows\Setup\Scripts\especializar.log' -Force | Out-Null
+
+# Pulso: esta janela roda antes de existir usuario, e uma remocao de pacote pode ficar um minuto sem
+# imprimir nada. Uma thread a parte escreve uma linha a cada 10 s de silencio com o bloco atual, ha
+# quanto tempo ele esta rodando e a hora. O Write-Host abaixo e um proxy do cmdlet real: so marca a
+# hora da ultima saida e repassa, entao toda linha impressa ja conta como sinal de vida.
+$Pulso = [hashtable]::Synchronized(@{ Nome = 'iniciando'; Desde = Get-Date; Ultimo = Get-Date; Ligado = $true })
+
+function Write-Host {
+    [CmdletBinding()]
+    param(
+        [Parameter(Position = 0, ValueFromPipeline, ValueFromRemainingArguments)] [object[]] $Object,
+        [switch] $NoNewline,
+        [object] $Separator,
+        [System.ConsoleColor] $ForegroundColor,
+        [System.ConsoleColor] $BackgroundColor
+    )
+    process {
+        $script:Pulso.Ultimo = Get-Date
+        Microsoft.PowerShell.Utility\Write-Host @PSBoundParameters
+    }
+}
+
+$PulsoPS = $null
+try {
+    $espaco = [runspacefactory]::CreateRunspace()
+    $espaco.Open()
+    $PulsoPS = [powershell]::Create()
+    $PulsoPS.Runspace = $espaco
+    [void]$PulsoPS.AddScript({
+        param($P)
+        while ($P.Ligado) {
+            Start-Sleep -Milliseconds 500
+            try {
+                $agora = Get-Date
+                if (($agora - $P.Ultimo).TotalSeconds -ge 10) {
+                    $P.Ultimo = $agora
+                    [Console]::WriteLine(("   ... {0} | {1} s neste bloco | {2}" -f $P.Nome, [int]($agora - $P.Desde).TotalSeconds, $agora.ToString('HH:mm:ss')))
+                }
+            } catch { }
+        }
+    }).AddArgument($Pulso)
+    [void]$PulsoPS.BeginInvoke()
+} catch { $Pulso.Ligado = $false }
 Write-Host "mywiniso specialize | $(Get-Date -Format 'dd/MM/yyyy HH:mm')" -ForegroundColor Cyan
 $script:Erros = 0
 
 function Faz([string] $Nome, [scriptblock] $Corpo) {
-    Write-Host "-> $Nome" -ForegroundColor Cyan
-    try { & $Corpo; Write-Host '   OK' -ForegroundColor Green }
+    $script:Pulso.Nome  = $Nome
+    $script:Pulso.Desde = Get-Date
+    Write-Host ("-> $Nome | {0}" -f (Get-Date -Format 'HH:mm:ss')) -ForegroundColor Cyan
+    try { & $Corpo; Write-Host ("   OK ({0} s)" -f [int]((Get-Date) - $script:Pulso.Desde).TotalSeconds) -ForegroundColor Green }
     catch { $script:Erros++; Write-Host "   ERRO: $($_.Exception.Message)" -ForegroundColor Red }
 }
 function Set-Reg([string] $Path, [string] $Name, $Value, [string] $Type = 'DWord') {
@@ -746,7 +806,9 @@ Faz 'Energia: Alto desempenho já no primeiro boot (o setup.ps1 troca para Desem
     }
 }
 
-Write-Host ("specialize terminou com {0} bloco(s) com erro. Log: C:\Windows\Setup\Scripts\especializar.log" -f $script:Erros) -ForegroundColor $(if ($script:Erros) { 'Red' } else { 'Green' })
+$Pulso.Ligado = $false
+if ($PulsoPS) { try { $PulsoPS.Runspace.Close() } catch { } }
+Write-Host ("specialize terminou com {0} bloco(s) com erro em {1}. Log: C:\Windows\Setup\Scripts\especializar.log" -f $script:Erros, (Get-Date -Format 'HH:mm:ss')) -ForegroundColor $(if ($script:Erros) { 'Red' } else { 'Green' })
 Stop-Transcript | Out-Null
 exit 0
 ]]></File>
@@ -790,14 +852,14 @@ Write-Host "criado $desktop\mywiniso-setup.cmd (roda o setup de novo quando quis
 $destino = Join-Path $env:TEMP 'mywiniso-setup.ps1'
 $ok = $false
 for ($i = 1; $i -le 60 -and -not $ok; $i++) {          # até 5 minutos esperando a rede
-    Write-Host ("baixando $raw/setup.ps1 (tentativa {0}/60)" -f $i)
+    Write-Host ("baixando $raw/setup.ps1 (tentativa {0}/60, ate 15 s cada, desiste em 5 min) | {1}" -f $i, (Get-Date -Format 'HH:mm:ss'))
     try {
         Invoke-WebRequest -UseBasicParsing -Uri "$raw/setup.ps1" -OutFile $destino -TimeoutSec 15
         $ok = $true
     } catch { Write-Host "  sem resposta: $($_.Exception.Message)" -ForegroundColor Yellow; Start-Sleep -Seconds 5 }
 }
 if ($ok) {
-    Write-Host "rodando $destino" -ForegroundColor Cyan
+    Write-Host ("rodando $destino | {0} | daqui em diante quem fala e o setup.ps1" -f (Get-Date -Format 'HH:mm:ss')) -ForegroundColor Cyan
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File $destino
     $codigo = $LASTEXITCODE
     if ($codigo -eq 0) { Write-Host 'setup.ps1 terminou sem erros.' -ForegroundColor Green }
