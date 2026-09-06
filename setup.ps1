@@ -124,24 +124,31 @@ function Invoke-SemElevacao([string] $Exe, [string] $Argumentos, [int] $TimeoutS
     # Alguns instaladores recusam rodar como administrador e o winget devolve 0x8A150056 (o do Spotify faz
     # isso). O setup todo roda elevado, então o jeito de chamar um deles é por uma tarefa agendada com
     # RunLevel Limited, que nasce no nível médio de integridade do próprio usuário. Devolve o código de saída.
-    $nome = 'mywiniso-sem-elevacao'
+    $nome  = 'mywiniso-sem-elevacao'
+    # com a barra no fim: o Agendador guarda a tarefa em '\mywiniso\', e o Get-ScheduledTask consulta o
+    # TaskPath por igualdade. Sem a barra ele não acha a tarefa que ele mesmo acabou de registrar, os dois
+    # laços abaixo saem na hora e o LastTaskResult volta nulo.
+    $pasta = '\mywiniso\'
     $config    = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::FromSeconds($TimeoutSeg)) -StartWhenAvailable
     $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
-    Register-ScheduledTask -TaskName $nome -TaskPath '\mywiniso' -Force -Settings $config -Principal $principal `
+    Register-ScheduledTask -TaskName $nome -TaskPath $pasta -Force -Settings $config -Principal $principal `
         -Action (New-ScheduledTaskAction -Execute $Exe -Argument $Argumentos) | Out-Null
     try {
-        Start-ScheduledTask -TaskName $nome -TaskPath '\mywiniso'
-        # espera a tarefa sair de Ready para Running antes de esperar o fim, senão o LastTaskResult lido é o antigo
-        $limite = (Get-Date).AddSeconds(30)
-        while ((Get-ScheduledTask -TaskName $nome -TaskPath '\mywiniso').State -ne 'Running' -and (Get-Date) -lt $limite) {
-            Start-Sleep -Milliseconds 500
-        }
+        $antes = (Get-ScheduledTaskInfo -TaskName $nome -TaskPath $pasta).LastRunTime
+        Start-ScheduledTask -TaskName $nome -TaskPath $pasta
+        # espera começar. A saída pelo LastRunTime é para a tarefa curta, que pode terminar antes de o
+        # primeiro Get-ScheduledTask acontecer e portanto nunca ser vista em Running.
+        $limite = (Get-Date).AddSeconds(60)
+        while ((Get-ScheduledTask -TaskName $nome -TaskPath $pasta).State -ne 'Running' -and
+               (Get-ScheduledTaskInfo -TaskName $nome -TaskPath $pasta).LastRunTime -eq $antes -and
+               (Get-Date) -lt $limite) { Start-Sleep -Milliseconds 500 }
+        # espera terminar
         $limite = (Get-Date).AddSeconds($TimeoutSeg)
-        while ((Get-ScheduledTask -TaskName $nome -TaskPath '\mywiniso').State -eq 'Running' -and (Get-Date) -lt $limite) {
+        while ((Get-ScheduledTask -TaskName $nome -TaskPath $pasta).State -eq 'Running' -and (Get-Date) -lt $limite) {
             Start-Sleep -Seconds 3
         }
-        return (Get-ScheduledTaskInfo -TaskName $nome -TaskPath '\mywiniso').LastTaskResult
-    } finally { Unregister-ScheduledTask -TaskName $nome -TaskPath '\mywiniso' -Confirm:$false -ErrorAction Ignore }
+        return (Get-ScheduledTaskInfo -TaskName $nome -TaskPath $pasta).LastTaskResult
+    } finally { Unregister-ScheduledTask -TaskName $nome -TaskPath $pasta -Confirm:$false -ErrorAction Ignore }
 }
 
 $eu = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
