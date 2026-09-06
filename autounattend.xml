@@ -6,7 +6,7 @@
   O Setup lê este arquivo e executa, nesta ordem:
 
     windowsPE    pula a checagem de TPM/CPU/RAM/Secure Boot, acha o disco pelo serial
-                 e particiona (disco.ps1). Se não achar exatamente um disco, aborta sem tocar em nada.
+                 e particiona (disco.vbs: o WinPE não tem PowerShell). Se não achar exatamente um, aborta sem tocar em nada.
     specialize   nome do PC, fuso, remove bloatware, OneDrive, Copilot e telemetria (especializar.ps1)
     oobeSystem   conta local "Alexandre" administradora, login automático permanente, sem conta Microsoft.
                  No primeiro logon, primeiro-logon.ps1 baixa o setup.ps1 deste repositório e roda,
@@ -52,15 +52,87 @@
           <Description>Pular checagem de CPU</Description>
           <Path>reg.exe add HKLM\SYSTEM\Setup\LabConfig /v BypassCPUCheck /t REG_DWORD /d 1 /f</Path>
         </RunSynchronousCommand>
+        <!-- O WinPE do instalador nao tem PowerShell, e cada <Path> tem no maximo 255 caracteres.
+             Os comandos abaixo gravam X:\mywiniso\extrai.vbs por echo, linha a linha. Fonte legivel:
+               Option Explicit
+               On Error Resume Next
+               Dim sh, fso, p, x, f, d, dir, ts, n
+               Set sh = CreateObject("WScript.Shell")
+               Set fso = CreateObject("Scripting.FileSystemObject")
+               p = sh.RegRead("HKLM\System\Setup\UnattendFile")
+               If Err.Number <> 0 Then Err.Clear
+               If Not fso.FileExists(p & "") Then p = "X:\Unattend.xml"
+               If Not fso.FileExists(p) Then p = "X:\autounattend.xml"
+               On Error GoTo 0
+               Set x = CreateObject("Msxml2.DOMDocument.6.0")
+               x.async = False
+               x.setProperty "SelectionLanguage", "XPath"
+               If Not x.load(p) Then
+               WScript.Echo "nao carregou " & p & ": " & x.parseError.reason
+               WScript.Quit 1
+               End If
+               n = 0
+               For Each f In x.selectNodes("//*[local-name()='File'][@pass='windowsPE']")
+               d = f.getAttribute("path")
+               dir = fso.GetParentFolderName(d)
+               If Not fso.FolderExists(dir) Then fso.CreateFolder dir
+               Set ts = fso.CreateTextFile(d, True)
+               ts.Write Trim(f.text)
+               ts.Close
+               n = n + 1
+               Next
+               WScript.Echo n & " arquivo(s) extraido(s) de " & p
+               If n = 0 Then WScript.Quit 1
+        -->
         <RunSynchronousCommand wcm:action="add">
           <Order>5</Order>
-          <Description>Extrair os scripts embutidos neste XML para X:\mywiniso</Description>
-          <Path>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$p = (Get-ItemProperty -LiteralPath 'Registry::HKLM\System\Setup' -Name 'UnattendFile' -ErrorAction SilentlyContinue).UnattendFile; if (-not $p -or -not (Test-Path -LiteralPath $p)) { $p = @('X:\Unattend.xml', 'X:\autounattend.xml') + @([char[]](65..90) | ForEach-Object { [string]$_ + ':\autounattend.xml' }) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1 }; $x = [xml]::new(); $x.Load($p); Invoke-Command -ScriptBlock ([scriptblock]::Create($x.GetElementsByTagName('ExtractScript')[0].InnerText)) -ArgumentList $x, 'windowsPE'"</Path>
+          <Description>Pasta de trabalho no WinPE</Description>
+          <Path>cmd.exe /c mkdir X:\mywiniso</Path>
         </RunSynchronousCommand>
         <RunSynchronousCommand wcm:action="add">
           <Order>6</Order>
+          <Description>Gravar extrai.vbs (1/7)</Description>
+          <Path>cmd.exe /c &gt;&gt;X:\mywiniso\extrai.vbs (echo:Option Explicit&amp;echo:On Error Resume Next&amp;echo:Dim sh, fso, p, x, f, d, dir, ts, n&amp;echo:Set sh = CreateObject(^"WScript.Shell^"^)&amp;echo:Set fso = CreateObject(^"Scripting.FileSystemObject^"^))</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>7</Order>
+          <Description>Gravar extrai.vbs (2/7)</Description>
+          <Path>cmd.exe /c &gt;&gt;X:\mywiniso\extrai.vbs (echo:p = sh.RegRead(^"HKLM\System\Setup\UnattendFile^"^)&amp;echo:If Err.Number ^&lt;^&gt; 0 Then Err.Clear&amp;echo:If Not fso.FileExists(p ^&amp; ^"^"^) Then p = ^"X:\Unattend.xml^")</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>8</Order>
+          <Description>Gravar extrai.vbs (3/7)</Description>
+          <Path>cmd.exe /c &gt;&gt;X:\mywiniso\extrai.vbs (echo:If Not fso.FileExists(p^) Then p = ^"X:\autounattend.xml^"&amp;echo:On Error GoTo 0&amp;echo:Set x = CreateObject(^"Msxml2.DOMDocument.6.0^"^)&amp;echo:x.async = False&amp;echo:x.setProperty ^"SelectionLanguage^", ^"XPath^")</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>9</Order>
+          <Description>Gravar extrai.vbs (4/7)</Description>
+          <Path>cmd.exe /c &gt;&gt;X:\mywiniso\extrai.vbs (echo:If Not x.load(p^) Then&amp;echo:WScript.Echo ^"nao carregou ^" ^&amp; p ^&amp; ^": ^" ^&amp; x.parseError.reason&amp;echo:WScript.Quit 1&amp;echo:End If&amp;echo:n = 0)</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>10</Order>
+          <Description>Gravar extrai.vbs (5/7)</Description>
+          <Path>cmd.exe /c &gt;&gt;X:\mywiniso\extrai.vbs (echo:For Each f In x.selectNodes(^"//*[local-name(^)='File'][@pass='windowsPE']^"^)&amp;echo:d = f.getAttribute(^"path^"^)&amp;echo:dir = fso.GetParentFolderName(d^))</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>11</Order>
+          <Description>Gravar extrai.vbs (6/7)</Description>
+          <Path>cmd.exe /c &gt;&gt;X:\mywiniso\extrai.vbs (echo:If Not fso.FolderExists(dir^) Then fso.CreateFolder dir&amp;echo:Set ts = fso.CreateTextFile(d, True^)&amp;echo:ts.Write Trim(f.text^)&amp;echo:ts.Close&amp;echo:n = n + 1&amp;echo:Next)</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>12</Order>
+          <Description>Gravar extrai.vbs (7/7)</Description>
+          <Path>cmd.exe /c &gt;&gt;X:\mywiniso\extrai.vbs (echo:WScript.Echo n ^&amp; ^" arquivo(s^) extraido(s^) de ^" ^&amp; p&amp;echo:If n = 0 Then WScript.Quit 1)</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>13</Order>
+          <Description>Extrair o disco.vbs embutido neste XML para X:\mywiniso</Description>
+          <Path>cscript.exe //E:vbscript //nologo X:\mywiniso\extrai.vbs</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>14</Order>
           <Description>Achar o disco pelo serial e particionar</Description>
-          <Path>powershell.exe -NoProfile -ExecutionPolicy Bypass -File X:\mywiniso\disco.ps1</Path>
+          <Path>cscript.exe //E:vbscript //nologo X:\mywiniso\disco.vbs</Path>
         </RunSynchronousCommand>
       </RunSynchronous>
       <ImageInstall>
@@ -162,62 +234,59 @@ foreach ($file in $Document.GetElementsByTagName('File')) {
 }
 ]]></ExtractScript>
 
-    <File path="X:\mywiniso\disco.ps1" pass="windowsPE"><![CDATA[
-# Roda no WinPE, antes de qualquer coisa ser gravada.
-# Procura o disco alvo pelo serial ou pelo modelo. Só particiona se achar EXATAMENTE um; senão aborta
-# e o Setup para com erro, sem ter apagado nada. Pendrives nunca são candidatos.
+    <File path="X:\mywiniso\disco.vbs" pass="windowsPE"><![CDATA[
+' Roda no WinPE (cscript), antes de qualquer coisa ser gravada. O WinPE do instalador nao tem PowerShell.
+' Procura o disco alvo pelo serial ou pelo modelo via WMI. So particiona se achar EXATAMENTE um; senao
+' abre o log no Bloco de Notas e sai com erro, o Setup para, e nada foi apagado. Pendrives nunca sao candidatos.
+Option Explicit
+Const SERIAL = "AA09B5211012T9"   ' Get-Disk | Select-Object FriendlyName, SerialNumber
+Const MODELO = "MP700 ELITE"
+Const ARQLOG = "X:\mywiniso\disco.log"
+Dim fso, sh, wmi, d, alvo, n, script, ts, rc
+Set fso = CreateObject("Scripting.FileSystemObject")
+Set sh = CreateObject("WScript.Shell")
+Set wmi = GetObject("winmgmts:\\.\root\cimv2")
 
-$Serial = 'AA09B5211012T9'      # Get-Disk | Select-Object FriendlyName, SerialNumber
-$Modelo = 'MP700 ELITE'
+Sub Escreve(m)
+  WScript.Echo m
+  Dim t: Set t = fso.OpenTextFile(ARQLOG, 8, True): t.WriteLine m: t.Close
+End Sub
+Function Limpo(v)
+  Dim r, k, ch: r = ""
+  For k = 1 To Len(v)
+    ch = UCase(Mid(v, k, 1))
+    If InStr("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", ch) > 0 Then r = r & ch
+  Next
+  Limpo = r
+End Function
+Sub Falha(m)
+  Escreve "ERRO: " & m
+  sh.Run "notepad.exe " & ARQLOG, 1, True
+  WScript.Quit 1
+End Sub
 
-$log = 'X:\mywiniso\disco.log'
-function Log($m) { Write-Output $m; Add-Content -Path $log -Value $m }
-
-$discos = @(Get-CimInstance -ClassName Win32_DiskDrive)
-Log "Discos vistos pelo WinPE:"
-foreach ($d in $discos) { Log ("  [{0}] {1} | serial={2} | {3} GB | {4}" -f $d.Index, $d.Model, $d.SerialNumber, [math]::Round($d.Size / 1GB), $d.InterfaceType) }
-
-$alvo = @($discos | Where-Object {
-    $serialLimpo = ($_.SerialNumber -replace '[^A-Za-z0-9]', '')
-    ($serialLimpo -like "*$Serial*" -or $_.Model -like "*$Modelo*") -and
-    $_.InterfaceType -ne 'USB' -and $_.PNPDeviceID -notlike 'USBSTOR*'
-})
-
-if ($alvo.Count -ne 1) {
-    Log "ERRO: esperava 1 disco com serial '$Serial' ou modelo '$Modelo', achei $($alvo.Count). Nada foi apagado."
-    Start-Process notepad.exe -ArgumentList $log -Wait
-    exit 1
-}
-
-$n = $alvo[0].Index
-Log "Alvo: disco $n ($($alvo[0].Model)). Apagando e particionando (GPT: EFI 300 MB, MSR 16 MB, Windows, Recovery 1 GB)."
-
-$script = @"
-select disk $n
-clean
-convert gpt
-create partition efi size=300
-format quick fs=fat32 label="System"
-create partition msr size=16
-create partition primary
-shrink minimum=1024
-format quick fs=ntfs label="Windows"
-create partition primary
-format quick fs=ntfs label="Recovery"
-set id="de94bba4-06d1-4d40-a16a-bfd50179d6ac"
-gpt attributes=0x8000000000000001
-list partition
-"@
-$script | Set-Content -Path 'X:\mywiniso\diskpart.txt' -Encoding ASCII
-$saida = diskpart.exe /s 'X:\mywiniso\diskpart.txt' 2>&1
-$saida | ForEach-Object { Log ([string]$_) }
-if ($LASTEXITCODE -ne 0) {
-    Log "ERRO: diskpart saiu com código $LASTEXITCODE."
-    Start-Process notepad.exe -ArgumentList $log -Wait
-    exit $LASTEXITCODE
-}
-Log "Disco pronto."
-exit 0
+n = 0: alvo = -1
+Escreve "Discos vistos pelo WinPE:"
+For Each d In wmi.ExecQuery("SELECT Index, Model, SerialNumber, Size, InterfaceType, PNPDeviceID FROM Win32_DiskDrive")
+  Escreve "  [" & d.Index & "] " & d.Model & " | serial=" & d.SerialNumber & " | " & Int(CDbl(d.Size & "0") / 10 / 1073741824) & " GB | " & d.InterfaceType
+  If (InStr(Limpo(d.SerialNumber & ""), UCase(SERIAL)) > 0 Or InStr(UCase(d.Model & ""), UCase(MODELO)) > 0) _
+     And UCase(d.InterfaceType & "") <> "USB" And UCase(Left(d.PNPDeviceID & "", 7)) <> "USBSTOR" Then
+    n = n + 1: alvo = d.Index
+  End If
+Next
+If n <> 1 Then Falha "esperava 1 disco com serial '" & SERIAL & "' ou modelo '" & MODELO & "', achei " & n & ". Nada foi apagado."
+Escreve "Alvo: disco " & alvo & ". Apagando e particionando (GPT: EFI 300 MB, MSR 16 MB, Windows, Recovery 1 GB)."
+script = "select disk " & alvo & vbCrLf & "clean" & vbCrLf & "convert gpt" & vbCrLf & _
+  "create partition efi size=300" & vbCrLf & "format quick fs=fat32 label=""System""" & vbCrLf & _
+  "create partition msr size=16" & vbCrLf & "create partition primary" & vbCrLf & "shrink minimum=1024" & vbCrLf & _
+  "format quick fs=ntfs label=""Windows""" & vbCrLf & "create partition primary" & vbCrLf & _
+  "format quick fs=ntfs label=""Recovery""" & vbCrLf & "set id=""de94bba4-06d1-4d40-a16a-bfd50179d6ac""" & vbCrLf & _
+  "gpt attributes=0x8000000000000001" & vbCrLf & "list partition" & vbCrLf
+Set ts = fso.CreateTextFile("X:\mywiniso\diskpart.txt", True): ts.Write script: ts.Close
+rc = sh.Run("cmd.exe /c diskpart.exe /s X:\mywiniso\diskpart.txt >> " & ARQLOG & " 2>&1", 0, True)
+If rc <> 0 Then Falha "diskpart saiu com codigo " & rc
+Escreve "Disco pronto."
+WScript.Quit 0
 ]]></File>
 
     <File path="C:\Windows\Setup\Scripts\especializar.ps1" pass="specialize"><![CDATA[

@@ -24,7 +24,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | Passo | Quem faz | O quê |
 |:--|:--|:--|
 | 1 | Ventoy | mostra a ISO; em 5 s aplica o `autounattend.xml` sozinho |
-| 2 | `disco.ps1` (WinPE) | pula TPM/CPU/RAM, procura o disco pelo serial ou modelo, apaga e cria GPT: EFI 300 MB, MSR, Windows, Recovery 1 GB |
+| 2 | `disco.vbs` (WinPE) | pula TPM/CPU/RAM, procura o disco pelo serial ou modelo via WMI, apaga e cria GPT: EFI 300 MB, MSR, Windows, Recovery 1 GB. É VBScript porque o WinPE do instalador não tem PowerShell |
 | 3 | Setup | instala o Windows 11 Pro na partição que acabou de ser criada |
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
@@ -32,7 +32,9 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | 7 | `setup.ps1` | as 17 etapas abaixo |
 
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
-no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção.
+no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção. No WinPE,
+que não tem PowerShell, um extrator em VBScript gravado por `echo` (cada `<Path>` tem no máximo 255
+caracteres) lê o XML pelo MSXML e solta o `disco.vbs`; nos passos seguintes o PowerShell já existe.
 O `setup.ps1` e o resto ficam fora de propósito: mudam com frequência e são baixados do GitHub
 na hora, então o pendrive não envelhece quando a lista de programas muda.
 
@@ -40,6 +42,7 @@ na hora, então o pendrive não envelhece quando a lista de programas muda.
 
 Cada script mostra o estado real, não uma barra decorativa:
 
+- **WinPE**: o `disco.vbs` só é visível pelo log; se falhar, o Bloco de Notas abre com ele.
 - **specialize**: cada bloco aparece como `-> nome`, com os pacotes removidos um a um, e termina em `OK` ou `ERRO` com a mensagem.
 - **primeiro logon**: uma janela de console que diz o que está fazendo (espera pela rede com contagem de tentativas,
   download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela.
@@ -138,7 +141,7 @@ disk*, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). Ou desligue o Secure Boot na UEFI s
 
 | | Valor | Onde mudar |
 |:--|:--|:--|
-| Disco | serial `AA09B5211012T9` ou modelo `MP700 ELITE` | `$Serial` e `$Modelo` no `disco.ps1`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
+| Disco | serial `AA09B5211012T9` ou modelo `MP700 ELITE` | `SERIAL` e `MODELO` no `disco.vbs`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
 | Edição | Pro, pela chave genérica pública `VK7JG-…`, que só escolhe a edição | `<ProductKey>`; Home é `YTMG3-N6DKC-DKB77-7M9GH-8HVX7` |
 | Ativação | licença digital gravada na placa-mãe; sem chave nenhuma o Setup pararia para perguntar a edição | |
 | ISO | Windows 11 em Português (Brasil), da Microsoft | |
@@ -215,7 +218,7 @@ irm https://raw.githubusercontent.com/eualexandrerrr/mywiniso/main/setup.ps1 | i
 
 | Fase | Log |
 |:--|:--|
-| WinPE não achou o disco | `X:\mywiniso\disco.log`; o Bloco de Notas do WinPE abre sozinho com ele e nada foi apagado |
+| WinPE não achou o disco | `X:\mywiniso\disco.log`; o Bloco de Notas do WinPE abre sozinho com ele e nada foi apagado. Erro `0x80070002` logo no início é comando do `windowsPE` não encontrado |
 | specialize | `C:\Windows\Setup\Scripts\especializar.log` |
 | primeiro logon e setup | `C:\Users\Alexandre\mywiniso.log` |
 
