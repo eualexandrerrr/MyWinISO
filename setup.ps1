@@ -686,6 +686,36 @@ Etapa 'Preferências do usuário' {
     Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement' 'ScoobeSystemSettingEnabled' 0
     Passo 'clicar no relógio abre a central com o calendário (por isso a central fica de pé)'
 
+    # O que o preset do Sophia Script (farag2) faz e ainda não estava aqui. Cruzado função por função com o
+    # Sophia.ps1 do Windows 11; o resto do preset já existe em outras linhas deste arquivo ou no specialize.
+    Passo 'do Sophia Script: relatório de erros e feedback off, sem AutoPlay, Explorer e Iniciar mais limpos'
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' 'Disabled' 1              # ErrorReporting -Disable
+    Set-Reg 'HKCU:\Software\Microsoft\Siuf\Rules' 'NumberOfSIUFInPeriod' 0                                   # FeedbackFrequency -Never
+    Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Siuf\Rules' -Name 'PeriodInNanoSeconds' -ErrorAction Ignore
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers' 'DisableAutoplay' 1  # Autoplay -Disable
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer' 'ShowFrequent' 0                      # QuickAccessFrequentFolders -Hide
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer' 'ShowRecent'   0                      # QuickAccessRecentFiles -Hide
+    Set-Reg $adv 'HideMergeConflicts' 0                                                                       # MergeConflicts -Show
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\OperationStatusManager' 'EnthusiastMode' 1   # FileTransferDialog -Detailed
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate' 'CreateDesktopShortcutDefault' 0                 # PreventEdgeShortcutCreation
+    Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'EnableFirstLogonAnimation' 0  # FirstLogonAnimation -Disable
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\NamingTemplates' 'ShortcutNameTemplate' '%s.lnk' 'String'   # ShortcutsSuffix -Disable
+    Set-Reg 'HKCU:\Control Panel\International\User Profile' 'HttpAcceptLanguageOptOut' 1                    # LanguageListAccess -Disable
+    Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl' 'DisplayParameters' 1                      # BSoDStopError -Enable
+    Set-Reg 'HKCU:\Software\Classes\Typelib\{8cec5860-07a1-11d9-b15e-000d56bfe6ee}\1.0\0\win64' '(Default)' '' 'String'   # F1HelpPage -Disable
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel' 'AllItemsIconView' 0     # ControlPanelView -LargeIcons
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel' 'StartupPage'      1
+    Set-Reg $adv 'Start_TrackProgs' 0                                                                         # MostUsedStartApps -Hide
+    Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' 'HideRecentlyAddedApps' 1                  # RecentlyAddedStartApps -Hide
+    Set-Reg $adv 'Start_AccountNotifications' 0                                                               # StartAccountNotifications -Hide
+    Set-Reg 'HKCU:\Software\Policies\Microsoft\Windows\Explorer' 'NoUseStoreOpenWith' 1                      # UseStoreOpenWith -Hide
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds\DSB' 'ShowDynamicContent' 0              # SearchHighlights -Hide
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\SearchSettings' 'IsDynamicSearchBoxEnabled' 0
+    Set-Reg 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows' 'LegacyDefaultPrinterMode' 1        # WindowsManageDefaultPrinter -Disable
+    Set-Reg $adv 'ShowSyncProviderNotifications' 0                                                            # OneDriveFileExplorerAd -Hide
+    # NetworkAdaptersSavePower -Disable: a placa de rede não dorme para economizar energia (latência em jogo)
+    Get-NetAdapter -Physical -ErrorAction Ignore | ForEach-Object { Silencioso { Disable-NetAdapterPowerManagement -Name $_.Name -NoRestart } }
+
     Passo 'sons do sistema desligados'
     Set-Reg 'HKCU:\AppEvents\Schemes' '(Default)' '.None' 'String'
     Get-ChildItem -Path 'HKCU:\AppEvents\Schemes\Apps\*\*' -ErrorAction Ignore |
@@ -1555,8 +1585,10 @@ Etapa 'Windows Update (drivers)' {
     Silencioso { Set-PSRepository -Name PSGallery -InstallationPolicy Trusted }
     Silencioso { Install-Module -Name PSWindowsUpdate -Force -Scope AllUsers }
     Import-Module PSWindowsUpdate
+    # UpdateMicrosoftProducts (Sophia): o Microsoft Update traz também Office, .NET e o resto, não só o Windows
+    Silencioso { Add-WUServiceManager -MicrosoftUpdate -Confirm:$false | Out-Null }
     Passo 'procurando e instalando o resto das atualizações e drivers (o de vídeo já veio na etapa 4)'
-    Get-WindowsUpdate -AcceptAll -Install -IgnoreReboot | Out-Host
+    Get-WindowsUpdate -MicrosoftUpdate -AcceptAll -Install -IgnoreReboot | Out-Host
 
     # Ativação. Esta máquina tem licença digital do Windows 11 Pro gravada no hardware (canal Retail,
     # "ativada permanentemente"): reinstalando a mesma edição no mesmo PC, a Microsoft reativa sozinha
