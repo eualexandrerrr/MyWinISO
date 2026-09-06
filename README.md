@@ -24,8 +24,8 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | Passo | Quem faz | O quê |
 |:--|:--|:--|
 | 1 | Ventoy | mostra a ISO; em 5 s aplica o `autounattend.xml` sozinho |
-| 2 | `disco.vbs` (WinPE) | pula TPM/CPU/RAM, procura o disco pelo serial ou modelo via WMI, apaga e cria GPT: EFI 300 MB, MSR, Windows, Recovery 1 GB. É VBScript porque o WinPE do instalador não tem PowerShell |
-| 3 | Setup | instala o Windows 11 Pro na partição que acabou de ser criada |
+| 2 | `instala.vbs` (WinPE) | faz a fase inteira no lugar do Setup: pula TPM/CPU/RAM, procura o disco pelo serial ou modelo via WMI, apaga e cria GPT (EFI 300 MB, MSR, Windows, Recovery 1 GB), aplica a imagem `Windows 11 Pro` com o DISM, grava o boot, copia o XML completo para `C:\Windows\Panther` e reinicia pelo disco |
+| 3 | Windows | primeiro boot pelo disco; o Setup novo da ISO nunca chega a instalar |
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
 | 6 | `primeiro-logon.ps1` | baixa o `setup.ps1` deste repositório e roda; deixa `mywiniso-setup.cmd` na área de trabalho |
@@ -34,7 +34,12 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção. No WinPE,
 que não tem PowerShell, um extrator em VBScript gravado por `echo` (cada `<Path>` tem no máximo 255
-caracteres) lê o XML pelo MSXML e solta o `disco.vbs`; nos passos seguintes o PowerShell já existe.
+caracteres) lê o XML pelo MSXML e solta o `instala.vbs`; nos passos seguintes o PowerShell já existe.
+
+Por que o `instala.vbs` substitui o Setup: o Setup novo do Windows 11 (24H2 em diante) reescreve o arquivo
+de resposta para os passos seguintes com só o que ele entende (conta local e bypass) e descarta o resto:
+some a seção `<Extensions>`, o `specialize` e o `oobeSystem`, e o OOBE volta a perguntar país e teclado.
+Descoberto no teste em VM; é o mesmo motivo do modo "script no lugar do setup.exe" do gerador schneegans.
 O `setup.ps1` e o resto ficam fora de propósito: mudam com frequência e são baixados do GitHub
 na hora, então o pendrive não envelhece quando a lista de programas muda.
 
@@ -42,7 +47,8 @@ na hora, então o pendrive não envelhece quando a lista de programas muda.
 
 Cada script mostra o estado real, não uma barra decorativa:
 
-- **WinPE**: o `disco.vbs` só é visível pelo log; se falhar, o Bloco de Notas abre com ele.
+- **WinPE**: o `instala.vbs` mostra a janela do DISM aplicando a imagem; o resto vai para `X:\mywiniso\instala.log`,
+  que fica copiado em `C:\Windows\Panther\mywiniso-instala.log`. Se falhar, o Bloco de Notas abre com o log.
 - **specialize**: cada bloco aparece como `-> nome`, com os pacotes removidos um a um, e termina em `OK` ou `ERRO` com a mensagem.
 - **primeiro logon**: uma janela de console que diz o que está fazendo (espera pela rede com contagem de tentativas,
   download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela.
@@ -146,9 +152,9 @@ disk*, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). Ou desligue o Secure Boot na UEFI s
 
 | | Valor | Onde mudar |
 |:--|:--|:--|
-| Disco | serial `AA09B5211012T9` ou modelo `MP700 ELITE` | `SERIAL` e `MODELO` no `disco.vbs`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
-| Edição | Pro, pela chave genérica pública `VK7JG-…`, que só escolhe a edição | `<ProductKey>`; Home é `YTMG3-N6DKC-DKB77-7M9GH-8HVX7` |
-| Ativação | licença digital gravada na placa-mãe; sem chave nenhuma o Setup pararia para perguntar a edição | |
+| Disco | serial `AA09B5211012T9` ou modelo `MP700 ELITE` | `SERIAL` e `MODELO` no `instala.vbs`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
+| Edição | `Windows 11 Pro`, pelo nome da imagem dentro do `install.wim` | `EDICAO` no `instala.vbs`; `dism /Get-WimInfo` lista os nomes |
+| Ativação | licença digital gravada na placa-mãe | |
 | ISO | Windows 11 em Português (Brasil), da Microsoft | |
 | Conta | `Alexandre`, administradora, senha pelo `pendrive.ps1 -Senha`, login automático permanente | `<LocalAccount>` e `<AutoLogon>` |
 | PC | nome `RRR`, fuso `E. South America Standard Time`, teclado ABNT2 (`0416:00010416`) | `specialize` e `oobeSystem`; ABNT sem o 2 é `0416:00000416` |
@@ -223,7 +229,7 @@ irm https://raw.githubusercontent.com/eualexandrerrr/mywiniso/main/setup.ps1 | i
 
 | Fase | Log |
 |:--|:--|
-| WinPE não achou o disco | `X:\mywiniso\disco.log`; o Bloco de Notas do WinPE abre sozinho com ele e nada foi apagado. Erro `0x80070002` logo no início é comando do `windowsPE` não encontrado |
+| WinPE | `X:\mywiniso\instala.log` e `dism.log`; o Bloco de Notas abre sozinho com o log se algo falhar. Antes do diskpart nada foi apagado. Erro `0x80070002` logo no início é comando do `windowsPE` não encontrado |
 | specialize | `C:\Windows\Setup\Scripts\especializar.log` |
 | primeiro logon e setup | `C:\Users\Alexandre\mywiniso.log` |
 

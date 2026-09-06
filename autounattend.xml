@@ -5,8 +5,10 @@
 
   O Setup lê este arquivo e executa, nesta ordem:
 
-    windowsPE    pula a checagem de TPM/CPU/RAM/Secure Boot, acha o disco pelo serial
-                 e particiona (disco.vbs: o WinPE não tem PowerShell). Se não achar exatamente um, aborta sem tocar em nada.
+    windowsPE    pula a checagem de TPM/CPU/RAM/Secure Boot e roda o instala.vbs, que faz a fase inteira no
+                 lugar do Setup: disco pelo serial, diskpart, DISM, bcdboot, copia deste XML para C:\Windows\Panther,
+                 reboot. É VBScript porque o WinPE não tem PowerShell, e substitui o Setup porque o Setup novo
+                 (24H2+) descarta Extensions, specialize e oobeSystem ao reescrever o arquivo de resposta.
     specialize   nome do PC, fuso, remove bloatware, OneDrive, Copilot e telemetria (especializar.ps1)
     oobeSystem   conta local "Alexandre" administradora, login automático permanente, sem conta Microsoft.
                  No primeiro logon, primeiro-logon.ps1 baixa o setup.ps1 deste repositório e roda,
@@ -126,23 +128,17 @@
         </RunSynchronousCommand>
         <RunSynchronousCommand wcm:action="add">
           <Order>13</Order>
-          <Description>Extrair o disco.vbs embutido neste XML para X:\mywiniso</Description>
+          <Description>Extrair o instala.vbs embutido neste XML para X:\mywiniso</Description>
           <Path>cscript.exe //E:vbscript //nologo X:\mywiniso\extrai.vbs</Path>
         </RunSynchronousCommand>
         <RunSynchronousCommand wcm:action="add">
           <Order>14</Order>
-          <Description>Achar o disco pelo serial e particionar</Description>
-          <Path>cscript.exe //E:vbscript //nologo X:\mywiniso\disco.vbs</Path>
+          <Description>Fase WinPE inteira: disco pelo serial, diskpart, DISM, bcdboot, copia do XML, reboot</Description>
+          <Path>cscript.exe //E:vbscript //nologo X:\mywiniso\instala.vbs</Path>
         </RunSynchronousCommand>
       </RunSynchronous>
-      <ImageInstall>
-        <OSImage>
-          <!-- Instala na primeira partição NTFS vazia e grande o bastante: a "Windows" que o disco.ps1 criou.
-               O pendrive é removível e exFAT, então nunca é candidato. -->
-          <InstallToAvailablePartition>true</InstallToAvailablePartition>
-          <WillShowUI>OnError</WillShowUI>
-        </OSImage>
-      </ImageInstall>
+      <!-- Sem <ImageInstall>: o instala.vbs aplica a imagem e reinicia antes de o Setup chegar aqui.
+           Se ele falhar, sai com erro e o Setup para, em vez de seguir com o Setup novo, que ignoraria o resto deste XML. -->
       <UserData>
         <ProductKey>
           <Key>VK7JG-NPHTM-C97JM-9MPGT-3V66T</Key>
@@ -234,15 +230,19 @@ foreach ($file in $Document.GetElementsByTagName('File')) {
 }
 ]]></ExtractScript>
 
-    <File path="X:\mywiniso\disco.vbs" pass="windowsPE"><![CDATA[
-' Roda no WinPE (cscript), antes de qualquer coisa ser gravada. O WinPE do instalador nao tem PowerShell.
-' Procura o disco alvo pelo serial ou pelo modelo via WMI. So particiona se achar EXATAMENTE um; senao
-' abre o log no Bloco de Notas e sai com erro, o Setup para, e nada foi apagado. Pendrives nunca sao candidatos.
+    <File path="X:\mywiniso\instala.vbs" pass="windowsPE"><![CDATA[
+' Roda no WinPE (cscript). Dois motivos para ser assim: o WinPE do instalador nao tem PowerShell, e o Setup
+' novo do Windows 11 (24H2+) descarta quase tudo do arquivo de resposta ao reescreve-lo para os passos
+' seguintes (some a secao Extensions, o specialize e o oobeSystem). Entao este script faz a fase WinPE inteira
+' no lugar do Setup: acha o disco pelo serial ou modelo, particiona, aplica a imagem com o DISM, grava o boot,
+' copia este XML completo para C:\Windows\Panther e reinicia pelo disco. Se algo falhar, abre o log no Bloco
+' de Notas e sai com erro: o Setup para, e antes do diskpart nada foi apagado. Pendrives nunca sao candidatos.
 Option Explicit
 Const SERIAL = "AA09B5211012T9"   ' Get-Disk | Select-Object FriendlyName, SerialNumber
 Const MODELO = "MP700 ELITE"
-Const ARQLOG = "X:\mywiniso\disco.log"
-Dim fso, sh, wmi, d, alvo, n, script, ts, rc
+Const EDICAO = "Windows 11 Pro"   ' nome da imagem dentro do install.wim (dism /Get-WimInfo)
+Const ARQLOG = "X:\mywiniso\instala.log"
+Dim fso, sh, wmi, d, dr, alvo, n, script, ts, rc, xml, img
 Set fso = CreateObject("Scripting.FileSystemObject")
 Set sh = CreateObject("WScript.Shell")
 Set wmi = GetObject("winmgmts:\\.\root\cimv2")
@@ -264,7 +264,29 @@ Sub Falha(m)
   sh.Run "notepad.exe " & ARQLOG, 1, True
   WScript.Quit 1
 End Sub
+Function Roda(cmd, visivel)
+  Escreve "> " & cmd
+  Roda = sh.Run("cmd.exe /c " & cmd, visivel, True)
+End Function
 
+' 1. arquivo de resposta (o Ventoy grava o caminho no registro) e imagem do Windows (a ISO montada)
+On Error Resume Next
+xml = sh.RegRead("HKLM\System\Setup\UnattendFile")
+On Error GoTo 0
+If Not fso.FileExists(xml & "") Then xml = "X:\Unattend.xml"
+If Not fso.FileExists(xml) Then Falha "nao achei o arquivo de resposta (HKLM\System\Setup\UnattendFile)"
+img = ""
+For Each dr In fso.Drives
+  If dr.IsReady Then
+    If fso.FileExists(dr.DriveLetter & ":\sources\install.wim") Then img = dr.DriveLetter & ":\sources\install.wim"
+    If fso.FileExists(dr.DriveLetter & ":\sources\install.esd") Then img = dr.DriveLetter & ":\sources\install.esd"
+  End If
+Next
+If img = "" Then Falha "nao achei sources\install.wim nem install.esd em nenhuma unidade"
+Escreve "arquivo de resposta: " & xml
+Escreve "imagem: " & img & " (" & EDICAO & ")"
+
+' 2. disco alvo
 n = 0: alvo = -1
 Escreve "Discos vistos pelo WinPE:"
 For Each d In wmi.ExecQuery("SELECT Index, Model, SerialNumber, Size, InterfaceType, PNPDeviceID FROM Win32_DiskDrive")
@@ -275,17 +297,35 @@ For Each d In wmi.ExecQuery("SELECT Index, Model, SerialNumber, Size, InterfaceT
   End If
 Next
 If n <> 1 Then Falha "esperava 1 disco com serial '" & SERIAL & "' ou modelo '" & MODELO & "', achei " & n & ". Nada foi apagado."
-Escreve "Alvo: disco " & alvo & ". Apagando e particionando (GPT: EFI 300 MB, MSR 16 MB, Windows, Recovery 1 GB)."
+
+' 3. particionar (GPT: EFI 300 MB = S:, MSR 16 MB, Windows = W:, Recovery 1 GB)
+Escreve "Alvo: disco " & alvo & ". Apagando e particionando."
 script = "select disk " & alvo & vbCrLf & "clean" & vbCrLf & "convert gpt" & vbCrLf & _
-  "create partition efi size=300" & vbCrLf & "format quick fs=fat32 label=""System""" & vbCrLf & _
+  "create partition efi size=300" & vbCrLf & "format quick fs=fat32 label=""System""" & vbCrLf & "assign letter=S" & vbCrLf & _
   "create partition msr size=16" & vbCrLf & "create partition primary" & vbCrLf & "shrink minimum=1024" & vbCrLf & _
-  "format quick fs=ntfs label=""Windows""" & vbCrLf & "create partition primary" & vbCrLf & _
+  "format quick fs=ntfs label=""Windows""" & vbCrLf & "assign letter=W" & vbCrLf & "create partition primary" & vbCrLf & _
   "format quick fs=ntfs label=""Recovery""" & vbCrLf & "set id=""de94bba4-06d1-4d40-a16a-bfd50179d6ac""" & vbCrLf & _
   "gpt attributes=0x8000000000000001" & vbCrLf & "list partition" & vbCrLf
 Set ts = fso.CreateTextFile("X:\mywiniso\diskpart.txt", True): ts.Write script: ts.Close
-rc = sh.Run("cmd.exe /c diskpart.exe /s X:\mywiniso\diskpart.txt >> " & ARQLOG & " 2>&1", 0, True)
+rc = Roda("diskpart.exe /s X:\mywiniso\diskpart.txt >> " & ARQLOG & " 2>&1", 0)
 If rc <> 0 Then Falha "diskpart saiu com codigo " & rc
-Escreve "Disco pronto."
+
+' 4. aplicar a imagem (demora alguns minutos; o progresso aparece na janela)
+rc = Roda("dism.exe /Apply-Image /ImageFile:""" & img & """ /Name:""" & EDICAO & """ /ApplyDir:W:\ /LogPath:X:\mywiniso\dism.log", 1)
+If rc <> 0 Then Falha "dism saiu com codigo " & rc & " (veja X:\mywiniso\dism.log)"
+
+' 5. boot pelo disco, inclusive no proximo reinicio mesmo com o pendrive na frente na ordem da UEFI
+rc = Roda("bcdboot.exe W:\Windows /s S: /f UEFI >> " & ARQLOG & " 2>&1", 0)
+If rc <> 0 Then Falha "bcdboot saiu com codigo " & rc
+Roda "bcdedit.exe /set {fwbootmgr} bootsequence {bootmgr} >> " & ARQLOG & " 2>&1", 0
+
+' 6. arquivo de resposta inteiro para os passos specialize e oobeSystem, e os logs desta fase
+If Not fso.FolderExists("W:\Windows\Panther") Then fso.CreateFolder "W:\Windows\Panther"
+fso.CopyFile xml, "W:\Windows\Panther\unattend.xml", True
+Escreve "Pronto. Reiniciando pelo disco."
+fso.CopyFile ARQLOG, "W:\Windows\Panther\mywiniso-instala.log", True
+If fso.FileExists("X:\mywiniso\dism.log") Then fso.CopyFile "X:\mywiniso\dism.log", "W:\Windows\Panther\mywiniso-dism.log", True
+Roda "wpeutil.exe reboot", 0
 WScript.Quit 0
 ]]></File>
 
