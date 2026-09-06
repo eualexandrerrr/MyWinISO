@@ -1707,15 +1707,31 @@ Etapa 'Barra de tarefas e tarefa de logon' {
 
 # --- 25. WSL com Debian (wsl\debian.sh configura por dentro) ----------------------------------------
 Etapa 'WSL com Debian e zsh' {
+    # Os dois componentes primeiro, e pelo DISM. O wsl.exe do System32 não liga mais nada sozinho: com os
+    # componentes desligados ele apenas escreve "o WSL não está instalado" e sai com 1 -- que esta etapa
+    # dava por normal ("o esperado antes do primeiro reinício") e seguia em frente. O efeito era um Windows
+    # que nunca ganhava WSL: medido nesta máquina, dois setups completos e os dois recursos continuavam
+    # Disabled, sem app do WSL instalado. Quem liga de verdade é o Enable-WindowsOptionalFeature.
+    $faltam = @('Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform' |
+        Where-Object { (Get-WindowsOptionalFeature -Online -FeatureName $_ -ErrorAction Ignore).State -ne 'Enabled' })
+    if ($faltam) {
+        Passo "ligando os componentes do WSL: $($faltam -join ', ')"
+        foreach ($f in $faltam) {
+            Enable-WindowsOptionalFeature -Online -FeatureName $f -All -NoRestart -WarningAction SilentlyContinue | Out-Null
+            Passo ("  $f -> " + (Get-WindowsOptionalFeature -Online -FeatureName $f -ErrorAction Ignore).State)
+        }
+    }
     Silencioso { wsl.exe --status 2>&1 | Out-Null }
     if ($LASTEXITCODE -ne 0) {
-        Passo 'WSL ainda não instalado; instalando sem distro (precisa reiniciar depois)'
-        # num Windows recém-instalado o componente entra mas o wsl.exe só responde certo depois de reiniciar,
-        # e até lá ele escreve em stderr "o WSL não está instalado". Não é falha: é o caminho normal na
-        # primeira passada. Por isso Silencioso e Passo, e não Falha, que sujava o resumo com sete linhas.
-        Silencioso { wsl.exe --install --no-distribution 2>&1 | Out-Host }
-        if ($LASTEXITCODE -ne 0) { Passo "wsl --install saiu com código $LASTEXITCODE, o normal antes do primeiro reinício" }
-        Passo 'reinicie e rode mywiniso-setup.cmd de novo para instalar e configurar o Debian'
+        if ($faltam) {
+            Passo 'componentes ligados; reinicie e rode mywiniso-setup.cmd de novo para instalar o Debian'
+        } else {
+            # componentes já ligados e o wsl.exe ainda não responde: o que falta é o app do WSL
+            Passo 'componentes já ligados; instalando o app do WSL'
+            Silencioso { wsl.exe --install --no-distribution 2>&1 | Out-Host }
+            if ($LASTEXITCODE -ne 0) { Passo "wsl --install saiu com código $LASTEXITCODE; reinicie e rode mywiniso-setup.cmd de novo" }
+            else { Passo 'app do WSL instalado; reinicie e rode mywiniso-setup.cmd de novo para o Debian' }
+        }
     } else {
         $distros = ((wsl.exe --list --quiet 2>$null) -join "`n") -replace "`0", ''
         # Com a partição Dados, o disco do Debian (ext4.vhdx) mora em D:\WSL\Debian e sobrevive à formatação.
