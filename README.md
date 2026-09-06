@@ -194,7 +194,7 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 | Área | O que fica |
 |:--|:--|
 | Explorer | extensões visíveis, abre em Este Computador, menu de contexto clássico; Detalhes em todas as pastas com Nome, Caminho, Data de modificação, Tipo e Tamanho (WinSetView) |
-| Barra e Iniciar | ícones à esquerda, sem busca, Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito; pinos fixos |
+| Barra e Iniciar | ícones centralizados, sem busca, Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito; pinos fixos |
 | Tema | escuro desde o primeiro boot, cor de destaque puxada do wallpaper; barra, Iniciar e central de notificações translúcidos pelo Windhawk (TranslucentTaskbar, TranslucentStartMenu, TranslucentShell), menus escuros, janelas sem borda |
 | Desligar | apps travados são encerrados sozinhos (`AutoEndTasks`), sem "este aplicativo está impedindo o desligamento" |
 | Entrar | reabre os apps que estavam abertos (`RestartApps`), NumLock ligado, tarefa de logon arruma as janelas |

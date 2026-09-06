@@ -279,8 +279,8 @@ Etapa 'Preferências do usuário' {
     Set-Reg $adv 'HideFileExt'        0
     Set-Reg $adv 'LaunchTo'           1
     Set-Reg 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32' '(Default)' '' 'String'
-    Passo 'barra: ícones à esquerda, sem busca, Visão de Tarefas, widgets e Copilot; "Finalizar tarefa"'
-    Set-Reg $adv 'TaskbarAl'          0
+    Passo 'barra: ícones centralizados, sem busca, Visão de Tarefas, widgets e Copilot; "Finalizar tarefa"'
+    Set-Reg $adv 'TaskbarAl'          1      # 1 = ícones centralizados
     Set-Reg $adv 'ShowTaskViewButton' 0
     Set-Reg $adv 'TaskbarDa'          0
     Set-Reg $adv 'ShowCopilotButton'  0
