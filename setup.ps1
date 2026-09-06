@@ -25,6 +25,8 @@ param([string] $Senha = $env:MYWINISO_SENHA)
 # Este arquivo é UTF-8 sem BOM: com BOM, "irm | iex" no Windows PowerShell engasga no primeiro caractere. Só que
 # sem BOM o Windows PowerShell lê .ps1 pelo -File (ou por &) como ANSI e os acentos viram "Ã¡". Se o texto chegou
 # aqui assim, relê o próprio arquivo como UTF-8 e roda de novo, passando a pasta e a senha por variáveis de ambiente.
+# Regra para quem edita: fora de comentário, nada de Ó Ô Â Ä Ñ Ò, travessão, seta, cifrão de euro ou emoji dentro de
+# strings; lidos como ANSI esses caracteres viram aspas curvas e o arquivo nem chega a rodar.
 if ($PSCommandPath -and 'á'.Length -ne 1) {
     $env:MYWINISO_SENHA = $Senha
     $env:MYWINISO_RAIZ  = $PSScriptRoot
@@ -132,7 +134,12 @@ function Update-Winget {
     Expand-Archive -Path (Join-Path $tmp 'deps.zip') -DestinationPath (Join-Path $tmp 'deps') -Force
     $appx = @(Get-ChildItem -Path (Join-Path $tmp 'deps\x64') -Filter '*.appx' | Select-Object -ExpandProperty FullName)
     Passo "Add-AppxPackage $($bundle.name) com $($appx.Count) dependências: $(($appx | Split-Path -Leaf) -join ', ')"
-    Add-AppxPackage -Path (Join-Path $tmp $bundle.name) -DependencyPath $appx -ForceApplicationShutdown
+    # -ErrorAction Stop: o erro real vira exceção aqui em vez de só AVISO; 3 tentativas porque no primeiro logon a Loja
+    # e o AppReadiness podem estar mexendo no mesmo pacote
+    for ($t = 1; $t -le 3; $t++) {
+        try { Add-AppxPackage -Path (Join-Path $tmp $bundle.name) -DependencyPath $appx -ForceApplicationShutdown -ErrorAction Stop; break }
+        catch { if ($t -eq 3) { throw }; Passo "Add-AppxPackage falhou (tentativa $t/3): $($_.Exception.Message); de novo em 20 s"; Start-Sleep -Seconds 20 }
+    }
     Refresh-Path
     for ($i = 0; $i -lt 10 -and (Get-WingetVersao) -lt $alvo; $i++) { Start-Sleep -Seconds 3 }   # o alias winget.exe leva uns segundos para apontar para o novo
     $agora = Get-WingetVersao
@@ -167,10 +174,12 @@ $aqui = if ($PSScriptRoot) { $PSScriptRoot } elseif ($env:MYWINISO_RAIZ) { $env:
 if (-not ($aqui -and (Test-Path -LiteralPath (Join-Path $aqui 'apps.json')))) {
     Etapa 'Git e clone do repositório' {
         if (-not (Get-Command git.exe -ErrorAction Ignore)) {
-            Passo 'instalando Git (winget, fonte winget)'
-            winget.exe install --id Git.Git --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-            if ($LASTEXITCODE -ne 0) { Falha ("Git.Git: winget saiu com código {0} (0x{0:X8})" -f $LASTEXITCODE) }
-            Refresh-Path
+            if (Test-Winget) {
+                Passo 'instalando Git (winget, fonte winget)'
+                winget.exe install --id Git.Git --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+                if ($LASTEXITCODE -ne 0) { Falha ("Git.Git: winget saiu com código {0} (0x{0:X8})" -f $LASTEXITCODE) }
+                Refresh-Path
+            } else { Passo 'sem winget; o Git fica para a etapa 3 e o repositório vem pelo zip' }
         }
         if (Get-Command git.exe -ErrorAction Ignore) {
             if (Test-Path -LiteralPath (Join-Path $Dir '.git')) {
@@ -192,12 +201,17 @@ if (-not ($aqui -and (Test-Path -LiteralPath (Join-Path $aqui 'apps.json')))) {
             Expand-Archive -Path $zip -DestinationPath $tmp -Force
             New-Item -ItemType Directory -Path (Split-Path -Parent $Dir) -Force | Out-Null
             Remove-Item -LiteralPath $Dir -Recurse -Force -ErrorAction Ignore
-            Move-Item -LiteralPath (Join-Path $tmp 'mywiniso-main') -Destination $Dir
+            if (Test-Path -LiteralPath $Dir) {
+                Passo "$Dir não pôde ser apagado (pasta aberta em algum terminal ou arquivo em uso); copiando por cima"
+                Copy-Item -Path (Join-Path $tmp 'mywiniso-main\*') -Destination $Dir -Recurse -Force
+            } else {
+                Move-Item -LiteralPath (Join-Path $tmp 'mywiniso-main') -Destination $Dir
+            }
         }
         if (-not (Test-Path -LiteralPath (Join-Path $Dir 'apps.json'))) { throw "não consegui obter $Repo em $Dir" }
     }
-    if (-not (Test-Path -LiteralPath (Join-Path $Dir 'setup.ps1'))) {
-        Write-Host "Sem $Dir\setup.ps1 não dá para continuar. Veja o erro acima; com internet, rode mywiniso-setup.cmd de novo." -ForegroundColor Red
+    if (-not (Test-Path -LiteralPath (Join-Path $Dir 'setup.ps1')) -or -not (Test-Path -LiteralPath (Join-Path $Dir 'apps.json'))) {
+        Write-Host "Sem setup.ps1 e apps.json em $Dir não dá para continuar. Veja o erro acima; com internet, rode mywiniso-setup.cmd de novo." -ForegroundColor Red
         try { Stop-Transcript | Out-Null } catch { }
         exit 1
     }
@@ -209,7 +223,10 @@ if (-not ($aqui -and (Test-Path -LiteralPath (Join-Path $aqui 'apps.json')))) {
 Etapa 'Git e clone do repositório' {
     Passo "rodando de $aqui"
     if ((Get-Command git.exe -ErrorAction Ignore) -and (Test-Path -LiteralPath (Join-Path $aqui '.git'))) {
-        git.exe -C $aqui pull --ff-only 2>&1 | ForEach-Object { Passo "$_" }
+        # -q e sem 2>&1: no Windows PowerShell 5.1 cada linha de stderr redirecionada do git entraria em $Error e a etapa sairia como AVISO
+        git.exe -C $aqui pull --ff-only -q
+        if ($LASTEXITCODE -ne 0) { Falha "git pull em $aqui saiu com código $LASTEXITCODE" }
+        Passo "commit: $(git.exe -C $aqui log -1 --format='%h %s')"
     } else { Passo 'cópia sem .git ou sem Git; nada a atualizar' }
 }
 

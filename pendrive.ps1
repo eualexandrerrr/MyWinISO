@@ -67,8 +67,8 @@ $disco = Get-Disk -Number $part.DiskNumber
 if ($disco.BusType -ne 'USB') { throw "$raiz não é USB ($($disco.BusType)); me recuso a mexer" }
 Write-Host ("pendrive: {0}, {1} GB" -f $disco.FriendlyName, [math]::Round($disco.Size / 1GB))
 
-$xmlTexto = Set-SenhaXml (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'autounattend.xml') -Raw) $Senha
-$modelo = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'ventoy\ventoy.json') -Raw
+$xmlTexto = Set-SenhaXml (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'autounattend.xml') -Raw -Encoding UTF8) $Senha
+$modelo = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'ventoy\ventoy.json') -Raw -Encoding UTF8
 if (-not $Senha) { Write-Warning 'sem -Senha: a conta fica sem senha e a Área de Trabalho Remota não aceita login.' }
 
 $ehVentoy = [bool](Get-Partition -DiskNumber $disco.Number |
@@ -107,7 +107,7 @@ if ($ehVentoy) {
     $existente = $null
     if (Test-Path -LiteralPath $destino) {
         Copy-Item -LiteralPath $destino -Destination "$destino.bak" -Force
-        $existente = Get-Content -LiteralPath $destino -Raw
+        $existente = Get-Content -LiteralPath $destino -Raw -Encoding UTF8
         Write-Host 'ventoy.json existente preservado (cópia em ventoy.json.bak)'
     }
     $json = Merge-VentoyJson $modelo $existente $imagem

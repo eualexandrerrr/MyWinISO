@@ -303,7 +303,9 @@ Function RestartExplorer {
   If ($WinVer -ne '7') {ResetStoreAppViews}
   Stop-Process -Force -ErrorAction SilentlyContinue -ProcessName Explorer
   If ($ResetThumbs -eq 1) {ResetThumbCache}
-  Explorer $PSScriptRoot
+  # mywiniso: o original abria uma janela do Explorer nesta pasta; aqui so garante que o shell voltou
+  Start-Sleep -Seconds 3
+  If (-Not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) {Start-Process explorer.exe}
   Exit
 }
 
