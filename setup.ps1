@@ -572,12 +572,19 @@ Etapa 'Monitores (resolução, Hz, posição)' {
     Passo 'ASUS XG27ACS em 2560x1440 a 180 Hz como principal; LG UltraGear em 1920x1080 a 144 Hz, de pé, à esquerda'
     for ($t = 1; $t -le 3; $t++) {
         & $mon -Arquivo $json
-        if ($LASTEXITCODE -eq 0) { break }
+        $cod = $LASTEXITCODE
+        if ($cod -eq 0) { break }
+        # 100+N: os N que faltam apenas não estão ligados (cabo, botão, monitor de outra máquina). Ainda
+        # vale repetir, porque logo depois do driver subir eles podem aparecer com segundos de atraso; o
+        # que muda é o fim: monitor desligado sai como aviso, e só o driver recusando o modo é FALHOU.
+        $faltam = if ($cod -ge 100) { $cod - 100 } else { $cod }
         if ($t -lt 3) {
-            Passo "$LASTEXITCODE monitor(es) fora do lugar; o driver ainda pode estar subindo (tentativa $t de 3)"
+            Passo "$faltam monitor(es) fora do lugar; o driver ainda pode estar subindo (tentativa $t de 3)"
             Start-Sleep -Seconds 10
+        } elseif ($cod -ge 100) {
+            Passo "$faltam monitor(es) do monitores.json não estão ligados; os que estão ficaram como pedido"
         } else {
-            Falha "monitores: $LASTEXITCODE monitor(es) não ficaram como no monitores.json; confira o driver da placa e rode de novo"
+            Falha "monitores: $cod monitor(es) não ficaram como no monitores.json; confira o driver da placa e rode de novo"
         }
     }
 }

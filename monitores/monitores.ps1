@@ -188,7 +188,12 @@ if (-not (Test-Path -LiteralPath $Arquivo)) { throw "não achei $Arquivo" }
 $cfg = Get-Content -LiteralPath $Arquivo -Raw -Encoding UTF8 | ConvertFrom-Json
 
 $erros = 0
+$ausentes = 0
 $aplicar = @()
+# Código de saída: 0 tudo no lugar; 1..99 erro de verdade (o driver recusou o modo); 100+N quando os
+# N que faltam só não estão ligados. Quem chama precisa da diferença: monitor desligado é o cabo ou o
+# botão do monitor, não uma falha do setup, e não faz sentido sair como FALHOU no resumo por causa disso.
+function Codigo { if ($erros) { $erros } elseif ($ausentes) { 100 + $ausentes } else { 0 } }
 foreach ($q in $cfg.monitores) {
     $alvo = $ligados | Where-Object { $_.Nome -and $_.Nome -eq $q.nome } | Select-Object -First 1
     if (-not $alvo) { $alvo = $ligados | Where-Object { $_.Pnp -eq $q.pnp } | Select-Object -First 1 }
@@ -196,7 +201,7 @@ foreach ($q in $cfg.monitores) {
     if (-not $alvo) { $alvo = $ligados | Where-Object { $_.Monitor -eq $q.nome } | Select-Object -First 1 }
     if (-not $alvo) {
         Write-Host "  AVISO: '$($q.nome)' ($($q.apelido)) não está ligado; pulando" -ForegroundColor Yellow
-        $erros++
+        $ausentes++
         continue
     }
     $aplicar += [pscustomobject]@{ Alvo = $alvo; Quer = $q }
@@ -205,7 +210,7 @@ foreach ($q in $cfg.monitores) {
 if ($aplicar.Count -eq 0) {
     # noutra máquina (ou numa VM) nenhum destes monitores existe; isso é aviso, não falha do script
     Write-Host '  nenhum monitor do monitores.json está ligado; nada a aplicar' -ForegroundColor Yellow
-    exit $erros
+    exit (Codigo)
 }
 
 # 1) grava o modo de cada monitor sem aplicar; o primário primeiro, para as posições relativas fecharem
@@ -248,4 +253,4 @@ if ($r -ne 0) { Write-Host "  ERRO ao aplicar o conjunto: código $r" -Foregroun
 Start-Sleep -Seconds 2
 Write-Host 'como ficou:'
 foreach ($m in (Get-MonitoresLigados)) { Write-Host "  - $(Format-Monitor $m)" }
-exit $erros
+exit (Codigo)
