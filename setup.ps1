@@ -709,7 +709,7 @@ Etapa 'Preferências do usuário' {
         'Microsoft.WindowsAlarms', 'Microsoft.WindowsCamera', 'Microsoft.WindowsFeedbackHub', 'Microsoft.WindowsMaps',
         'Microsoft.WindowsSoundRecorder', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxApp',
         'Microsoft.XboxGameOverlay', 'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone',
-        'Microsoft.ZuneMusic', 'Microsoft.ZuneVideo', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
+        'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
         'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps', 'MicrosoftWindows.Client.WebExperience',
         'Microsoft.WidgetsPlatformRuntime', 'Microsoft.SecureAssessmentBrowser',
         'Microsoft.Windows.Ai.Copilot.Provider'
@@ -1012,6 +1012,9 @@ Etapa 'Windhawk: tema Translucent' {
             } },
         @{ id = 'windows-11-file-explorer-styler';       settings = @{ theme = 'Translucent Explorer11' } },
         @{ id = 'taskbar-thumbnail-reorder';             settings = @{} },   # arrastar a miniatura da barra com o botão esquerdo
+        # Explorer abre em D: (Win+E e o pino da barra). O Windows só oferece Início, Este Computador e Downloads
+        # (LaunchTo); pasta arbitrária só por este mod. Sem a partição Alexandre, abre em Este Computador.
+        @{ id = 'change-explorer-default-location';      settings = @{ location = $(if ($Dados) { 'D:\' } else { 'shell:::{20D04FE0-3AEA-1069-A2D8-08002B30309D}' }) } },
         @{ id = 'dark-menus';                            settings = @{} },
         @{ id = 'invisible-borders';                     settings = @{} }
     )

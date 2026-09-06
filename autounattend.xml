@@ -545,8 +545,7 @@ Faz 'Bloatware: pacotes provisionados' {
         'Microsoft.Todos', 'Microsoft.Wallet', 'Microsoft.Windows.DevHome', 'Microsoft.WindowsAlarms',
         'Microsoft.WindowsCamera', 'Microsoft.WindowsFeedbackHub', 'Microsoft.WindowsMaps',
         'Microsoft.WindowsSoundRecorder', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxApp', 'Microsoft.XboxGameOverlay',
-        'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone', 'Microsoft.ZuneMusic',
-        'Microsoft.ZuneVideo', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
+        'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
         'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps',
         'MicrosoftWindows.Client.WebExperience', 'Microsoft.WidgetsPlatformRuntime',
         'Microsoft.SecureAssessmentBrowser'
@@ -564,7 +563,7 @@ Faz 'Capacidades (recursos sob demanda)' {
     $capacidades = @(
         'App.StepsRecorder', 'App.Support.QuickAssist', 'Browser.InternetExplorer', 'Hello.Face.18967', 'Hello.Face.20134',
         'Hello.Face.Migration.18967', 'Language.Handwriting', 'Language.Speech', 'Language.TextToSpeech', 'MathRecognizer',
-        'Media.WindowsMediaPlayer', 'Microsoft.Windows.MSPaint', 'Microsoft.Windows.PowerShell.ISE',
+        'Microsoft.Windows.MSPaint', 'Microsoft.Windows.PowerShell.ISE',
         'Microsoft.Windows.SnippingTool', 'Microsoft.Windows.WordPad', 'OneCoreUAP.OneSync', 'Print.Fax.Scan'
     )
     foreach ($c in Get-WindowsCapability -Online | Where-Object { $_.State -notin 'NotPresent', 'Removed' -and $capacidades -contains ($_.Name -split '~')[0] }) {
