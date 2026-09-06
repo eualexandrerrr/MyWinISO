@@ -6,23 +6,27 @@
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
 
-  O console mostra cada etapa como [n/24], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
+  O console mostra cada etapa como [n/25], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
   listados) ou ERRO (a etapa parou; a mensagem aparece). Nenhuma etapa derruba as seguintes. No final sai um
   resumo de todas as etapas e dos programas que falharam. Tudo vai também para ~\mywiniso-setup.log.
 
-   1. ponto de restauração antes de mexer    13. Área de Trabalho Remota e política de senha
-   2. garante que o winget funciona          14. energia: tela apaga em 5 min, PC nunca dorme
-   3. Git e clone em ~\Projetos\mywiniso     15. NVIDIA App (instalador silencioso)
-   4. programas do apps.json, um a um        16. MariaDB: serviço e root
-   5. RedM na área de trabalho               17. fonte Cascadia Mono, console e VS Code
-   6. git config                             18. perfil do PowerShell
-   7. preferências do usuário                19. barra de tarefas e tarefa de logon
-   8. Explorer em Detalhes (WinSetView)      20. WSL com Debian e zsh
-   9. Windhawk: tema Translucent             21. Windows Update (drivers)
-  10. Office                                 22. monitores: resolução, Hz e posição
-  11. wallpaper                              23. Windows Terminal como terminal único
-  12. foto do perfil                         24. manutenção: limpeza automática e telemetria
-  10. wallpaper
+  As etapas 4 a 11 são as que mudam o que se vê: driver de vídeo, monitores, tema, wallpaper, barra.
+  Vêm antes dos programas (etapa 12, que sozinha leva uns treze minutos) para a máquina já estar com a
+  cara certa, na resolução certa e no tema escuro enquanto o resto se instala por baixo.
+
+   1. ponto de restauração antes de mexer    14. git config
+   2. garante que o winget funciona          15. Office
+   3. Git e clone em ~\Projetos\mywiniso     16. Área de Trabalho Remota e política de senha
+   4. driver de vídeo, direto da NVIDIA      17. NVIDIA App (instalador silencioso)
+   5. monitores: resolução, Hz e posição     18. MariaDB: serviço e root
+   6. preferências do usuário (tema escuro)  19. fonte Cascadia Mono, console e VS Code
+   7. wallpaper                              20. perfil do PowerShell
+   8. foto do perfil                         21. barra de tarefas e tarefa de logon
+   9. Explorer em Detalhes (WinSetView)      22. WSL com Debian e zsh
+  10. Windhawk: tema Translucent             23. Windows Update (resto dos drivers)
+  11. energia: tela apaga em 5 min           24. Windows Terminal como terminal único
+  12. programas do apps.json, um a um        25. manutenção: limpeza automática e telemetria
+  13. RedM na área de trabalho
 #>
 param([string] $Senha = $env:MYWINISO_SENHA)
 
@@ -47,13 +51,14 @@ try { $Host.UI.RawUI.WindowTitle = 'mywiniso: setup' } catch { }
 $Repo = 'https://github.com/eualexandrerrr/mywiniso'
 $Dir  = Join-Path $env:USERPROFILE 'Projetos\mywiniso'
 $Log  = Join-Path $env:USERPROFILE 'mywiniso-setup.log'
+$desktop = [Environment]::GetFolderPath('Desktop')     # usado pela etapa de preferências (ícone do Edge) e pela do RedM
 try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 
 # ---------------------------------------------------------------------------------------------------
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$TotalEtapas = 24
+$TotalEtapas = 25
 $NumEtapa    = 0
 $Resultado   = New-Object System.Collections.Generic.List[object]
 $Falhas      = New-Object System.Collections.Generic.List[string]
@@ -106,6 +111,38 @@ function Baixar([string] $Url, [string] $Destino) {
     Invoke-WebRequest -UseBasicParsing -UserAgent 'Mozilla/5.0' -Uri $Url -OutFile $Destino
     Passo ("{0:n1} MB em {1}" -f ((Get-Item -LiteralPath $Destino).Length / 1MB), $Destino)
 }
+function Silencioso([scriptblock] $Corpo) {
+    # Roda o bloco e apaga o que ele deixou em $Error. É para comando que escreve em stderr sem ter falhado:
+    # o wsl.exe antes do primeiro reinício, o Set-PSRepository do PowerShellGet 5.1. O Windows PowerShell
+    # transforma cada linha de stderr de programa nativo em registro de erro, e sem isto a Etapa conta essas
+    # linhas como erro não fatal e fecha em AVISO sem nada de errado ter acontecido.
+    $antes = $Error.Count
+    try { & $Corpo } catch { }
+    while ($Error.Count -gt $antes) { $Error.RemoveAt(0) }
+}
+function Invoke-SemElevacao([string] $Exe, [string] $Argumentos, [int] $TimeoutSeg = 1800) {
+    # Alguns instaladores recusam rodar como administrador e o winget devolve 0x8A150056 (o do Spotify faz
+    # isso). O setup todo roda elevado, então o jeito de chamar um deles é por uma tarefa agendada com
+    # RunLevel Limited, que nasce no nível médio de integridade do próprio usuário. Devolve o código de saída.
+    $nome = 'mywiniso-sem-elevacao'
+    $config    = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::FromSeconds($TimeoutSeg)) -StartWhenAvailable
+    $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+    Register-ScheduledTask -TaskName $nome -TaskPath '\mywiniso' -Force -Settings $config -Principal $principal `
+        -Action (New-ScheduledTaskAction -Execute $Exe -Argument $Argumentos) | Out-Null
+    try {
+        Start-ScheduledTask -TaskName $nome -TaskPath '\mywiniso'
+        # espera a tarefa sair de Ready para Running antes de esperar o fim, senão o LastTaskResult lido é o antigo
+        $limite = (Get-Date).AddSeconds(30)
+        while ((Get-ScheduledTask -TaskName $nome -TaskPath '\mywiniso').State -ne 'Running' -and (Get-Date) -lt $limite) {
+            Start-Sleep -Milliseconds 500
+        }
+        $limite = (Get-Date).AddSeconds($TimeoutSeg)
+        while ((Get-ScheduledTask -TaskName $nome -TaskPath '\mywiniso').State -eq 'Running' -and (Get-Date) -lt $limite) {
+            Start-Sleep -Seconds 3
+        }
+        return (Get-ScheduledTaskInfo -TaskName $nome -TaskPath '\mywiniso').LastTaskResult
+    } finally { Unregister-ScheduledTask -TaskName $nome -TaskPath '\mywiniso' -Confirm:$false -ErrorAction Ignore }
+}
 
 $eu = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $eu.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -113,7 +150,7 @@ if (-not $eu.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 }
 Write-Host "mywiniso setup | $(Get-Date -Format 'dd/MM/yyyy HH:mm') | usuário $env:USERNAME | senha: $(if ($Senha) { 'sim' } else { 'não' }) | log: $Log"
 
-# --- 1. Ponto de restauração antes de mexer em qualquer coisa ---------------------------------------
+# --- 1. Ponto de restauração antes de mexer em qualquer coisa ----------------------------------------
 # O setup grava mais de cem valores de registro. Um ponto de restauração é a única forma barata de voltar
 # atrás se algo sair errado. O Sophia Script e o WinUtil fazem isso como primeira ação, e por isso está aqui.
 Etapa 'Ponto de restauração' {
@@ -127,7 +164,7 @@ Etapa 'Ponto de restauração' {
     if ($ponto) { Passo "ponto $($ponto.SequenceNumber): $($ponto.Description)" }
 }
 
-# --- 2. winget -------------------------------------------------------------------------------------
+# --- 2. winget --------------------------------------------------------------------------------------
 # A ISO traz um App Installer velho (1.9 na 25H2) que não fala mais com a fonte msstore (certificado, 0x8a15005e)
 # e faz qualquer "winget install" sem --source parar pedindo para escolher fonte. Então, além de garantir que o
 # winget existe, esta etapa o troca pelo release atual do GitHub quando ele estiver mais de uma versão atrás.
@@ -190,7 +227,7 @@ Etapa 'winget' {
     winget.exe source update --disable-interactivity | Out-Null
 }
 
-# --- 3. Git e clone ---------------------------------------------------------------------------------
+# --- 3. Git e clone ----------------------------------------------------------------------------------
 # Rodando pelo irm/-File (sem apps.json ao lado): instala o Git, clona o repositório e continua pela cópia clonada.
 # Se o Git não entrar, baixa o repositório como zip, para que o resto do setup não dependa dele; o Git é tentado
 # de novo na etapa 3, porque está no apps.json.
@@ -254,42 +291,121 @@ Etapa 'Git e clone do repositório' {
     } else { Passo 'cópia sem .git ou sem Git; nada a atualizar' }
 }
 
-# --- 4. Programas, um a um, com resultado ----------------------------------------------------------
-Etapa 'Programas (apps.json)' {
-    $lista = Get-Content -LiteralPath (Join-Path $aqui 'apps.json') -Raw | ConvertFrom-Json
-    $pacotes = @()
-    foreach ($src in $lista.Sources) {
-        foreach ($p in $src.Packages) { $pacotes += [pscustomobject]@{ Id = $p.PackageIdentifier; Fonte = $src.SourceDetails.Name } }
+# --- 4. Driver de vídeo da NVIDIA, direto da NVIDIA --------------------------------------------------
+# Primeira coisa que o setup faz depois de ter o repositório na mão, e de propósito: sem o driver da placa
+# o Windows fica no adaptador básico da Microsoft, numa resolução baixa, e a etapa dos monitores não tem
+# como pedir 1440p a 180 Hz nem girar a LG. O Windows Update também traz o driver, mas só na etapa 23 e
+# sempre atrasado (o que ele entregou nesta máquina tinha oito meses). Aqui o driver vem da própria NVIDIA,
+# pela mesma API que a página de download usa, e é o mais novo que existe.
+#   psid = série da placa, pfid = modelo dentro da série. A NVIDIA não expõe mais o lookup desses dois
+#   (o endpoint lookupValueSearch responde 404), então ficam nesta tabela; placa que não estiver aqui cai
+#   no Windows Update da etapa 23, que é lento mas funciona sozinho.
+$NvidiaProdutos = @{
+    'RTX 3090' = @{ psid = 120; pfid = 934 }
+}
+Etapa 'Driver de vídeo (NVIDIA)' {
+    $gpu = @(Get-CimInstance Win32_VideoController -ErrorAction Ignore | Where-Object { $_.Name -match 'NVIDIA' })[0]
+    if (-not $gpu) {
+        Passo 'nenhuma placa NVIDIA à vista; o vídeo fica com o que o Windows Update trouxer na etapa 23'
+        return
     }
-    $i = 0
-    foreach ($p in $pacotes) {
-        $i++
-        Write-Host ("  [{0,2}/{1}] {2} ({3})" -f $i, $pacotes.Count, $p.Id, $p.Fonte) -ForegroundColor White
-        winget.exe install --id $p.Id --exact --source $p.Fonte --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-        $codigo = $LASTEXITCODE
-        if ($codigo -eq 0)                    { Write-Host '        OK' -ForegroundColor Green }
-        elseif ($codigo -eq -1978335189)      { Write-Host '        já instalado, sem atualização' -ForegroundColor DarkGray }
-        else                                  { Falha ("{0}: winget saiu com código {1} (0x{2:X8})" -f $p.Id, $codigo, $codigo) }
+    Passo "placa: $($gpu.Name)"
+
+    # O WMI mostra a versão do Windows (32.0.15.9186); a da NVIDIA são os dois últimos campos colados
+    # (15 + 9186 = 159186), os 5 últimos dígitos disso (59186) e um ponto antes dos dois finais: 591.86.
+    $instalado = $null
+    $campos = @($gpu.DriverVersion -split '\.')
+    if ($campos.Count -ge 2) {
+        $n = ($campos[-2] + $campos[-1]) -replace '\D', ''
+        if ($n.Length -ge 5) { $instalado = $n.Substring($n.Length - 5).Insert(3, '.') }
     }
-    Refresh-Path
+    if ($instalado) { Passo "driver instalado: $instalado ($($gpu.DriverVersion))" }
+    else { Passo "driver instalado: $($gpu.DriverVersion), num formato que não sei ler; vou tratar como desatualizado" }
+
+    $chave = @($NvidiaProdutos.Keys | Where-Object { $gpu.Name -match [regex]::Escape($_) })[0]
+    if (-not $chave) {
+        Falha "a placa '$($gpu.Name)' não está no NvidiaProdutos do setup.ps1; o driver fica para o Windows Update da etapa 23"
+        return
+    }
+    $prod = $NvidiaProdutos[$chave]
+
+    # osID 135 = Windows 11 64-bit; dch=1 = driver DCH, o único que o Windows 11 aceita; isWHQL=1 = assinado
+    # pela Microsoft; beta=0 e numberOfResults=1 = só o Game Ready estável mais recente.
+    $api = 'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php' +
+           "?func=DriverManualLookup&psid=$($prod.psid)&pfid=$($prod.pfid)&osID=135&languageCode=1033" +
+           '&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0&sort1=0&numberOfResults=1'
+    $info = $null
+    try {
+        $resposta = Invoke-RestMethod -UseBasicParsing -UserAgent 'Mozilla/5.0' -Uri $api -TimeoutSec 60
+        $info = @($resposta.IDS)[0].downloadInfo
+    } catch {
+        Falha "a API da NVIDIA não respondeu ($($_.Exception.Message)); o driver fica para o Windows Update da etapa 23"
+        return
+    }
+    if (-not $info.DownloadURL) {
+        Falha 'a API da NVIDIA respondeu sem DownloadURL; o driver fica para o Windows Update da etapa 23'
+        return
+    }
+    Passo "mais novo na NVIDIA: $($info.Version), de $($info.ReleaseDateTime)"
+
+    # [version] em vez de [double]: comparação de número com ponto não depende da cultura da máquina
+    if ($instalado -and [version]$instalado -ge [version]$info.Version) {
+        Passo 'o driver instalado já é esse; nada a baixar'
+        return
+    }
+
+    $exe = Join-Path $env:TEMP "NVIDIA-$($info.Version).exe"
+    Baixar $info.DownloadURL $exe
+    # -s silencioso, -noreboot para não reiniciar no meio do setup, -clean para apagar o driver anterior e os
+    # perfis dele (a máquina acabou de ser formatada, não há o que preservar), -nofinish e -nosplash para não
+    # abrir janela nenhuma. O instalador leva alguns minutos e a tela pisca e apaga durante ele.
+    Passo 'instalando em silêncio (a tela vai piscar e ficar preta por alguns segundos)'
+    $inst = Start-Process -FilePath $exe -ArgumentList '-s', '-noreboot', '-clean', '-nofinish', '-nosplash' -Wait -PassThru
+    Remove-Item -LiteralPath $exe -Force -ErrorAction Ignore
+    # 0 = instalou; 1 = instalou e quer reiniciar (o -noreboot só adia, e o driver já está valendo)
+    if ($inst.ExitCode -notin 0, 1) {
+        Falha "o instalador da NVIDIA saiu com código $($inst.ExitCode); o log dele fica em C:\ProgramData\NVIDIA Corporation\NVIDIA Installer2"
+        return
+    }
+
+    # O driver novo assume sem reiniciar, mas o Windows leva alguns segundos para publicar os modos de vídeo
+    # novos. A etapa seguinte depende disso, então espera a versão no WMI mudar antes de seguir.
+    Passo 'esperando o driver assumir'
+    $novo = $gpu
+    $limite = (Get-Date).AddSeconds(90)
+    while ($novo.DriverVersion -eq $gpu.DriverVersion -and (Get-Date) -lt $limite) {
+        Start-Sleep -Seconds 3
+        $novo = @(Get-CimInstance Win32_VideoController -ErrorAction Ignore | Where-Object { $_.Name -match 'NVIDIA' })[0]
+    }
+    if ($novo.DriverVersion -eq $gpu.DriverVersion) {
+        Falha "o instalador terminou mas o WMI ainda mostra $($gpu.DriverVersion); os monitores podem não aceitar o modo pedido antes de um reinício"
+    } else {
+        Passo "driver agora: $($info.Version) ($($novo.DriverVersion))"
+    }
 }
 
-# --- 5. RedM ----------------------------------------------------------------------------------------
-$desktop = [Environment]::GetFolderPath('Desktop')
-Etapa 'RedM na área de trabalho' {
-    Baixar 'https://runtime.fivem.net/redm/RedM.exe' (Join-Path $desktop 'RedM.exe')
-    Passo 'o instalador não tem modo silencioso: abra o RedM.exe uma vez'
+# --- 5. Monitores: resolução, frequência, orientação e posição (monitores\monitores.json) ----------
+# Logo depois do driver, de propósito: 1440p a 180 Hz e o giro da LG só existem com o driver da placa
+# carregado. O driver acabou de assumir e o Windows leva alguns segundos para publicar os modos novos,
+# então tenta até três vezes antes de desistir, em vez de avisar na primeira.
+Etapa 'Monitores (resolução, Hz, posição)' {
+    $mon  = Join-Path $aqui 'monitores\monitores.ps1'
+    $json = Join-Path $aqui 'monitores\monitores.json'
+    if (-not (Test-Path -LiteralPath $json)) { throw "não achei $json" }
+    Passo 'ASUS XG27ACS em 2560x1440 a 180 Hz como principal; LG UltraGear em 1920x1080 a 144 Hz, de pé, à esquerda'
+    for ($t = 1; $t -le 3; $t++) {
+        & $mon -Arquivo $json
+        if ($LASTEXITCODE -eq 0) { break }
+        if ($t -lt 3) {
+            Passo "$LASTEXITCODE monitor(es) fora do lugar; o driver ainda pode estar subindo (tentativa $t de 3)"
+            Start-Sleep -Seconds 10
+        } else {
+            Falha "monitores: $LASTEXITCODE monitor(es) não ficaram como no monitores.json; confira o driver da placa e rode de novo"
+        }
+    }
 }
 
-# --- 6. Git -----------------------------------------------------------------------------------------
-Etapa 'git config' {
-    git.exe config --global user.name  'Alexandre Rangel'
-    git.exe config --global user.email 'mamutal91@gmail.com'
-    git.exe config --global init.defaultBranch main
-    Passo "user.name=$(git.exe config --global user.name) user.email=$(git.exe config --global user.email)"
-}
-
-# --- 7. Preferências do usuário ---------------------------------------------------------------------
+# --- 6. Preferências do usuário ----------------------------------------------------------------------
 Etapa 'Preferências do usuário' {
     Passo 'Explorer: extensões, Este Computador, menu de contexto clássico'
     $adv = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
@@ -299,11 +415,11 @@ Etapa 'Preferências do usuário' {
     Passo 'barra: ícones centralizados, só no monitor principal, sem busca, Visão de Tarefas, widgets e Copilot; "Finalizar tarefa"'
     Set-Reg $adv 'TaskbarAl'          1      # 1 = ícones centralizados
     Set-Reg $adv 'ShowTaskViewButton' 0
-    Set-Reg $adv 'TaskbarDa'          0
     Set-Reg $adv 'ShowCopilotButton'  0
     Set-Reg $adv 'MMTaskbarEnabled'  0      # barra de tarefas só no monitor principal
     # O driver UCPD (24H2+) recusa escrita em TaskbarDa quando quem grava se chama powershell.exe ou reg.exe.
-    # Contorno do Sophia Script: gravar por uma cópia renomeada do próprio powershell.
+    # Contorno do Sophia Script: gravar por uma cópia renomeada do próprio powershell. Não há Set-Reg antes
+    # deste bloco de propósito: ela seria recusada sempre e entraria na lista de falhas do resumo por nada.
     $psOrig = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
     $psCopia = Join-Path $env:TEMP 'mywiniso-ps.exe'
     try {
@@ -437,7 +553,61 @@ Etapa 'Preferências do usuário' {
     Remove-Item -LiteralPath (Join-Path $desktop 'Microsoft Edge.lnk'), 'C:\Users\Public\Desktop\Microsoft Edge.lnk' -Force -ErrorAction Ignore
 }
 
-# --- 8. Explorer em Detalhes (WinSetView) ------------------------------------------------------------
+# --- 7. Wallpaper nos dois monitores e na tela de bloqueio --------------------------------------------
+Etapa 'Wallpaper' {
+    $wallDir = Join-Path $env:SystemRoot 'Web\Wallpaper\mywiniso'     # legível pelo SYSTEM, que desenha a tela de bloqueio
+    New-Item -ItemType Directory -Path $wallDir -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $aqui 'wallpaper\Jason_and_Lucia_Robbery_landscape.jpg') -Destination $wallDir -Force
+    $wall = Join-Path $wallDir 'Jason_and_Lucia_Robbery_landscape.jpg'
+    Passo "área de trabalho (todos os monitores): $wall"
+    Set-Reg 'HKCU:\Control Panel\Desktop' 'WallPaper'      $wall 'String'
+    Set-Reg 'HKCU:\Control Panel\Desktop' 'WallpaperStyle' '10'  'String'     # preencher
+    Set-Reg 'HKCU:\Control Panel\Desktop' 'TileWallpaper'  '0'   'String'
+    Add-Type -Namespace Win32 -Name Wallpaper -MemberDefinition '[DllImport("user32.dll", SetLastError = true)] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);'
+    if (-not [Win32.Wallpaper]::SystemParametersInfo(20, 0, $wall, 3)) { throw 'SystemParametersInfo recusou o wallpaper' }
+    Passo 'tela de bloqueio (PersonalizationCSP)'
+    $csp = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP'
+    Set-Reg $csp 'LockScreenImagePath'   $wall 'String'
+    Set-Reg $csp 'LockScreenImageUrl'    $wall 'String'
+    Set-Reg $csp 'LockScreenImageStatus' 1
+}
+
+# --- 8. Foto do perfil da conta (perfil\avatar.png) -------------------------------------------------
+# O Windows guarda a foto da conta em tamanhos fixos dentro de C:\Users\Public\AccountPictures\<SID> e
+# aponta cada um no registro, por SID. Sem esses valores a tela de login e o Iniciar mostram o boneco padrão.
+Etapa 'Foto do perfil' {
+    $origem = Join-Path $aqui 'perfil\avatar.png'
+    if (-not (Test-Path -LiteralPath $origem)) { throw "não achei $origem" }
+    $sid = ([Security.Principal.NTAccount]"$env:USERDOMAIN\$env:USERNAME").Translate([Security.Principal.SecurityIdentifier]).Value
+    $dir = Join-Path $env:PUBLIC "AccountPictures\$sid"
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    Add-Type -AssemblyName System.Drawing
+    $img = [System.Drawing.Image]::FromFile($origem)
+    try {
+        $tamanhos = 32, 40, 48, 96, 192, 208, 240, 424, 448, 1080
+        $chave = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AccountPicture\Users\$sid"
+        foreach ($t in $tamanhos) {
+            $arq = Join-Path $dir "Image$t.png"
+            $bmp = New-Object System.Drawing.Bitmap $t, $t
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            try {
+                $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $g.DrawImage($img, 0, 0, $t, $t)
+            } finally { $g.Dispose() }
+            $bmp.Save($arq, [System.Drawing.Imaging.ImageFormat]::Png)
+            $bmp.Dispose()
+            Set-Reg $chave "Image$t" $arq 'String'
+        }
+        Passo "$($tamanhos.Count) tamanhos em $dir"
+    } finally { $img.Dispose() }
+    # a cópia no perfil do usuário é a que o Iniciar usa quando o registro ainda não foi lido
+    $meu = Join-Path $env:APPDATA 'Microsoft\Windows\AccountPictures'
+    New-Item -ItemType Directory -Path $meu -Force | Out-Null
+    Copy-Item -LiteralPath $origem -Destination (Join-Path $meu 'avatar.png') -Force
+    Passo 'foto da conta aplicada; aparece no Iniciar e na tela de login'
+}
+
+# --- 9. Explorer em Detalhes (WinSetView) -------------------------------------------------------------
 # WinSetView (Les Ferch, MIT) grava em HKCU os padrões de exibição de todos os tipos de pasta e reinicia o Explorer.
 # O INI é o do Alexandre (explorer\WinSetView\README.md). Roda em outro processo: o script mexe em Set-Location e
 # solta dezenas de linhas do reg.exe, que vão para um log próprio em vez do console.
@@ -458,7 +628,7 @@ Etapa 'Explorer em Detalhes (WinSetView)' {
     Passo 'aplicado; o Explorer foi reiniciado'
 }
 
-# --- 9. Windhawk: barra, Iniciar e central de notificações translúcidos, menus escuros, sem bordas --------
+# --- 10. Windhawk: barra, Iniciar e central de notificações translúcidos, menus escuros, sem bordas --------
 # Windhawk (winget) mais 5 mods, sem abrir a interface: desde o 1.7 os mods vêm precompilados de mods.windhawk.net e o
 # motor lê HKLM\SOFTWARE\Windhawk\Engine\Mods\<id> e carrega o mod na hora, em todos os processos já injetados. Os temas
 # Translucent (Undisputed00x) já vêm dentro dos Styler do m417z; só o setting "theme" precisa ser gravado. Cada mod:
@@ -540,91 +710,7 @@ Etapa 'Windhawk: tema Translucent' {
     Passo "serviço Windhawk: $((Get-Service -Name Windhawk -ErrorAction SilentlyContinue).Status)"
 }
 
-# --- 10. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) ------------------------
-Etapa 'Office' {
-    $odt = Join-Path $env:TEMP 'odt'
-    New-Item -ItemType Directory -Path $odt -Force | Out-Null
-    Baixar 'https://officecdn.microsoft.com/pr/wsus/setup.exe' (Join-Path $odt 'setup.exe')
-    $cfg = Join-Path $aqui 'office\Configuracao.xml'
-    Passo "setup.exe /configure $cfg (baixa uns 3 GB da Microsoft; demora)"
-    $p = Start-Process -FilePath (Join-Path $odt 'setup.exe') -ArgumentList "/configure `"$cfg`"" -Wait -PassThru
-    if ($p.ExitCode -ne 0) { throw "setup.exe do Office saiu com código $($p.ExitCode)" }
-    Passo 'instalado'
-}
-
-# --- 11. Wallpaper nos dois monitores e na tela de bloqueio ------------------------------------------
-Etapa 'Wallpaper' {
-    $wallDir = Join-Path $env:SystemRoot 'Web\Wallpaper\mywiniso'     # legível pelo SYSTEM, que desenha a tela de bloqueio
-    New-Item -ItemType Directory -Path $wallDir -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $aqui 'wallpaper\Jason_and_Lucia_Robbery_landscape.jpg') -Destination $wallDir -Force
-    $wall = Join-Path $wallDir 'Jason_and_Lucia_Robbery_landscape.jpg'
-    Passo "área de trabalho (todos os monitores): $wall"
-    Set-Reg 'HKCU:\Control Panel\Desktop' 'WallPaper'      $wall 'String'
-    Set-Reg 'HKCU:\Control Panel\Desktop' 'WallpaperStyle' '10'  'String'     # preencher
-    Set-Reg 'HKCU:\Control Panel\Desktop' 'TileWallpaper'  '0'   'String'
-    Add-Type -Namespace Win32 -Name Wallpaper -MemberDefinition '[DllImport("user32.dll", SetLastError = true)] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);'
-    if (-not [Win32.Wallpaper]::SystemParametersInfo(20, 0, $wall, 3)) { throw 'SystemParametersInfo recusou o wallpaper' }
-    Passo 'tela de bloqueio (PersonalizationCSP)'
-    $csp = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP'
-    Set-Reg $csp 'LockScreenImagePath'   $wall 'String'
-    Set-Reg $csp 'LockScreenImageUrl'    $wall 'String'
-    Set-Reg $csp 'LockScreenImageStatus' 1
-}
-
-# --- 12. Foto do perfil da conta (perfil\avatar.png) -----------------------------------------------
-# O Windows guarda a foto da conta em tamanhos fixos dentro de C:\Users\Public\AccountPictures\<SID> e
-# aponta cada um no registro, por SID. Sem esses valores a tela de login e o Iniciar mostram o boneco padrão.
-Etapa 'Foto do perfil' {
-    $origem = Join-Path $aqui 'perfil\avatar.png'
-    if (-not (Test-Path -LiteralPath $origem)) { throw "não achei $origem" }
-    $sid = ([Security.Principal.NTAccount]"$env:USERDOMAIN\$env:USERNAME").Translate([Security.Principal.SecurityIdentifier]).Value
-    $dir = Join-Path $env:PUBLIC "AccountPictures\$sid"
-    New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    Add-Type -AssemblyName System.Drawing
-    $img = [System.Drawing.Image]::FromFile($origem)
-    try {
-        $tamanhos = 32, 40, 48, 96, 192, 208, 240, 424, 448, 1080
-        $chave = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AccountPicture\Users\$sid"
-        foreach ($t in $tamanhos) {
-            $arq = Join-Path $dir "Image$t.png"
-            $bmp = New-Object System.Drawing.Bitmap $t, $t
-            $g = [System.Drawing.Graphics]::FromImage($bmp)
-            try {
-                $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-                $g.DrawImage($img, 0, 0, $t, $t)
-            } finally { $g.Dispose() }
-            $bmp.Save($arq, [System.Drawing.Imaging.ImageFormat]::Png)
-            $bmp.Dispose()
-            Set-Reg $chave "Image$t" $arq 'String'
-        }
-        Passo "$($tamanhos.Count) tamanhos em $dir"
-    } finally { $img.Dispose() }
-    # a cópia no perfil do usuário é a que o Iniciar usa quando o registro ainda não foi lido
-    $meu = Join-Path $env:APPDATA 'Microsoft\Windows\AccountPictures'
-    New-Item -ItemType Directory -Path $meu -Force | Out-Null
-    Copy-Item -LiteralPath $origem -Destination (Join-Path $meu 'avatar.png') -Force
-    Passo 'foto da conta aplicada; aparece no Iniciar e na tela de login'
-}
-
-# --- 13. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados ----------
-Etapa 'Área de Trabalho Remota e contas' {
-    Passo 'RDP ligado com autenticação de rede; regra de firewall'
-    Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' 'fDenyTSConnections' 0
-    Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' 'UserAuthentication' 1
-    Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28752'   # grupo "Área de Trabalho Remota", nome neutro de idioma
-    if (-not $Senha) { Passo 'AVISO: conta sem senha; o RDP não aceita login até você definir uma (net user Alexandre *)' }
-    Passo 'senha sem validade, sem bloqueio de conta, scripts .ps1 liberados (RemoteSigned)'
-    net.exe accounts /maxpwage:unlimited | Out-Null
-    net.exe accounts /lockoutthreshold:0 | Out-Null
-    try { Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop }
-    catch {
-        if ($Error.Count) { $Error.RemoveAt(0) }
-        Passo "Set-ExecutionPolicy recusou ($($_.Exception.Message.Trim())); gravando no registro"
-        Set-Reg 'HKLM:\SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell' 'ExecutionPolicy' 'RemoteSigned' 'String'
-    }
-}
-
-# --- 14. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação ----------
+# --- 11. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação -----------
 Etapa 'Energia' {
     # Desempenho Máximo (Ultimate Performance) vem oculto no Windows 11; /duplicatescheme cria uma cópia visível.
     # Se a cópia já existe (segunda execução), reaproveita em vez de criar outra.
@@ -646,7 +732,84 @@ Etapa 'Energia' {
     Passo ((powercfg.exe /getactivescheme) -join ' ')
 }
 
-# --- 15. NVIDIA App (não está no winget; instalador silencioso com /s) -----------------------------
+# --- 12. Programas, um a um, com resultado ----------------------------------------------------------
+# Instalador que recusa rodar elevado faz o winget sair com 0x8A150056 (INSTALLER_PROHIBITS_ELEVATION).
+# O setup roda como administrador, então esses vão por uma tarefa agendada sem elevação. O do Spotify é o
+# caso conhecido; se outro aparecer com esse código no resumo, é só acrescentar o id aqui.
+$SemElevacao = @('Spotify.Spotify')
+Etapa 'Programas (apps.json)' {
+    $lista = Get-Content -LiteralPath (Join-Path $aqui 'apps.json') -Raw | ConvertFrom-Json
+    $pacotes = @()
+    foreach ($src in $lista.Sources) {
+        foreach ($p in $src.Packages) { $pacotes += [pscustomobject]@{ Id = $p.PackageIdentifier; Fonte = $src.SourceDetails.Name } }
+    }
+    $i = 0
+    foreach ($p in $pacotes) {
+        $i++
+        Write-Host ("  [{0,2}/{1}] {2} ({3})" -f $i, $pacotes.Count, $p.Id, $p.Fonte) -ForegroundColor White
+        $argumentos = "install --id $($p.Id) --exact --source $($p.Fonte) --silent --accept-package-agreements --accept-source-agreements --disable-interactivity"
+        if ($SemElevacao -contains $p.Id) {
+            Passo 'este instalador recusa administrador; vai por tarefa agendada sem elevação'
+            # pelo powershell.exe, e não pelo winget.exe: o winget é um alias de execução de app em
+            # WindowsApps, que a tarefa agendada nem sempre resolve pelo nome
+            $codigo = Invoke-SemElevacao "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+                "-NoProfile -ExecutionPolicy Bypass -Command `"winget.exe $argumentos; exit `$LASTEXITCODE`""
+        } else {
+            winget.exe install --id $p.Id --exact --source $p.Fonte --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+            $codigo = $LASTEXITCODE
+        }
+        if ($codigo -eq 0)                    { Write-Host '        OK' -ForegroundColor Green }
+        elseif ($codigo -eq -1978335189)      { Write-Host '        já instalado, sem atualização' -ForegroundColor DarkGray }
+        else                                  { Falha ("{0}: winget saiu com código {1} (0x{2:X8})" -f $p.Id, $codigo, $codigo) }
+    }
+    Refresh-Path
+}
+
+# --- 13. RedM ----------------------------------------------------------------------------------------
+Etapa 'RedM na área de trabalho' {
+    Baixar 'https://runtime.fivem.net/redm/RedM.exe' (Join-Path $desktop 'RedM.exe')
+    Passo 'o instalador não tem modo silencioso: abra o RedM.exe uma vez'
+}
+
+# --- 14. Git -----------------------------------------------------------------------------------------
+Etapa 'git config' {
+    git.exe config --global user.name  'Alexandre Rangel'
+    git.exe config --global user.email 'mamutal91@gmail.com'
+    git.exe config --global init.defaultBranch main
+    Passo "user.name=$(git.exe config --global user.name) user.email=$(git.exe config --global user.email)"
+}
+
+# --- 15. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) -------------------------
+Etapa 'Office' {
+    $odt = Join-Path $env:TEMP 'odt'
+    New-Item -ItemType Directory -Path $odt -Force | Out-Null
+    Baixar 'https://officecdn.microsoft.com/pr/wsus/setup.exe' (Join-Path $odt 'setup.exe')
+    $cfg = Join-Path $aqui 'office\Configuracao.xml'
+    Passo "setup.exe /configure $cfg (baixa uns 3 GB da Microsoft; demora)"
+    $p = Start-Process -FilePath (Join-Path $odt 'setup.exe') -ArgumentList "/configure `"$cfg`"" -Wait -PassThru
+    if ($p.ExitCode -ne 0) { throw "setup.exe do Office saiu com código $($p.ExitCode)" }
+    Passo 'instalado'
+}
+
+# --- 16. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados -----------
+Etapa 'Área de Trabalho Remota e contas' {
+    Passo 'RDP ligado com autenticação de rede; regra de firewall'
+    Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' 'fDenyTSConnections' 0
+    Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' 'UserAuthentication' 1
+    Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28752'   # grupo "Área de Trabalho Remota", nome neutro de idioma
+    if (-not $Senha) { Passo 'AVISO: conta sem senha; o RDP não aceita login até você definir uma (net user Alexandre *)' }
+    Passo 'senha sem validade, sem bloqueio de conta, scripts .ps1 liberados (RemoteSigned)'
+    net.exe accounts /maxpwage:unlimited | Out-Null
+    net.exe accounts /lockoutthreshold:0 | Out-Null
+    try { Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop }
+    catch {
+        if ($Error.Count) { $Error.RemoveAt(0) }
+        Passo "Set-ExecutionPolicy recusou ($($_.Exception.Message.Trim())); gravando no registro"
+        Set-Reg 'HKLM:\SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell' 'ExecutionPolicy' 'RemoteSigned' 'String'
+    }
+}
+
+# --- 17. NVIDIA App (não está no winget; instalador silencioso com /s) ------------------------------
 Etapa 'NVIDIA App' {
     $url = 'https://us.download.nvidia.com/nvapp/client/11.0.9.251/NVIDIA_app_v11.0.9.251.exe'   # reserva, caso a página mude
     try {
@@ -663,7 +826,7 @@ Etapa 'NVIDIA App' {
     else { Passo 'NVIDIA App instalado' }
 }
 
-# --- 16. MariaDB: serviço automático, root com a senha da conta e acesso remoto --------------------
+# --- 18. MariaDB: serviço automático, root com a senha da conta e acesso remoto ---------------------
 Etapa 'MariaDB' {
     $maria = Get-ChildItem -Path 'C:\Program Files\MariaDB*' -Directory -ErrorAction Ignore | Select-Object -First 1
     if (-not $maria) { throw 'não instalado (MariaDB.Server falhou no winget?)' }
@@ -693,7 +856,7 @@ Etapa 'MariaDB' {
     }
 }
 
-# --- 17. Fonte Cascadia Mono (máquina), console e VS Code --------------------------------------------
+# --- 19. Fonte Cascadia Mono (máquina), console e VS Code ---------------------------------------------
 Etapa 'Cascadia Mono, console e VS Code' {
     $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/cascadia-code/releases/latest' -Headers @{ 'User-Agent' = 'PowerShell' }
     $asset = $rel.assets | Where-Object { $_.name -like 'CascadiaCode-*.zip' } | Select-Object -First 1
@@ -745,7 +908,7 @@ Etapa 'Cascadia Mono, console e VS Code' {
     Passo "VS Code: $vsArq"
 }
 
-# --- 18. Perfil do PowerShell (powershell\profile.ps1) ----------------------------------------------
+# --- 20. Perfil do PowerShell (powershell\profile.ps1) -----------------------------------------------
 Etapa 'Perfil do PowerShell' {
     $docs = [Environment]::GetFolderPath('MyDocuments')
     New-Item -ItemType Directory -Path (Join-Path $docs 'PowerShell'), (Join-Path $docs 'WindowsPowerShell') -Force | Out-Null
@@ -754,7 +917,7 @@ Etapa 'Perfil do PowerShell' {
     Passo "$docs\PowerShell\profile.ps1 (o do Windows PowerShell aponta para ele)"
 }
 
-# --- 19. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" --------------
+# --- 21. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" ---------------
 Etapa 'Barra de tarefas e tarefa de logon' {
     $layout = Join-Path $aqui 'taskbar\LayoutModification.xml'
     foreach ($shell in (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Shell'), 'C:\Users\Default\AppData\Local\Microsoft\Windows\Shell') {
@@ -779,16 +942,16 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     Stop-Process -Name explorer -Force -ErrorAction Ignore
 }
 
-# --- 20. WSL com Debian (wsl\debian.sh configura por dentro) ---------------------------------------
+# --- 22. WSL com Debian (wsl\debian.sh configura por dentro) ----------------------------------------
 Etapa 'WSL com Debian e zsh' {
-    wsl.exe --status 2>$null | Out-Null
+    Silencioso { wsl.exe --status 2>&1 | Out-Null }
     if ($LASTEXITCODE -ne 0) {
         Passo 'WSL ainda não instalado; instalando sem distro (precisa reiniciar depois)'
-        wsl.exe --install --no-distribution
-        if ($LASTEXITCODE -ne 0) {
-            # num Windows recém-instalado o componente entra mas o wsl.exe ainda responde com erro até reiniciar
-            Falha "wsl --install saiu com código $LASTEXITCODE (normal antes do primeiro reinício)"
-        }
+        # num Windows recém-instalado o componente entra mas o wsl.exe só responde certo depois de reiniciar,
+        # e até lá ele escreve em stderr "o WSL não está instalado". Não é falha: é o caminho normal na
+        # primeira passada. Por isso Silencioso e Passo, e não Falha, que sujava o resumo com sete linhas.
+        Silencioso { wsl.exe --install --no-distribution 2>&1 | Out-Host }
+        if ($LASTEXITCODE -ne 0) { Passo "wsl --install saiu com código $LASTEXITCODE, o normal antes do primeiro reinício" }
         Passo 'reinicie e rode mywiniso-setup.cmd de novo para instalar e configurar o Debian'
     } else {
         $distros = ((wsl.exe --list --quiet 2>$null) -join "`n") -replace "`0", ''
@@ -806,29 +969,21 @@ Etapa 'WSL com Debian e zsh' {
     }
 }
 
-# --- 21. Drivers e atualizações pelo Windows Update ------------------------------------------------
+# --- 23. Resto dos drivers e as atualizações, pelo Windows Update -------------------------------------------------
 Etapa 'Windows Update (drivers)' {
-    Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null
-    Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-    Install-Module -Name PSWindowsUpdate -Force -Scope AllUsers
+    Silencioso { Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null }
+    # O Set-PSRepository do PowerShellGet 5.1 reclama de 'PackageManagementProvider' e de 'SourceLocation'
+    # quando o PSGallery foi registrado por uma versão mais nova do PackageManagement. A confiança é aplicada
+    # de todo jeito, e o que vem depois só depende dela: se o PSGallery ficar mesmo inacessível, o
+    # Import-Module abaixo falha e a etapa fecha em ERRO, que é o certo. Silencioso só tira o ruído.
+    Silencioso { Set-PSRepository -Name PSGallery -InstallationPolicy Trusted }
+    Silencioso { Install-Module -Name PSWindowsUpdate -Force -Scope AllUsers }
     Import-Module PSWindowsUpdate
-    Passo 'procurando e instalando atualizações e drivers (o driver da NVIDIA vem por aqui)'
+    Passo 'procurando e instalando o resto das atualizações e drivers (o de vídeo já veio na etapa 4)'
     Get-WindowsUpdate -AcceptAll -Install -IgnoreReboot | Out-Host
 }
 
-# --- 22. Monitores: resolução, frequência, orientação e posição (monitores\monitores.json) --------
-# Depois do Windows Update de propósito: 180 Hz e 1440p só aparecem com o driver da placa instalado.
-# Se rodar antes, o driver genérico recusa o modo e a etapa avisa; rodar o setup de novo resolve.
-Etapa 'Monitores (resolução, Hz, posição)' {
-    $mon  = Join-Path $aqui 'monitores\monitores.ps1'
-    $json = Join-Path $aqui 'monitores\monitores.json'
-    if (-not (Test-Path -LiteralPath $json)) { throw "não achei $json" }
-    Passo 'ASUS XG27ACS em 2560x1440 a 180 Hz como principal; LG UltraGear em 1920x1080 a 144 Hz, de pé, à esquerda'
-    & $mon -Arquivo $json
-    if ($LASTEXITCODE -ne 0) { Falha "monitores: $LASTEXITCODE monitor(es) não ficaram como no monitores.json; confira o driver da placa e rode de novo" }
-}
-
-# --- 23. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) --------------
+# --- 24. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) ---------------
 # No Windows dá para abrir console de vários lugares (cmd, Windows PowerShell, PowerShell 7, Git Bash, WSL) e
 # cada um abria numa janela diferente. Aqui o Windows Terminal passa a ser o console padrão do sistema: tudo que
 # abrir console aparece nele, em abas, e os cinco shells ficam num menu só. O padrão é o PowerShell 7.
@@ -852,7 +1007,7 @@ Etapa 'Windows Terminal como terminal único' {
     Passo 'qualquer console do Windows abre no Windows Terminal'
 }
 
-# --- 24. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo --------------------
+# --- 25. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo ---------------------
 # Vem do Sophia Script (farag2), que trata isso melhor que qualquer outra ferramenta. Três tarefas agendadas
 # que rodam sozinhas, o armazenamento reservado liberado (~7 GB), o compartilhamento P2P de updates desligado
 # e as dez tarefas de telemetria que rodam em segundo plano. A pior delas, o Compatibility Appraiser, varre o

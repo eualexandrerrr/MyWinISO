@@ -239,7 +239,7 @@ foreach ($file in $Document.GetElementsByTagName('File')) {
 ' copia este XML completo para C:\Windows\Panther e reinicia pelo disco. Se algo falhar, abre o log no Bloco
 ' de Notas e sai com erro: o Setup para, e antes do diskpart nada foi apagado. Pendrives nunca sao candidatos.
 Option Explicit
-Const SERIAL = "AA09B5211012T9"   ' Get-Disk | Select-Object FriendlyName, SerialNumber
+Const SERIAL = "6479A7AABAC014A3"   ' Get-Disk | Select-Object FriendlyName, SerialNumber; Limpo() tira os "_" e o "."
 Const MODELO = "MP700 ELITE"
 Const EDICAO = "Windows 11 Pro"   ' nome da imagem dentro do install.wim (dism /Get-WimInfo)
 Const ARQLOG = "X:\mywiniso\instala.log"
@@ -350,7 +350,9 @@ function Set-Reg([string] $Path, [string] $Name, $Value, [string] $Type = 'DWord
     if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force | Out-Null }
     Set-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -Type $Type -Force
 }
-function Reg([string] $Args) { $saida = cmd.exe /c "reg.exe $Args 2>&1"; if ($LASTEXITCODE -ne 0) { throw "reg.exe $Args -> $saida" } }
+# $Args, nao: e variavel automatica do PowerShell, o parametro nunca receberia o valor e o reg.exe
+# rodaria sem argumento nenhum ("ERRO: sintaxe invalida"), levando o bloco inteiro com ele.
+function Reg([string] $Cmd) { $saida = cmd.exe /c "reg.exe $Cmd 2>&1"; if ($LASTEXITCODE -ne 0) { throw "reg.exe $Cmd -> $saida" } }
 
 Faz 'Bloatware: pacotes provisionados' {
     # Ficam: Loja e App Installer (o winget depende deles), Bloco de Notas, Calculadora, Fotos, Terminal, Xbox Identity Provider.

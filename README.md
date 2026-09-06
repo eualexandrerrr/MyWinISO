@@ -15,7 +15,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 
 ---
 
-> **Apaga o disco inteiro.** O alvo é o Corsair MP700 ELITE (serial `AA09B5211012T9`).
+> **Apaga o disco inteiro.** O alvo é o Corsair MP700 ELITE (serial `6479A7AABAC014A3`).
 > O script só particiona se achar exatamente esse disco; qualquer outro cenário aborta antes
 > de gravar. Mesmo assim: backup antes.
 
@@ -29,7 +29,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
 | 6 | `primeiro-logon.ps1` | baixa o `setup.ps1` deste repositório e roda; deixa `mywiniso-setup.cmd` na área de trabalho |
-| 7 | `setup.ps1` | as 24 etapas abaixo |
+| 7 | `setup.ps1` | as 25 etapas abaixo |
 
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção. No WinPE,
@@ -53,7 +53,7 @@ Cada script mostra o estado real, não uma barra decorativa:
 - **specialize**: cada bloco aparece como `-> nome`, com os pacotes removidos um a um, e termina em `OK` ou `ERRO` com a mensagem.
 - **primeiro logon**: uma janela de console que diz o que está fazendo (espera pela rede com contagem de tentativas,
   download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela.
-- **setup.ps1**: cada etapa como `[n/24] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
+- **setup.ps1**: cada etapa como `[n/25] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
   `já instalado` ou `FALHOU (código)`, e no fim de cada etapa `OK`, `AVISO` (erros não fatais, listados) ou
   `ERRO` (a etapa parou, a mensagem aparece). Uma etapa com erro não derruba as seguintes. No final, um resumo
   de todas as etapas com tempo, a lista de programas que falharam e o caminho do log.
@@ -64,32 +64,37 @@ Logs: `C:\Windows\Setup\Scripts\especializar.log`, `~\mywiniso.log` (primeiro lo
 
 Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou o `irm` abaixo).
 
+As etapas **4 a 11** são as que mudam o que se vê. Vêm de propósito antes dos programas (etapa 12,
+que sozinha leva uns treze minutos): em uns quatro minutos a máquina já está com o driver da placa,
+nos 2560x1440 a 180 Hz, no tema escuro, com o wallpaper e a barra no lugar, e o resto se instala por baixo.
+
 | # | Etapa |
 |:--|:--|
 | 1 | ponto de restauração antes de mexer em qualquer coisa |
 | 2 | garante que o winget funciona e, se a ISO trouxe um velho (o 1.9 não fala mais com a msstore), instala o release atual do GitHub |
 | 3 | instala o Git e clona este repositório em `~\Projetos\mywiniso`; sem Git, baixa o zip e segue |
-| 4 | programas do `apps.json`, um a um, com resultado na tela: 44 do winget, e WhatsApp e Bloco de Notas da Loja |
-| 5 | RedM na área de trabalho (o instalador não tem modo silencioso) |
-| 6 | `git config` com nome e e-mail |
-| 7 | preferências do usuário (tabela abaixo) |
-| 8 | Explorer em Detalhes em todas as pastas, com as colunas do Alexandre, pelo WinSetView (`explorer/WinSetView/`) |
-| 9 | Windhawk com os temas Translucent do Undisputed00x na barra, no Iniciar e na central de notificações, menus de contexto escuros e janelas sem borda; tudo por registro, sem abrir o Windhawk |
-| 10 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`) |
-| 11 | wallpaper nos dois monitores e na tela de bloqueio |
-| 12 | foto do perfil da conta (`perfil/avatar.png`) no Iniciar e na tela de login |
-| 13 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
-| 14 | energia: plano Desempenho Máximo, nunca suspende nem hiberna, tela apaga em 5 minutos |
-| 15 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
-| 16 | MariaDB como serviço, root com a senha da conta e acesso remoto |
-| 17 | fonte Cascadia Mono na máquina, no console e no terminal do VS Code |
-| 18 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
-| 19 | barra de tarefas com Explorer, Firefox, Discord, VS Code, WinSCP e Chrome; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar |
-| 20 | WSL com Debian: usuário `alexandre` com zsh, sudo sem senha, systemd (`wsl/debian.sh`) |
-| 21 | drivers e atualizações pelo Windows Update |
-| 22 | monitores: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`) |
-| 23 | Windows Terminal instalado, atualizado e como console padrão do sistema, com cinco shells em abas (`terminal/settings.json`) |
-| 24 | manutenção: três tarefas de limpeza que rodam sozinhas, armazenamento reservado liberado, sem compartilhar updates com a internet, backup do registro e as tarefas de telemetria de fundo desligadas |
+| 4 | **driver de vídeo da NVIDIA**, o mais novo, baixado da própria NVIDIA pela API que a página de download usa; instalado em silêncio com `-s -clean -noreboot` |
+| 5 | **monitores**: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`); tenta três vezes, porque o driver acabou de assumir |
+| 6 | **preferências do usuário**: tema escuro, barra centralizada e só no monitor principal, Explorer, teclado, mouse, privacidade (tabela abaixo) |
+| 7 | **wallpaper** nos dois monitores e na tela de bloqueio |
+| 8 | **foto do perfil** da conta (`perfil/avatar.png`) no Iniciar e na tela de login |
+| 9 | **Explorer em Detalhes** em todas as pastas, com as colunas do Alexandre, pelo WinSetView (`explorer/WinSetView/`); reinicia o Explorer, e é aqui que tema, barra e wallpaper passam a valer |
+| 10 | **Windhawk** com os temas Translucent do Undisputed00x na barra, no Iniciar e na central de notificações, menus de contexto escuros e janelas sem borda; tudo por registro, sem abrir o Windhawk |
+| 11 | **energia**: plano Desempenho Máximo, nunca suspende nem hiberna, tela apaga em 5 minutos |
+| 12 | programas do `apps.json`, um a um, com resultado na tela: 44 do winget, e WhatsApp e Bloco de Notas da Loja. Instalador que recusa administrador (o do Spotify) vai por tarefa agendada sem elevação |
+| 13 | RedM na área de trabalho (o instalador não tem modo silencioso) |
+| 14 | `git config` com nome e e-mail |
+| 15 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`) |
+| 16 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
+| 17 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
+| 18 | MariaDB como serviço, root com a senha da conta e acesso remoto |
+| 19 | fonte Cascadia Mono na máquina, no console e no terminal do VS Code |
+| 20 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
+| 21 | barra de tarefas com Explorer, Firefox, Discord, VS Code, WinSCP e Chrome; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar. Depois dos programas, porque os pinos precisam dos apps instalados |
+| 22 | WSL com Debian: usuário `alexandre` com zsh, sudo sem senha, systemd (`wsl/debian.sh`) |
+| 23 | resto dos drivers e as atualizações, pelo Windows Update (o de vídeo já veio na etapa 4) |
+| 24 | Windows Terminal instalado, atualizado e como console padrão do sistema, com cinco shells em abas (`terminal/settings.json`) |
+| 25 | manutenção: três tarefas de limpeza que rodam sozinhas, armazenamento reservado liberado, sem compartilhar updates com a internet, backup do registro e as tarefas de telemetria de fundo desligadas |
 
 ## Programas
 
@@ -166,7 +171,7 @@ disk*, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). Ou desligue o Secure Boot na UEFI s
 
 | | Valor | Onde mudar |
 |:--|:--|:--|
-| Disco | serial `AA09B5211012T9` ou modelo `MP700 ELITE` | `SERIAL` e `MODELO` no `instala.vbs`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
+| Disco | serial `6479A7AABAC014A3` ou modelo `MP700 ELITE` | `SERIAL` e `MODELO` no `instala.vbs`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
 | Edição | `Windows 11 Pro`, pelo nome da imagem dentro do `install.wim` | `EDICAO` no `instala.vbs`; `dism /Get-WimInfo` lista os nomes |
 | Ativação | licença digital gravada na placa-mãe | |
 | ISO | Windows 11 em Português (Brasil), da Microsoft | |
