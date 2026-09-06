@@ -863,14 +863,17 @@ Etapa 'Preferências do usuário' {
     $pal = New-Object byte[] 32
     $i = 0
     foreach ($f in 60, 40, 20, 0, -20, -40, -60, -80) { $t = Tom $f; [Array]::Copy($t, 0, $pal, $i * 4, 4); $i++ }
-    function Abgr([byte[]] $t) { [uint32](0xFF000000 -bor ([uint32]$t[2] -shl 16) -bor ([uint32]$t[1] -shl 8) -bor [uint32]$t[0]) }
+    # o L nos literais nao e enfeite: sem ele o Windows PowerShell 5.1 le 0xFF000000/0xC4000000 como
+    # Int32, que nao cabe, e entrega negativo; o [uint32] entao lanca "valor era muito grande ou muito
+    # pequeno para UInt32" e a etapa inteira morre bem no fim. Com o L o literal e Int64 positivo.
+    function Abgr([byte[]] $t) { [uint32](0xFF000000L -bor ([uint32]$t[2] -shl 16) -bor ([uint32]$t[1] -shl 8) -bor [uint32]$t[0]) }
     $acc = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent'
     Set-Reg $acc 'AccentPalette'   $pal 'Binary'
     Set-Reg $acc 'AccentColorMenu' (Abgr (Tom 0))   'DWord'
     Set-Reg $acc 'StartColorMenu'  (Abgr (Tom -20)) 'DWord'
     Set-Reg 'HKCU:\Software\Microsoft\Windows\DWM' 'AccentColor'         (Abgr (Tom 0)) 'DWord'
-    Set-Reg 'HKCU:\Software\Microsoft\Windows\DWM' 'ColorizationColor'   ([uint32](0xC4000000 -bor $rgb)) 'DWord'
-    Set-Reg 'HKCU:\Software\Microsoft\Windows\DWM' 'ColorizationAfterglow' ([uint32](0xC4000000 -bor $rgb)) 'DWord'
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\DWM' 'ColorizationColor'   ([uint32](0xC4000000L -bor $rgb)) 'DWord'
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\DWM' 'ColorizationAfterglow' ([uint32](0xC4000000L -bor $rgb)) 'DWord'
     Set-Reg 'HKCU:\Control Panel\Desktop' 'AutoColorization' 0
     # avisa quem está aberto (Explorer, Configurações) que a cor mudou
     if (-not ('Win32.Aviso' -as [type])) {
