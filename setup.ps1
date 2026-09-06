@@ -6,7 +6,7 @@
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
 
-  O console mostra cada etapa como [n/29], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
+  O console mostra cada etapa como [n/28], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
   listados) ou ERRO (a etapa parou; a mensagem aparece). Nenhuma etapa derruba as seguintes. No final sai um
   resumo de todas as etapas e dos programas que falharam. Tudo vai também para ~\mywiniso-setup.log.
 
@@ -15,25 +15,24 @@
   vê (driver, monitores, tema, wallpaper, barra), e só então vêm os programas, que sozinhos levam uns
   treze minutos. Em uns cinco minutos a máquina já está na cara certa e o resto instala por baixo.
 
-   1. ponto de restauração antes de mexer    16. RedM na área de trabalho
-   2. garante que o winget funciona          17. git config
-   3. Git e clone em ~\Projetos\mywiniso     18. Office
-   4. Claude Code (CLI)                      19. Área de Trabalho Remota e política de senha
-   5. driver de vídeo, direto da NVIDIA      20. NVIDIA App (instalador silencioso)
-   6. monitores: resolução, Hz e posição     21. MariaDB: serviço e root
-   7. preferências do usuário (tema escuro)  22. fonte Cascadia Mono, console e VS Code
-   8. wallpaper e tela de bloqueio           23. perfil do PowerShell
-   9. foto do perfil                         24. barra de tarefas e tarefa de logon
-  10. Explorer em Detalhes (WinSetView)      25. wallpaper do monitor em pé
-  11. Windhawk: tema Translucent             26. WSL com Debian e zsh
-  12. energia: tela apaga em 5 min           27. Windows Update (resto dos drivers)
-  13. programas do apps.json, um a um        28. Windows Terminal como terminal único
-  14. Lightshot: só Shift+PrintScreen        29. manutenção: limpeza e telemetria
-  15. Chrome: senhas só no Proton Pass
+   1. ponto de restauração antes de mexer    15. Chrome: senhas só no Proton Pass
+   2. garante que o winget funciona          16. RedM instalado e fixado na barra
+   3. Git e clone em ~\Projetos\mywiniso     17. git config
+   4. Claude Code (CLI)                      18. Office
+   5. driver de vídeo, direto da NVIDIA      19. Área de Trabalho Remota e política de senha
+   6. monitores: resolução, Hz e posição     20. NVIDIA App (instalador silencioso)
+   7. preferências do usuário (tema escuro)  21. MariaDB: serviço e root
+   8. wallpaper, um por monitor              22. fonte Cascadia Mono, console e VS Code
+   9. foto do perfil                         23. perfil do PowerShell
+  10. Explorer em Detalhes (WinSetView)      24. barra de tarefas e tarefa de logon
+  11. Windhawk: tema Translucent             25. WSL com Debian e zsh
+  12. energia: tela apaga em 5 min           26. Windows Update (resto dos drivers)
+  13. programas do apps.json, um a um        27. Windows Terminal como terminal único
+  14. Lightshot: só Shift+PrintScreen        28. manutenção: limpeza e telemetria
 
-  A etapa 25 é a única fora de lugar de propósito: reiniciar o Explorer desfaz a atribuição de wallpaper
-  por monitor, e o Explorer reinicia na 10 e no fim da 24. Então o monitor em pé só recebe a imagem
-  dele depois disso, e a etapa 8 deixa a paisagem nos dois enquanto o setup corre.
+  A etapa 8 termina esperando o Explorer gravar o TranscodedImageCache. Sem essa espera, o reinício do
+  Explorer na etapa 10 desfaz a atribuição de wallpaper por monitor e o monitor em pé perde a imagem
+  dele. Com ela, sobrevive. Medido, não suposto.
 #>
 param([string] $Senha = $env:MYWINISO_SENHA)
 
@@ -65,7 +64,7 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$TotalEtapas = 29
+$TotalEtapas = 28
 $NumEtapa    = 0
 $Resultado   = New-Object System.Collections.Generic.List[object]
 $Falhas      = New-Object System.Collections.Generic.List[string]
@@ -599,35 +598,136 @@ Etapa 'Preferências do usuário' {
     Remove-Item -LiteralPath (Join-Path $desktop 'Microsoft Edge.lnk'), 'C:\Users\Public\Desktop\Microsoft Edge.lnk' -Force -ErrorAction Ignore
 }
 
-# --- 8. Wallpaper e tela de bloqueio ----------------------------------------------------------------
-# Aqui entra a paisagem nos dois monitores, para a máquina já ficar com cara de gente nesta altura do
-# setup. A imagem em retrato do monitor em pé NÃO entra aqui: o registro só guarda uma imagem para todos
-# os monitores, e a atribuição por monitor (IDesktopWallpaper) não sobrevive a um reinício do Explorer,
-# que ainda vai acontecer duas vezes: na etapa 10 (WinSetView) e no fim da etapa 24 (barra de tarefas).
-# Testado: depois do Stop-Process explorer, o monitor em pé volta para o valor único do registro.
-# Por isso o retrato fica para a etapa 25, depois do último reinício do Explorer.
+# --- 8. Wallpaper: uma imagem por monitor, e a tela de bloqueio --------------------------------------
+# O registro (Control Panel\Desktop\WallPaper) guarda UMA imagem para todos os monitores. Uma por monitor
+# só existe pela interface COM IDesktopWallpaper (Windows 8+), a mesma que a Personalização usa quando
+# você clica com o direito numa imagem e escolhe "Definir para o monitor 2".
+#
+# Qual imagem para qual monitor: em vez de casar por nome de dispositivo, que muda de porta para porta, a
+# etapa pergunta o retângulo de cada monitor e olha a forma. Mais alto que largo é o retrato (a LG em pé,
+# girada 90 pela etapa 6) e recebe a imagem em retrato; os outros ficam com a paisagem. Funciona igual se
+# as portas trocarem, e não quebra se só um monitor estiver ligado.
+#
+# A espera no fim não é decorativa. O Explorer só grava a atribuição por monitor em
+# Control Panel\Desktop\TranscodedImageCache_00N alguns segundos depois do SetWallpaper. Se ele morrer
+# antes disso, e ele reinicia na etapa 10 e no fim da etapa 24, volta todos os monitores para o valor
+# único do registro e o monitor em pé perde a imagem. Medido nesta máquina: sem a espera desfaz, com a
+# espera sobrevive. Por isso a etapa só termina depois de ver as chaves no registro.
 $WallPaisagem = 'Jason_and_Lucia_Robbery_landscape.jpg'
 $WallRetrato  = 'Real_Dimez_portrait.jpg'
-$WallDir      = Join-Path $env:SystemRoot 'Web\Wallpaper\mywiniso'   # legível pelo SYSTEM, que desenha a tela de bloqueio
-Etapa 'Wallpaper e tela de bloqueio' {
-    New-Item -ItemType Directory -Path $WallDir -Force | Out-Null
+Etapa 'Wallpaper (um por monitor)' {
+    $wallDir = Join-Path $env:SystemRoot 'Web\Wallpaper\mywiniso'   # legível pelo SYSTEM, que desenha a tela de bloqueio
+    New-Item -ItemType Directory -Path $wallDir -Force | Out-Null
     foreach ($nome in $WallPaisagem, $WallRetrato) {
         $origem = Join-Path $aqui "wallpaper\$nome"
         if (-not (Test-Path -LiteralPath $origem)) { throw "não achei $origem" }
-        Copy-Item -LiteralPath $origem -Destination $WallDir -Force
+        Copy-Item -LiteralPath $origem -Destination $wallDir -Force
     }
-    $wall = Join-Path $WallDir $WallPaisagem
-    Passo "área de trabalho (todos os monitores por enquanto): $wall"
-    Set-Reg 'HKCU:\Control Panel\Desktop' 'WallPaper'      $wall 'String'
-    Set-Reg 'HKCU:\Control Panel\Desktop' 'WallpaperStyle' '10'  'String'     # preencher
-    Set-Reg 'HKCU:\Control Panel\Desktop' 'TileWallpaper'  '0'   'String'
-    Add-Type -Namespace Win32 -Name Wallpaper -MemberDefinition '[DllImport("user32.dll", SetLastError = true)] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);'
-    if (-not [Win32.Wallpaper]::SystemParametersInfo(20, 0, $wall, 3)) { throw 'SystemParametersInfo recusou o wallpaper' }
-    Passo "o monitor em pé recebe $WallRetrato na etapa 25, depois do último reinício do Explorer"
+    $paisagem = Join-Path $wallDir $WallPaisagem
+    $retrato  = Join-Path $wallDir $WallRetrato
+
+    # Tudo que toca COM fica dentro do C#: o Windows PowerShell 5.1 rebaixa objeto COM para
+    # System.__ComObject e perde a interface, então chamar $dw.Metodo() do PowerShell falha com "não
+    # contém um método denominado...". Os 8 métodos estão na ordem exata da vtable, que é o que define
+    # qual slot é chamado; a declaração tem de ir até o mais alto que se usa (SetPosition).
+    if (-not ('MyWinIso.Wallpaper' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+namespace MyWinIso {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left, Top, Right, Bottom; }
+
+    [ComImport, Guid("B92B56A9-8B55-4E14-9A89-0199BBB6F93B"),
+     InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IDesktopWallpaper {
+        void SetWallpaper([MarshalAs(UnmanagedType.LPWStr)] string monitorID,
+                          [MarshalAs(UnmanagedType.LPWStr)] string wallpaper);
+        [return: MarshalAs(UnmanagedType.LPWStr)] string GetWallpaper([MarshalAs(UnmanagedType.LPWStr)] string monitorID);
+        [return: MarshalAs(UnmanagedType.LPWStr)] string GetMonitorDevicePathAt(uint monitorIndex);
+        uint GetMonitorDevicePathCount();
+        RECT GetMonitorRECT([MarshalAs(UnmanagedType.LPWStr)] string monitorID);
+        void SetBackgroundColor(uint color);
+        uint GetBackgroundColor();
+        void SetPosition(int position);
+    }
+
+    public class MonitorInfo {
+        public string Id;
+        public int Width, Height, Left, Top;
+        public bool Portrait;
+    }
+
+    public static class Wallpaper {
+        static IDesktopWallpaper Novo() {
+            Type t = Type.GetTypeFromCLSID(new Guid("C2CF3110-460E-4FC1-B9D0-8A1C0C9CC4BD"));
+            // o cast tem de ser aqui, no C#: e ele que vira um QueryInterface de verdade
+            return (IDesktopWallpaper)Activator.CreateInstance(t);
+        }
+        public static MonitorInfo[] Monitores() {
+            IDesktopWallpaper dw = Novo();
+            uint n = dw.GetMonitorDevicePathCount();
+            List<MonitorInfo> lista = new List<MonitorInfo>();
+            for (uint i = 0; i < n; i++) {
+                string id = dw.GetMonitorDevicePathAt(i);
+                if (string.IsNullOrEmpty(id)) continue;
+                RECT r;
+                // monitor que ja foi ligado mas esta desconectado agora aparece na lista sem retangulo
+                try { r = dw.GetMonitorRECT(id); } catch { continue; }
+                int w = r.Right - r.Left, h = r.Bottom - r.Top;
+                if (w <= 0 || h <= 0) continue;
+                lista.Add(new MonitorInfo { Id = id, Width = w, Height = h, Left = r.Left, Top = r.Top, Portrait = h > w });
+            }
+            return lista.ToArray();
+        }
+        public static string Atual(string id) { return Novo().GetWallpaper(id); }
+        public static void Definir(string id, string imagem) { Novo().SetWallpaper(id, imagem); }
+        public static void Posicao(int p) { Novo().SetPosition(p); }
+    }
+}
+'@
+    }
+
+    # o valor único do registro primeiro: é o que vale para conta nova, para sessão de RDP e para
+    # qualquer caminho que não passe pela IDesktopWallpaper
+    Set-Reg 'HKCU:\Control Panel\Desktop' 'WallPaper'      $paisagem 'String'
+    Set-Reg 'HKCU:\Control Panel\Desktop' 'WallpaperStyle' '10'      'String'     # preencher
+    Set-Reg 'HKCU:\Control Panel\Desktop' 'TileWallpaper'  '0'       'String'
+
+    [MyWinIso.Wallpaper]::Posicao(4)      # 4 = DWPOS_FILL, o equivalente ao WallpaperStyle 10 do registro
+    $monitores = [MyWinIso.Wallpaper]::Monitores()
+    Passo "$($monitores.Count) monitor(es) ligados"
+    foreach ($m in $monitores) {
+        $img = if ($m.Portrait) { $retrato } else { $paisagem }
+        Passo ("  {0}x{1} em {2},{3} -> {4}" -f $m.Width, $m.Height, $m.Left, $m.Top, (Split-Path $img -Leaf))
+        try { [MyWinIso.Wallpaper]::Definir($m.Id, $img) }
+        catch { Falha ("wallpaper do monitor {0}x{1}: {2}" -f $m.Width, $m.Height, $_.Exception.Message) }
+    }
+
+    Passo 'esperando o Explorer gravar o TranscodedImageCache (sem isso o reinício dele desfaz o de cada monitor)'
+    $limite = (Get-Date).AddSeconds(60)
+    do {
+        Start-Sleep -Seconds 2
+        $caches = @((Get-Item -LiteralPath 'HKCU:\Control Panel\Desktop').Property | Where-Object { $_ -match '^TranscodedImageCache_\d+$' })
+    } while ($caches.Count -lt $monitores.Count -and (Get-Date) -lt $limite)
+    if ($caches.Count -lt $monitores.Count) {
+        Falha "o Explorer gravou $($caches.Count) TranscodedImageCache_NNN para $($monitores.Count) monitor(es); o reinício do Explorer na etapa 10 pode desfazer o wallpaper do monitor em pé"
+    } else {
+        Passo "$($caches.Count) TranscodedImageCache_NNN no registro; a imagem de cada monitor sobrevive ao reinício do Explorer"
+    }
+
+    # confere lendo de volta, que é a única forma de saber se pegou
+    foreach ($m in $monitores) {
+        $esperado = if ($m.Portrait) { $retrato } else { $paisagem }
+        $agora = try { [MyWinIso.Wallpaper]::Atual($m.Id) } catch { '' }
+        if ($agora -ne $esperado) { Falha ("o monitor {0}x{1} ficou com '{2}' em vez de '{3}'" -f $m.Width, $m.Height, (Split-Path $agora -Leaf), (Split-Path $esperado -Leaf)) }
+    }
+
     Passo 'tela de bloqueio (PersonalizationCSP)'
     $csp = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP'
-    Set-Reg $csp 'LockScreenImagePath'   $wall 'String'
-    Set-Reg $csp 'LockScreenImageUrl'    $wall 'String'
+    Set-Reg $csp 'LockScreenImagePath'   $paisagem 'String'
+    Set-Reg $csp 'LockScreenImageUrl'    $paisagem 'String'
     Set-Reg $csp 'LockScreenImageStatus' 1
 }
 
@@ -916,14 +1016,9 @@ Etapa 'Chrome: senhas no Proton Pass e extensões' {
         Set-Reg $lista "$i" "$id;https://clients2.google.com/service/update2/crx" 'String'
     }
 
-    # O Enhancer for YouTube guarda a configuração dentro do perfil do Chrome (chrome.storage) e não tem
-    # política de managed storage, então não dá para injetar de fora. O que dá é deixar o arquivo de
-    # backup pronto: na extensão, Opções > Importar configurações > escolher este arquivo.
-    $backup = Join-Path $aqui 'chrome\enhancer-for-youtube.json'
-    if (Test-Path -LiteralPath $backup) {
-        Passo "config do Enhancer for YouTube pronta para importar: $backup"
-        Passo '  (na extensão: Opções > Importar configurações; não dá para injetar de fora)'
-    } else { Falha "não achei $backup" }
+    # A configuração do Enhancer for YouTube não vem daqui: a extensão guarda tudo dentro do perfil do
+    # Chrome (chrome.storage) e não tem política de managed storage, então não há como injetar de fora.
+    # O backup fica com o Alexandre; a importação é na mão, em Opções > Importar configurações.
 
     $pp = Get-ChildItem 'C:\Program Files\Proton\Proton Pass', "$env:LOCALAPPDATA\Programs\Proton Pass" -ErrorAction Ignore | Select-Object -First 1
     if ($pp) { Passo 'Proton Pass para Windows instalado (veio do apps.json)' }
@@ -931,9 +1026,28 @@ Etapa 'Chrome: senhas no Proton Pass e extensões' {
 }
 
 # --- 16. RedM ----------------------------------------------------------------------------------------
-Etapa 'RedM na área de trabalho' {
-    Baixar 'https://runtime.fivem.net/redm/RedM.exe' (Join-Path $desktop 'RedM.exe')
-    Passo 'o instalador não tem modo silencioso: abra o RedM.exe uma vez'
+# O RedM.exe do site é um bootstrapper: no primeiro clique ele cria o RedM.app ao lado de si mesmo e
+# baixa o jogo, uns GB, numa janela própria. Não existe instalação silenciosa: o binário só entende
+# -ctracpkm, nada de /S nem /quiet, e a página do CitizenFX não documenta nenhum. Então o setup faz o que
+# dá para fazer sozinho: põe o executável numa casa definitiva (não na área de trabalho, que desde a
+# etapa 7 não mostra ícone nenhum) e cria o atalho no menu Iniciar, que é o caminho estável que a etapa
+# 24 fixa na barra. O que sobra para você é um clique.
+Etapa 'RedM' {
+    $dir = Join-Path $env:LOCALAPPDATA 'RedM'
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    $exe = Join-Path $dir 'RedM.exe'
+    Baixar 'https://runtime.fivem.net/redm/RedM.exe' $exe
+    $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\RedM.lnk'
+    $atalho = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
+    $atalho.TargetPath       = $exe
+    $atalho.WorkingDirectory = $dir
+    $atalho.Description      = 'RedM'
+    $atalho.Save()
+    Passo "RedM em $exe"
+    Passo "atalho em $lnk (é por ele que a barra fixa o RedM)"
+    # a versão anterior deixava o instalador na área de trabalho; sai, que agora não aparece mesmo
+    Remove-Item -LiteralPath (Join-Path $desktop 'RedM.exe') -Force -ErrorAction Ignore
+    Passo 'sem modo silencioso: o primeiro clique baixa o jogo numa janela própria'
 }
 
 # --- 17. Git -----------------------------------------------------------------------------------------
@@ -1107,108 +1221,7 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     Stop-Process -Name explorer -Force -ErrorAction Ignore
 }
 
-# --- 25. Wallpaper do monitor em pé, agora que o Explorer não reinicia mais ------------------------
-# O registro guarda UMA imagem para todos os monitores. Uma por monitor só existe pela interface COM
-# IDesktopWallpaper (Windows 8+), a mesma que a Personalização usa no "Definir para o monitor 2".
-#
-# Esta etapa vem aqui, e não junto da etapa 8, por um motivo medido: reiniciar o Explorer desfaz a
-# atribuição por monitor e devolve todos os monitores ao valor único do registro. O Explorer reinicia
-# na etapa 10 (WinSetView) e no fim da etapa 24 (barra de tarefas). Depois daqui não reinicia mais.
-#
-# Qual imagem para qual monitor: em vez de casar por nome de dispositivo, que muda de porta para porta,
-# a etapa pergunta o retângulo de cada monitor e olha a forma. Mais alto que largo é o retrato (a LG em
-# pé, girada 90 pela etapa 6) e recebe a imagem em retrato; os outros ficam com a paisagem. Funciona
-# igual se as portas trocarem, e não quebra se só um monitor estiver ligado.
-Etapa 'Wallpaper do monitor em pé' {
-    $paisagem = Join-Path $WallDir $WallPaisagem
-    $retrato  = Join-Path $WallDir $WallRetrato
-    foreach ($f in $paisagem, $retrato) { if (-not (Test-Path -LiteralPath $f)) { throw "não achei $f (a etapa 8 não copiou?)" } }
-
-    # Tudo que toca COM fica dentro do C#: o Windows PowerShell 5.1 rebaixa objeto COM para
-    # System.__ComObject e perde a interface, então chamar $dw.Metodo() do PowerShell falha com "não
-    # contém um método denominado...". Os 8 métodos estão na ordem exata da vtable, que é o que define
-    # qual slot é chamado; a declaração tem de ir até o mais alto que se usa (SetPosition).
-    if (-not ('MyWinIso.Wallpaper' -as [type])) {
-        Add-Type -TypeDefinition @'
-using System;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
-namespace MyWinIso {
-    [StructLayout(LayoutKind.Sequential)]
-    public struct RECT { public int Left, Top, Right, Bottom; }
-
-    [ComImport, Guid("B92B56A9-8B55-4E14-9A89-0199BBB6F93B"),
-     InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    public interface IDesktopWallpaper {
-        void SetWallpaper([MarshalAs(UnmanagedType.LPWStr)] string monitorID,
-                          [MarshalAs(UnmanagedType.LPWStr)] string wallpaper);
-        [return: MarshalAs(UnmanagedType.LPWStr)] string GetWallpaper([MarshalAs(UnmanagedType.LPWStr)] string monitorID);
-        [return: MarshalAs(UnmanagedType.LPWStr)] string GetMonitorDevicePathAt(uint monitorIndex);
-        uint GetMonitorDevicePathCount();
-        RECT GetMonitorRECT([MarshalAs(UnmanagedType.LPWStr)] string monitorID);
-        void SetBackgroundColor(uint color);
-        uint GetBackgroundColor();
-        void SetPosition(int position);
-    }
-
-    public class MonitorInfo {
-        public string Id;
-        public int Width, Height, Left, Top;
-        public bool Portrait;
-    }
-
-    public static class Wallpaper {
-        static IDesktopWallpaper Novo() {
-            Type t = Type.GetTypeFromCLSID(new Guid("C2CF3110-460E-4FC1-B9D0-8A1C0C9CC4BD"));
-            // o cast tem de ser aqui, no C#: e ele que vira um QueryInterface de verdade
-            return (IDesktopWallpaper)Activator.CreateInstance(t);
-        }
-        public static MonitorInfo[] Monitores() {
-            IDesktopWallpaper dw = Novo();
-            uint n = dw.GetMonitorDevicePathCount();
-            List<MonitorInfo> lista = new List<MonitorInfo>();
-            for (uint i = 0; i < n; i++) {
-                string id = dw.GetMonitorDevicePathAt(i);
-                if (string.IsNullOrEmpty(id)) continue;
-                RECT r;
-                // monitor que ja foi ligado mas esta desconectado agora aparece na lista sem retangulo
-                try { r = dw.GetMonitorRECT(id); } catch { continue; }
-                int w = r.Right - r.Left, h = r.Bottom - r.Top;
-                if (w <= 0 || h <= 0) continue;
-                lista.Add(new MonitorInfo { Id = id, Width = w, Height = h, Left = r.Left, Top = r.Top, Portrait = h > w });
-            }
-            return lista.ToArray();
-        }
-        public static string Atual(string id) { return Novo().GetWallpaper(id); }
-        public static void Definir(string id, string imagem) { Novo().SetWallpaper(id, imagem); }
-        public static void Posicao(int p) { Novo().SetPosition(p); }
-    }
-}
-'@
-    }
-
-    [MyWinIso.Wallpaper]::Posicao(4)      # 4 = DWPOS_FILL, o equivalente ao WallpaperStyle 10 do registro
-    $monitores = [MyWinIso.Wallpaper]::Monitores()
-    Passo "$($monitores.Count) monitor(es) ligados"
-    $emPe = 0
-    foreach ($m in $monitores) {
-        $img = if ($m.Portrait) { $retrato } else { $paisagem }
-        if ($m.Portrait) { $emPe++ }
-        Passo ("  {0}x{1} em {2},{3} -> {4}" -f $m.Width, $m.Height, $m.Left, $m.Top, (Split-Path $img -Leaf))
-        try { [MyWinIso.Wallpaper]::Definir($m.Id, $img) }
-        catch { Falha ("wallpaper do monitor {0}x{1}: {2}" -f $m.Width, $m.Height, $_.Exception.Message) }
-    }
-    if ($emPe -eq 0) { Passo 'nenhum monitor em pé agora; todos ficaram com a paisagem' }
-
-    # confere lendo de volta, que é a única forma de saber se pegou
-    foreach ($m in $monitores) {
-        $esperado = if ($m.Portrait) { $retrato } else { $paisagem }
-        $agora = try { [MyWinIso.Wallpaper]::Atual($m.Id) } catch { '' }
-        if ($agora -ne $esperado) { Falha ("o monitor {0}x{1} ficou com '{2}' em vez de '{3}'" -f $m.Width, $m.Height, (Split-Path $agora -Leaf), (Split-Path $esperado -Leaf)) }
-    }
-}
-
-# --- 26. WSL com Debian (wsl\debian.sh configura por dentro) ----------------------------------------
+# --- 25. WSL com Debian (wsl\debian.sh configura por dentro) ----------------------------------------
 Etapa 'WSL com Debian e zsh' {
     Silencioso { wsl.exe --status 2>&1 | Out-Null }
     if ($LASTEXITCODE -ne 0) {
@@ -1235,7 +1248,7 @@ Etapa 'WSL com Debian e zsh' {
     }
 }
 
-# --- 27. Resto dos drivers e as atualizações, pelo Windows Update -------------------------------------------------
+# --- 26. Resto dos drivers e as atualizações, pelo Windows Update -------------------------------------------------
 Etapa 'Windows Update (drivers)' {
     Silencioso { Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null }
     # O Set-PSRepository do PowerShellGet 5.1 reclama de 'PackageManagementProvider' e de 'SourceLocation'
@@ -1249,7 +1262,7 @@ Etapa 'Windows Update (drivers)' {
     Get-WindowsUpdate -AcceptAll -Install -IgnoreReboot | Out-Host
 }
 
-# --- 28. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) ---------------
+# --- 27. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) ---------------
 # No Windows dá para abrir console de vários lugares (cmd, Windows PowerShell, PowerShell 7, Git Bash, WSL) e
 # cada um abria numa janela diferente. Aqui o Windows Terminal passa a ser o console padrão do sistema: tudo que
 # abrir console aparece nele, em abas, e os cinco shells ficam num menu só. O padrão é o PowerShell 7.
@@ -1273,7 +1286,7 @@ Etapa 'Windows Terminal como terminal único' {
     Passo 'qualquer console do Windows abre no Windows Terminal'
 }
 
-# --- 29. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo ---------------------
+# --- 28. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo ---------------------
 # Vem do Sophia Script (farag2), que trata isso melhor que qualquer outra ferramenta. Três tarefas agendadas
 # que rodam sozinhas, o armazenamento reservado liberado (~7 GB), o compartilhamento P2P de updates desligado
 # e as dez tarefas de telemetria que rodam em segundo plano. A pior delas, o Compatibility Appraiser, varre o

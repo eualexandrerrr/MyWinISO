@@ -4,10 +4,10 @@
     <defaultlayout:TaskbarLayout>
       <taskbar:TaskbarPinList>
         <taskbar:UWA AppUserModelID="Microsoft.Windows.Explorer"/>
-        <taskbar:DesktopApp DesktopApplicationLinkPath="%AppData%\Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk"/>
-        <taskbar:DesktopApp DesktopApplicationLinkPath="%ProgramData%\Microsoft\Windows\Start Menu\Programs\Visual Studio Code\Visual Studio Code.lnk"/>
-        <taskbar:DesktopApp DesktopApplicationLinkPath="%ProgramData%\Microsoft\Windows\Start Menu\Programs\WinSCP\WinSCP.lnk"/>
         <taskbar:DesktopApp DesktopApplicationLinkPath="%ProgramData%\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"/>
+        <taskbar:DesktopApp DesktopApplicationLinkPath="%AppData%\Microsoft\Windows\Start Menu\Programs\RedM.lnk"/>
+        <taskbar:DesktopApp DesktopApplicationLinkPath="%AppData%\Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk"/>
+        <taskbar:DesktopApp DesktopApplicationLinkPath="%AppData%\Microsoft\Windows\Start Menu\Programs\Visual Studio Code\Visual Studio Code.lnk"/>
       </taskbar:TaskbarPinList>
     </defaultlayout:TaskbarLayout>
   </CustomTaskbarLayoutCollection>

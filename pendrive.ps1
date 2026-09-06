@@ -1,11 +1,13 @@
 ﻿<#
   Coloca o autounattend.xml no pendrive SEM formatar e SEM mexer nas ISOs que já estão lá.
 
-    powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: -Senha 123          # letra do pendrive
-    powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: win11.iso -Senha 123 # mais de uma ISO: diga qual
+    powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E:                     # letra do pendrive
+    powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: win11.iso           # mais de uma ISO: diga qual
 
-  -Senha vira a senha da conta Alexandre (e do root do MariaDB) só na cópia do XML gravada no pendrive;
-  o autounattend.xml do repositório continua sem senha. Sem -Senha a conta fica sem senha e o RDP não entra.
+  -Senha NÃO é mais necessário: o instala.vbs pergunta a senha no WinPE, logo no começo da instalação, e
+  grava só na cópia do arquivo de resposta que vai para o disco. Assim o pendrive nunca carrega a senha.
+  O parâmetro continua existindo para instalação sem ninguém na frente da máquina, mas aí a senha fica em
+  texto no pendrive, que é justamente o que a pergunta no WinPE evita. Prefira não usar.
 
   Dois tipos de pendrive são aceitos:
     Ventoy             copia autounattend.xml e ventoy.json para \ventoy, apontando para a ISO do Windows
@@ -74,7 +76,8 @@ Write-Host ("pendrive: {0}, {1} GB" -f $disco.FriendlyName, [math]::Round($disco
 
 $xmlTexto = Set-SenhaXml (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'autounattend.xml') -Raw -Encoding UTF8) $Senha
 $modelo = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'ventoy\ventoy.json') -Raw -Encoding UTF8
-if (-not $Senha) { Write-Warning 'sem -Senha: a conta fica sem senha e a Área de Trabalho Remota não aceita login.' }
+if ($Senha) { Write-Warning 'com -Senha a senha vai em texto para o pendrive. O instala.vbs pergunta no WinPE; considere rodar sem.' }
+else { Write-Host 'sem -Senha: o instala.vbs pergunta a senha no WinPE, e o pendrive fica sem ela' }
 
 $ehVentoy = [bool](Get-Partition -DiskNumber $disco.Number |
     ForEach-Object { Get-Volume -Partition $_ -ErrorAction SilentlyContinue } |

@@ -270,6 +270,85 @@ Function Roda(cmd, visivel)
   Roda = sh.Run("cmd.exe /c " & cmd, visivel, True)
 End Function
 
+' Pergunta a senha duas vezes e compara. Ela nao pode ser digitada errada: o login automatico usa a mesma
+' senha, entao um erro de digitacao deixa a maquina sem entrar. Tres tentativas; depois disso segue sem
+' senha, que e um estado ruim mas recuperavel, em vez de travar a instalacao.
+Function PedeSenha()
+  Dim a, b, k
+  For k = 1 To 3
+    a = InputBox("Senha da conta Alexandre." & vbCrLf & vbCrLf & _
+                 "Vai para a conta do Windows, para o login automatico e para o root do MariaDB." & vbCrLf & _
+                 "Em branco = conta sem senha (e a Area de Trabalho Remota nao aceita login).", _
+                 "mywiniso - senha (" & k & " de 3)")
+    b = InputBox("Digite a mesma senha de novo para conferir.", "mywiniso - conferencia (" & k & " de 3)")
+    If a = b Then
+      PedeSenha = a
+      Exit Function
+    End If
+    Escreve "as duas senhas nao bateram (tentativa " & k & " de 3)"
+  Next
+  Escreve "as senhas nao bateram tres vezes; seguindo sem senha"
+  PedeSenha = ""
+End Function
+
+' Copia o arquivo de resposta para o disco ja com a senha dentro.
+' Por MSXML e nao por fso.CopyFile porque o XML e UTF-8 com acentos e o FileSystemObject so escreve ASCII
+' ou UTF-16; ler e reescrever como texto corromperia o arquivo. O MSXML ja e usado por este XML (o
+' extrator do WinPE roda em cima dele), entao nao e uma dependencia nova.
+Sub GravaUnattend(origem, destino, ps)
+  Dim x, nos, nd, c, i, psPs
+  Set x = CreateObject("Msxml2.DOMDocument.6.0")
+  x.async = False
+  x.preserveWhiteSpace = True
+  x.setProperty "SelectionLanguage", "XPath"
+  If Not x.load(origem) Then
+    Escreve "aviso: o MSXML nao leu " & origem & " (" & x.parseError.reason & "); copiando sem a senha"
+    fso.CopyFile origem, destino, True
+    Exit Sub
+  End If
+  If ps <> "" Then
+    ' os dois <Value> vazios dentro de <Password>: o da conta local e o do login automatico.
+    ' local-name() para nao depender do prefixo do namespace do unattend. O MSXML escapa & < > sozinho.
+    Set nos = x.selectNodes("//*[local-name()='Password']/*[local-name()='Value']")
+    i = 0
+    For Each nd In nos
+      nd.text = ps
+      i = i + 1
+    Next
+    Escreve "senha gravada em " & i & " campo(s) <Password><Value> da copia do disco"
+    ' e o $Senha do primeiro-logon.ps1, que vive dentro de um CDATA (nodeType 4); '' e o escape de
+    ' aspa simples em string do PowerShell
+    psPs = Replace(ps, "'", "''")
+    ' selectNodes com local-name(), e nao getElementsByTagName("File"): os <File> estao no namespace
+    ' proprio do repositorio (xmlns em <Extensions>), e o getElementsByTagName do MSXML nao os acha.
+    i = 0
+    For Each nd In x.selectNodes("//*[local-name()='File']")
+      If InStr(nd.getAttribute("path") & "", "primeiro-logon.ps1") > 0 Then
+        For Each c In nd.childNodes
+          If c.nodeType = 4 Then
+            c.data = Replace(c.data, "$Senha = ''", "$Senha = '" & psPs & "'")
+            i = i + 1
+          End If
+        Next
+      End If
+    Next
+    If i = 0 Then Escreve "aviso: nao achei o CDATA do primeiro-logon.ps1; o root do MariaDB fica sem senha"
+  End If
+  x.save destino
+End Sub
+
+' 0. senha da conta, perguntada aqui e agora, antes de mexer no disco.
+' De proposito no WinPE: assim o autounattend.xml gravado no pendrive fica com <Value></Value> vazio e a
+' senha nunca encosta na midia. Quem recebe a senha e so a copia que vai para o disco
+' (W:\Windows\Panther\unattend.xml), e o proprio primeiro-logon.ps1 apaga essa copia no fim.
+Dim senha
+senha = PedeSenha()
+If senha = "" Then
+  Escreve "senha: nenhuma (a conta fica sem senha e a Area de Trabalho Remota nao aceita login)"
+Else
+  Escreve "senha: definida, " & Len(senha) & " caracteres (nao vai para o log nem para o pendrive)"
+End If
+
 ' 1. arquivo de resposta (o Ventoy grava o caminho no registro) e imagem do Windows (a ISO montada)
 On Error Resume Next
 xml = sh.RegRead("HKLM\System\Setup\UnattendFile")
@@ -322,7 +401,7 @@ Roda "bcdedit.exe /set {fwbootmgr} bootsequence {bootmgr} >> " & ARQLOG & " 2>&1
 
 ' 6. arquivo de resposta inteiro para os passos specialize e oobeSystem, e os logs desta fase
 If Not fso.FolderExists("W:\Windows\Panther") Then fso.CreateFolder "W:\Windows\Panther"
-fso.CopyFile xml, "W:\Windows\Panther\unattend.xml", True
+GravaUnattend xml, "W:\Windows\Panther\unattend.xml", senha
 Escreve "Pronto. Reiniciando pelo disco."
 fso.CopyFile ARQLOG, "W:\Windows\Panther\mywiniso-instala.log", True
 If fso.FileExists("X:\mywiniso\dism.log") Then fso.CopyFile "X:\mywiniso\dism.log", "W:\Windows\Panther\mywiniso-dism.log", True

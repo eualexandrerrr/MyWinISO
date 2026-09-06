@@ -29,7 +29,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
 | 6 | `primeiro-logon.ps1` | baixa o `setup.ps1` deste repositório e roda; deixa `mywiniso-setup.cmd` na área de trabalho |
-| 7 | `setup.ps1` | as 29 etapas abaixo |
+| 7 | `setup.ps1` | as 28 etapas abaixo |
 
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção. No WinPE,
@@ -53,7 +53,7 @@ Cada script mostra o estado real, não uma barra decorativa:
 - **specialize**: cada bloco aparece como `-> nome`, com os pacotes removidos um a um, e termina em `OK` ou `ERRO` com a mensagem.
 - **primeiro logon**: uma janela de console que diz o que está fazendo (espera pela rede com contagem de tentativas,
   download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela.
-- **setup.ps1**: cada etapa como `[n/29] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
+- **setup.ps1**: cada etapa como `[n/28] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
   `já instalado` ou `FALHOU (código)`, e no fim de cada etapa `OK`, `AVISO` (erros não fatais, listados) ou
   `ERRO` (a etapa parou, a mensagem aparece). Uma etapa com erro não derruba as seguintes. No final, um resumo
   de todas as etapas com tempo, a lista de programas que falharam e o caminho do log.
@@ -70,9 +70,9 @@ se vê. Tudo isso vem de propósito antes dos programas (etapa 13, que sozinha l
 uns cinco minutos a máquina já está com o driver da placa, nos 2560x1440 a 180 Hz, no tema escuro, com o
 wallpaper e a barra no lugar, e o resto se instala por baixo.
 
-A **etapa 25** é a única fora de lugar de propósito. Reiniciar o Explorer desfaz a atribuição de
-wallpaper por monitor, e o Explorer reinicia na etapa 10 e no fim da 24; então o monitor em pé só recebe
-a imagem dele depois disso. Até lá a etapa 8 deixa a paisagem nos dois.
+A etapa 8 termina **esperando o Explorer gravar o `TranscodedImageCache_00N`** no registro. Sem essa
+espera, o reinício do Explorer na etapa 10 desfaz a atribuição de wallpaper por monitor e o monitor em pé
+perde a imagem dele; com ela, sobrevive. Medido nesta máquina, não suposto.
 
 | # | Etapa |
 |:--|:--|
@@ -83,7 +83,7 @@ a imagem dele depois disso. Até lá a etapa 8 deixa a paisagem nos dois.
 | 5 | **driver de vídeo da NVIDIA**, o mais novo, baixado da própria NVIDIA pela API que a página de download usa; instalado em silêncio com `-s -clean -noreboot` |
 | 6 | **monitores**: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`); tenta três vezes, porque o driver acabou de assumir |
 | 7 | **preferências do usuário**: tema escuro, barra centralizada e só no monitor principal, **área de trabalho sem ícone nenhum**, **notificações desligadas**, Explorer, teclado, mouse, privacidade (tabela abaixo) |
-| 8 | **wallpaper** (paisagem nos dois monitores) e tela de bloqueio |
+| 8 | **wallpaper, um por monitor**: paisagem na ASUS, `Real_Dimez_portrait.jpg` na LG em pé, pela `IDesktopWallpaper`; mais a tela de bloqueio. Termina esperando o Explorer persistir a escolha (veja acima) |
 | 9 | **foto do perfil** da conta (`perfil/avatar.png`) no Iniciar e na tela de login |
 | 10 | **Explorer em Detalhes** em todas as pastas, com as colunas do Alexandre, pelo WinSetView (`explorer/WinSetView/`); reinicia o Explorer, e é aqui que tema e barra passam a valer |
 | 11 | **Windhawk** com os temas Translucent do Undisputed00x na barra (escurecida), no Iniciar, na central de notificações e no Explorer, mais reordenar miniaturas da barra, menus escuros e janelas sem borda; tudo por registro, sem abrir o Windhawk. No fim reinicia o `ShellExperienceHost` e o `StartMenuExperienceHost`, senão eles ficam sem tema |
@@ -91,7 +91,7 @@ a imagem dele depois disso. Até lá a etapa 8 deixa a paisagem nos dois.
 | 13 | programas do `apps.json`, um a um, com resultado na tela: 44 do winget, e WhatsApp e Bloco de Notas da Loja. Instalador que recusa administrador (o do Spotify) vai por tarefa agendada sem elevação |
 | 14 | **Lightshot**: um atalho só, `Shift+PrintScreen`, os outros dois desligados |
 | 15 | **Chrome**: gerenciador de senhas desligado (fica só o Proton Pass), e Proton Pass e Enhancer for YouTube instalados por política |
-| 16 | RedM na área de trabalho (o instalador não tem modo silencioso) |
+| 16 | **RedM** em `%LOCALAPPDATA%\RedM` com atalho no menu Iniciar, que é o que a barra fixa. O bootstrapper não tem modo silencioso (só entende `-ctracpkm`), então o primeiro clique ainda baixa o jogo numa janela própria |
 | 17 | `git config` com nome e e-mail |
 | 18 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`) |
 | 19 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
@@ -99,12 +99,11 @@ a imagem dele depois disso. Até lá a etapa 8 deixa a paisagem nos dois.
 | 21 | MariaDB como serviço, root com a senha da conta e acesso remoto |
 | 22 | fonte Cascadia Mono na máquina, no console e no terminal do VS Code |
 | 23 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
-| 24 | barra de tarefas com Explorer, Discord, VS Code, WinSCP e Chrome; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar. Depois dos programas, porque os pinos precisam dos apps instalados |
-| 25 | **wallpaper do monitor em pé** (`Real_Dimez_portrait.jpg`), pela `IDesktopWallpaper`; aqui porque o Explorer não reinicia mais |
-| 26 | WSL com Debian: usuário `alexandre` com zsh, sudo sem senha, systemd (`wsl/debian.sh`) |
-| 27 | resto dos drivers e as atualizações, pelo Windows Update (o de vídeo já veio na etapa 5) |
-| 28 | Windows Terminal instalado, atualizado e como console padrão do sistema, com cinco shells em abas (`terminal/settings.json`) |
-| 29 | manutenção: três tarefas de limpeza que rodam sozinhas, armazenamento reservado liberado, sem compartilhar updates com a internet, backup do registro e as tarefas de telemetria de fundo desligadas |
+| 24 | barra de tarefas, nesta ordem: **Explorer, Chrome, RedM, Discord, VS Code**; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar. Depois dos programas, porque os pinos precisam dos atalhos existindo (o do VS Code fica em `%AppData%`, porque o winget o instala por usuário) |
+| 25 | WSL com Debian: usuário `alexandre` com zsh, sudo sem senha, systemd (`wsl/debian.sh`) |
+| 26 | resto dos drivers e as atualizações, pelo Windows Update (o de vídeo já veio na etapa 5) |
+| 27 | Windows Terminal instalado, atualizado e como console padrão do sistema, com cinco shells em abas (`terminal/settings.json`) |
+| 28 | manutenção: três tarefas de limpeza que rodam sozinhas, armazenamento reservado liberado, sem compartilhar updates com a internet, backup do registro e as tarefas de telemetria de fundo desligadas |
 
 ## Programas
 
@@ -132,7 +131,6 @@ Insync e Maestro não existem no winget; Google Drive oficial entra no lugar do 
 | `pendrive.ps1` | grava o XML no pendrive sem formatar e sem tocar nas ISOs que já estão lá |
 | `ventoy/ventoy.json` | plugin `auto_install` do Ventoy; o `pendrive.ps1` troca o caminho da ISO |
 | `office/Configuracao.xml` | Office pelo Office Deployment Tool, que o `setup.ps1` baixa da Microsoft na hora |
-| `chrome/` | `enhancer-for-youtube.json`, o backup das configurações da extensão para importar na mão (ela guarda tudo dentro do perfil do Chrome e não tem managed storage, então não dá para injetar de fora) |
 | `wallpaper/` | a paisagem dos dois monitores e da tela de bloqueio, e a imagem em retrato do monitor em pé |
 | `powershell/profile.ps1` | perfil do PowerShell 7 |
 | `taskbar/LayoutModification.xml` | pinos da barra de tarefas |
@@ -151,13 +149,17 @@ O pendrive já é Ventoy e já tem a ISO do Windows 11 em Português (Brasil). O
 nada e não mexe nas ISOs. PowerShell como administrador, com o pendrive na letra `E:`:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: -Senha 123                                 # uma ISO só
-powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: Win11_pt-BR_unattend.iso -Senha 123        # mais de uma: diga qual
+powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E:                                            # uma ISO só
+powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: Win11_pt-BR_unattend.iso                   # mais de uma: diga qual
 ```
 
-- `-Senha` vira a senha da conta `Alexandre` e do root do MariaDB **só na cópia do XML gravada no
-  pendrive**; o `autounattend.xml` do repositório continua sem senha, e o repositório é público.
-  Sem `-Senha` a conta fica sem senha e a Área de Trabalho Remota não aceita login.
+- **A senha é perguntada no instalador**, no WinPE, antes de qualquer coisa ser apagada: o `instala.vbs`
+  pede duas vezes, compara, e grava só na cópia do arquivo de resposta que vai para o disco
+  (`C:\Windows\Panther\unattend.xml`, que o `primeiro-logon.ps1` apaga no fim). O pendrive nunca
+  carrega a senha, e o repositório é público. Ela vai para a conta `Alexandre`, o login automático e o
+  root do MariaDB. Em branco = conta sem senha (a Área de Trabalho Remota não aceita login).
+- `-Senha` ainda existe para instalação sem ninguém na frente da máquina, mas aí a senha fica em texto
+  no pendrive, que é justamente o que a pergunta no WinPE evita. Prefira não usar.
 - **Ventoy**: copia `autounattend.xml` e `ventoy.json` para `\ventoy`. Um `ventoy.json` que já exista
   é preservado (cópia em `.bak`); só a entrada desta ISO é trocada, ela vira a padrão do menu e o menu
   secundário do Ventoy ("Boot in normal mode", que não tem timeout) é desligado, então o boot vai direto
@@ -186,7 +188,7 @@ disk*, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). Ou desligue o Secure Boot na UEFI s
 | Edição | `Windows 11 Pro`, pelo nome da imagem dentro do `install.wim` | `EDICAO` no `instala.vbs`; `dism /Get-WimInfo` lista os nomes |
 | Ativação | licença digital gravada na placa-mãe | |
 | ISO | Windows 11 em Português (Brasil), da Microsoft | |
-| Conta | `Alexandre`, administradora, senha pelo `pendrive.ps1 -Senha`, login automático permanente | `<LocalAccount>` e `<AutoLogon>` |
+| Conta | `Alexandre`, administradora, senha perguntada no WinPE pelo `instala.vbs`, login automático permanente | `<LocalAccount>` e `<AutoLogon>` |
 | PC | nome `RRR`, fuso `E. South America Standard Time`, teclado ABNT2 (`0416:00010416`) | `specialize` e `oobeSystem`; ABNT sem o 2 é `0416:00000416` |
 
 ## Debloat
