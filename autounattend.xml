@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   mywiniso: instalação automática do Windows 11 (pt-BR) no PC do Alexandre.
-  https://github.com/eualexandrerrr/mywiniso
+  https://github.com/eualexandrerrr/MyWinISO
 
   O Setup lê este arquivo e executa, nesta ordem:
 
@@ -218,7 +218,7 @@
   </settings>
 
   <!-- Scripts embutidos. O Setup ignora este elemento; quem lê é o ExtractScript, chamado nos RunSynchronous acima. -->
-  <Extensions xmlns="https://github.com/eualexandrerrr/mywiniso">
+  <Extensions xmlns="https://github.com/eualexandrerrr/MyWinISO">
 
     <ExtractScript><![CDATA[
 param([xml] $Document, [string] $Pass)
@@ -243,7 +243,8 @@ Const SERIAL = "6479A7AABAC014A3"   ' Get-Disk | Select-Object FriendlyName, Ser
 Const MODELO = "MP700 ELITE"
 Const EDICAO = "Windows 11 Pro"   ' nome da imagem dentro do install.wim (dism /Get-WimInfo)
 Const WINDOWS_MB = 122880         ' 120 GB para o Windows e os programas (o C: e descartavel: formata a cada 3 meses); o resto vira "Dados"
-Const DADOS = "Dados"             ' rotulo da particao que sobrevive a formatacao (projetos, jogos, Documentos...)
+Const DADOS = "Alexandre"         ' rotulo da particao que sobrevive a formatacao (jogos, perfil, Documentos...)
+Const ROTULO_WIN = "Win11"        ' rotulo do C:
 Const ARQLOG = "X:\mywiniso\instala.log"
 Dim fso, sh, wmi, d, dr, alvo, n, script, ts, rc, xml, img
 Set fso = CreateObject("Scripting.FileSystemObject")
@@ -454,7 +455,7 @@ If dadosPart = 0 Then
   script = script & _
     "create partition efi size=300" & vbCrLf & "format quick fs=fat32 label=""System""" & vbCrLf & "assign letter=S" & vbCrLf & _
     "create partition msr size=16" & vbCrLf & _
-    "create partition primary size=" & winMB & vbCrLf & "format quick fs=ntfs label=""Windows""" & vbCrLf & "assign letter=W" & vbCrLf & _
+    "create partition primary size=" & winMB & vbCrLf & "format quick fs=ntfs label=""" & ROTULO_WIN & """" & vbCrLf & "assign letter=W" & vbCrLf & _
     "create partition primary size=1024" & vbCrLf & "format quick fs=ntfs label=""Recovery""" & vbCrLf & _
     "set id=""de94bba4-06d1-4d40-a16a-bfd50179d6ac""" & vbCrLf & "gpt attributes=0x8000000000000001" & vbCrLf & _
     "list partition" & vbCrLf
@@ -467,7 +468,7 @@ Else
   script = "select disk " & alvo & vbCrLf & "clean" & vbCrLf & "convert gpt" & vbCrLf & _
     "create partition efi size=300" & vbCrLf & "format quick fs=fat32 label=""System""" & vbCrLf & "assign letter=S" & vbCrLf & _
     "create partition msr size=16" & vbCrLf & _
-    "create partition primary size=" & WINDOWS_MB & vbCrLf & "format quick fs=ntfs label=""Windows""" & vbCrLf & "assign letter=W" & vbCrLf & _
+    "create partition primary size=" & WINDOWS_MB & vbCrLf & "format quick fs=ntfs label=""" & ROTULO_WIN & """" & vbCrLf & "assign letter=W" & vbCrLf & _
     "create partition primary size=1024" & vbCrLf & "format quick fs=ntfs label=""Recovery""" & vbCrLf & _
     "set id=""de94bba4-06d1-4d40-a16a-bfd50179d6ac""" & vbCrLf & "gpt attributes=0x8000000000000001" & vbCrLf & _
     "create partition primary" & vbCrLf & "format quick fs=ntfs label=""" & DADOS & """" & vbCrLf & _
@@ -677,7 +678,7 @@ Faz 'Identidade: Sistema > Sobre mostra fabricante mywiniso, modelo RRR, dono Al
     $oem = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation'
     Set-Reg $oem 'Manufacturer' 'mywiniso'                                     'String'
     Set-Reg $oem 'Model'        'RRR'                                          'String'
-    Set-Reg $oem 'SupportURL'   'https://github.com/eualexandrerrr/mywiniso'   'String'
+    Set-Reg $oem 'SupportURL'   'https://github.com/eualexandrerrr/MyWinISO'   'String'
     Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' 'RegisteredOwner'        'Alexandre' 'String'
     Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' 'RegisteredOrganization' 'mywiniso'  'String'
 }
@@ -741,7 +742,7 @@ $log = Join-Path $env:USERPROFILE 'mywiniso.log'
 Start-Transcript -Path $log -Append | Out-Null
 Write-Host "mywiniso: primeiro logon de $env:USERNAME | $(Get-Date -Format 'dd/MM/yyyy HH:mm') | log: $log" -ForegroundColor Cyan
 
-$raw = 'https://raw.githubusercontent.com/eualexandrerrr/mywiniso/main'
+$raw = 'https://raw.githubusercontent.com/eualexandrerrr/MyWinISO/main'
 $env:MYWINISO_SENHA = $Senha
 Write-Host ("senha da conta: {0}" -f $(if ($Senha) { 'definida (vai para o root do MariaDB)' } else { 'nenhuma' }))
 

@@ -1,7 +1,7 @@
 <#
   mywiniso: pós-instalação. Roda como administrador em qualquer Windows 11, não só no instalado pelo pendrive.
 
-    irm https://raw.githubusercontent.com/eualexandrerrr/mywiniso/main/setup.ps1 | iex
+    irm https://raw.githubusercontent.com/eualexandrerrr/MyWinISO/main/setup.ps1 | iex
 
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
@@ -15,9 +15,9 @@
   vê (driver, monitores, tema, wallpaper, barra), e só então vêm os programas, que sozinhos levam uns
   treze minutos. Em uns cinco minutos a máquina já está na cara certa e o resto instala por baixo.
 
-   1. ponto de restauração antes de mexer    15. Chrome: senhas só no Proton Pass
+   1. ponto de restauração antes de mexer    15. Chrome (Proton Pass) e Discord (Vencord do fork)
    2. garante que o winget funciona          16. Jogos: RedM e biblioteca do Steam em D:
-   3. Git e clone em ~\Projetos\mywiniso     17. git config
+   3. Git e clone em ~\Projetos\MyWinISO     17. git config
    4. Claude Code (CLI)                      18. Office
    5. driver de vídeo, direto da NVIDIA      19. Área de Trabalho Remota e política de senha
    6. monitores: resolução, Hz e posição     20. NVIDIA App (instalador silencioso)
@@ -54,15 +54,15 @@ $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 try { $Host.UI.RawUI.WindowTitle = 'mywiniso: setup' } catch { }
 
-$Repo = 'https://github.com/eualexandrerrr/mywiniso'
-# Disco de dados. O instala.vbs cria uma partição "Dados" no fim do disco que sobrevive à formatação, e é
+$Repo = 'https://github.com/eualexandrerrr/MyWinISO'
+# Disco de dados. O instala.vbs cria uma partição "Alexandre" (rótulo) no fim do disco que sobrevive à formatação, e é
 # nela que mora o que é seu: jogos, Documentos, Downloads, Imagens, Vídeos e Música. Projetos não: essa
 # pasta o Alexandre monta na mão depois, e este clone continua em ~\Projetos no C:. Aqui só se garante a
 # letra D: (no primeiro boot o Windows pode ter dado D: ao pendrive Ventoy). Num Windows sem essa
 # partição, o setup roda em qualquer Windows 11, tudo fica nas pastas de sempre no C:.
 $Dados = $null
 try {
-    $volDados = @(Get-Volume -FileSystemLabel 'Dados' -ErrorAction Ignore | Where-Object DriveType -eq 'Fixed')[0]
+    $volDados = @(Get-Volume -FileSystemLabel 'Alexandre' -ErrorAction Ignore | Where-Object DriveType -eq 'Fixed')[0]
     if ($volDados) {
         if ($volDados.DriveLetter -ne 'D') {
             if (Get-Volume -DriveLetter D -ErrorAction Ignore) {
@@ -73,10 +73,10 @@ try {
             $volDados | Get-Partition | Set-Partition -NewDriveLetter D
         }
         $Dados = 'D:\'
-        Write-Host ("disco de dados: D: (rótulo Dados, {0:n0} GB)" -f ($volDados.Size / 1GB))
-    } else { Write-Host 'sem partição "Dados": projetos e pastas do usuário ficam no C:' }
+        Write-Host ("disco de dados: D: (rótulo Alexandre, {0:n0} GB)" -f ($volDados.Size / 1GB))
+    } else { Write-Host 'sem partição "Alexandre": pastas do usuário e jogos ficam no C:' }
 } catch { Write-Host "disco de dados: não consegui deixar em D: ($($_.Exception.Message)); seguindo sem" -ForegroundColor Yellow }
-$Dir  = Join-Path $env:USERPROFILE 'Projetos\mywiniso'
+$Dir  = Join-Path $env:USERPROFILE 'Projetos\MyWinISO'
 $Log  = Join-Path $env:USERPROFILE 'mywiniso-setup.log'
 $desktop = [Environment]::GetFolderPath('Desktop')     # usado pela etapa de preferências (ícone do Edge) e pela do RedM
 try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
@@ -513,6 +513,7 @@ Etapa 'Preferências do usuário' {
         foreach ($j in @(
             @{ de = "$env:LOCALAPPDATA\Google\Chrome\User Data"; para = 'Chrome' },        # perfil inteiro: extensões, favoritos, histórico, configurações
             @{ de = "$env:APPDATA\discord";                      para = 'discord' },
+            @{ de = "$env:APPDATA\Vencord";                      para = 'Vencord' },        # settings.json, quickCss, temas e plugins do Vencord
             @{ de = "$env:APPDATA\Spotify";                      para = 'Spotify' },
             @{ de = "$env:APPDATA\Code";                         para = 'Code' },           # VS Code: settings, keybindings, estado
             @{ de = "$env:USERPROFILE\.vscode";                  para = '.vscode' },        # VS Code: extensões
@@ -1194,7 +1195,7 @@ $ChromeExtensoes = [ordered]@{
     'ghmbeldphafepmbegfdlkpapadhbakde' = 'Proton Pass'
     'ponfpcnoihfmfllpaingbgckeeldkhle' = 'Enhancer for YouTube'
 }
-Etapa 'Chrome: senhas no Proton Pass e extensões' {
+Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
     $pol = 'HKLM:\SOFTWARE\Policies\Google\Chrome'
     Passo 'gerenciador de senhas do Chrome desligado (nao salva, nao preenche, nao sugere senha)'
     Set-Reg $pol 'PasswordManagerEnabled' 0
@@ -1218,6 +1219,43 @@ Etapa 'Chrome: senhas no Proton Pass e extensões' {
     $pp = Get-ChildItem 'C:\Program Files\Proton\Proton Pass', "$env:LOCALAPPDATA\Programs\Proton Pass" -ErrorAction Ignore | Select-Object -First 1
     if ($pp) { Passo 'Proton Pass para Windows instalado (veio do apps.json)' }
     else { Passo 'Proton Pass para Windows ainda não aparece; ele vem do apps.json na etapa 13' }
+
+    # Discord com o Vencord do fork do Alexandre (github.com/eualexandrerrr/Vencord), que tem o plugin
+    # goLiveBypass e o que mais ele puser em src/userplugins. Por isso não serve o instalador oficial: ele
+    # injetaria o Vencord de fábrica. O caminho é o dos desenvolvedores: clonar, buildar e injetar o dist
+    # local, que é o que "pnpm inject" faz (o installer roda com VENCORD_DEV_INSTALL=1 apontando para o
+    # dist). O clone fica em ~\Projetos\Vencord e é refeito a cada formatação (uns 2 minutos); as
+    # configurações (settings.json, quickCss, temas) ficam em %APPDATA%\Vencord, que a etapa 7 já pôs em D:.
+    Passo 'Discord com o Vencord do fork eualexandrerrr/Vencord (plugins próprios inclusos)'
+    Refresh-Path
+    if (-not (Get-Command git.exe -ErrorAction Ignore) -or -not (Get-Command node.exe -ErrorAction Ignore)) {
+        Falha 'Vencord: sem git ou node no PATH; rode o setup de novo depois de reiniciar'
+    } elseif (-not (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'Discord'))) {
+        Falha 'Vencord: o Discord não está instalado (apps.json); rode o setup de novo'
+    } else {
+        $vsrc = Join-Path $env:USERPROFILE 'Projetos\Vencord'
+        try {
+            if (Test-Path -LiteralPath (Join-Path $vsrc '.git')) { Passo 'git pull no fork'; git.exe -C $vsrc pull --ff-only -q }
+            else { Passo "git clone do fork em $vsrc"; git.exe clone -q https://github.com/eualexandrerrr/Vencord $vsrc }
+            if ($LASTEXITCODE -ne 0) { throw "git saiu com código $LASTEXITCODE" }
+            # o pnpm vem pelo corepack do próprio Node, na versão que o package.json pede; sem prompt
+            $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
+            Get-Process -Name Discord -ErrorAction Ignore | Stop-Process -Force -ErrorAction Ignore
+            Push-Location $vsrc
+            try {
+                Passo 'pnpm install'
+                & corepack pnpm install --frozen-lockfile 2>&1 | Out-Host
+                if ($LASTEXITCODE -ne 0) { throw "pnpm install saiu com código $LASTEXITCODE" }
+                Passo 'pnpm build'
+                & corepack pnpm build 2>&1 | Out-Host
+                if ($LASTEXITCODE -ne 0) { throw "pnpm build saiu com código $LASTEXITCODE" }
+                Passo 'pnpm inject (injeta o dist local no Discord stable, sem perguntar)'
+                & corepack pnpm inject --branch stable 2>&1 | Out-Host
+                if ($LASTEXITCODE -ne 0) { throw "pnpm inject saiu com código $LASTEXITCODE" }
+            } finally { Pop-Location }
+            Passo 'Vencord injetado; o Discord abre já com ele'
+        } catch { Falha "Vencord: $($_.Exception.Message)" }
+    }
 }
 
 # --- 16. RedM ----------------------------------------------------------------------------------------

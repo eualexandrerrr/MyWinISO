@@ -1,6 +1,6 @@
 <div align="center">
 
-# mywiniso
+# MyWinISO
 
 **Windows 11 · pt-BR · instalação sem perguntas**
 
@@ -16,9 +16,9 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 ---
 
 > **Apaga o Windows, não os seus arquivos.** O alvo é o Corsair MP700 ELITE (serial `6479A7AABAC014A3`).
-> Na primeira instalação o disco inteiro é apagado e nasce a partição **Dados** no fim dele; em toda
+> Na primeira instalação o disco inteiro é apagado e nasce a partição **Alexandre** (D:) no fim dele; em toda
 > reinstalação só as quatro partições do Windows (EFI, MSR, Windows, Recovery) são apagadas e recriadas no
-> mesmo espaço, e Dados não é tocada. Veja "Disco" abaixo.
+> mesmo espaço, e a partição Alexandre não é tocada. O C: se chama Win11. Veja "Disco" abaixo.
 > O script só particiona se achar exatamente esse disco; qualquer outro cenário aborta antes
 > de gravar. Mesmo assim: backup antes.
 
@@ -27,7 +27,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | Passo | Quem faz | O quê |
 |:--|:--|:--|
 | 1 | Ventoy | mostra a ISO; em 5 s aplica o `autounattend.xml` sozinho |
-| 2 | `instala.vbs` (WinPE) | faz a fase inteira no lugar do Setup: pula TPM/CPU/RAM, procura o disco pelo serial ou modelo via WMI, particiona (EFI 300 MB, MSR, Windows 120 GB, Recovery 1 GB e Dados com o resto; numa reinstalação recria só as quatro primeiras e deixa Dados em paz), aplica a imagem `Windows 11 Pro` com o DISM, grava o boot, copia o XML completo para `C:\Windows\Panther` e reinicia pelo disco |
+| 2 | `instala.vbs` (WinPE) | faz a fase inteira no lugar do Setup: pula TPM/CPU/RAM, procura o disco pelo serial ou modelo via WMI, particiona (EFI 300 MB, MSR, Windows 120 GB, Recovery 1 GB e a partição Alexandre com o resto; numa reinstalação recria só as quatro primeiras e deixa a Alexandre em paz), aplica a imagem `Windows 11 Pro` com o DISM, grava o boot, copia o XML completo para `C:\Windows\Panther` e reinicia pelo disco |
 | 3 | Windows | primeiro boot pelo disco; o Setup novo da ISO nunca chega a instalar |
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
@@ -81,11 +81,11 @@ perde a imagem dele; com ela, sobrevive. Medido nesta máquina, não suposto.
 |:--|:--|
 | 1 | ponto de restauração antes de mexer em qualquer coisa |
 | 2 | garante que o winget funciona e, se a ISO trouxe um velho (o 1.9 não fala mais com a msstore), instala o release atual do GitHub |
-| 3 | instala o Git e clona este repositório em `~\Projetos\mywiniso`; sem Git, baixa o zip e segue |
+| 3 | instala o Git e clona este repositório em `~\Projetos\MyWinISO`; sem Git, baixa o zip e segue |
 | 4 | **Claude Code (CLI)** pelo winget, antes de tudo que é longo |
 | 5 | **driver de vídeo da NVIDIA**, o mais novo, baixado da própria NVIDIA pela API que a página de download usa; instalado em silêncio com `-s -clean -noreboot` |
 | 6 | **monitores**: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`); tenta três vezes, porque o driver acabou de assumir |
-| 7 | **preferências do usuário**: tema escuro, barra centralizada e só no monitor principal, **área de trabalho sem ícone nenhum**, **notificações desligadas**, **Documentos, Downloads, Imagens, Vídeos e Música em D:** quando a partição Dados existe, Explorer, teclado, mouse, privacidade (tabela abaixo) |
+| 7 | **preferências do usuário**: tema escuro, barra centralizada e só no monitor principal, **área de trabalho sem ícone nenhum**, **notificações desligadas**, **Documentos, Downloads, Imagens, Vídeos e Música em D:** quando a partição Alexandre (D:) existe, Explorer, teclado, mouse, privacidade (tabela abaixo) |
 | 8 | **wallpaper, um por monitor**: paisagem na ASUS, `Real_Dimez_portrait.jpg` na LG em pé, pela `IDesktopWallpaper`; mais a tela de bloqueio. Termina esperando o Explorer persistir a escolha (veja acima) |
 | 9 | **foto do perfil** da conta (`perfil/avatar.png`) no Iniciar e na tela de login |
 | 10 | **Explorer em Detalhes** em todas as pastas, com as colunas do Alexandre, pelo WinSetView (`explorer/WinSetView/`); reinicia o Explorer, e é aqui que tema e barra passam a valer |
@@ -93,7 +93,7 @@ perde a imagem dele; com ela, sobrevive. Medido nesta máquina, não suposto.
 | 12 | **energia e memória**: plano Desempenho Máximo, nunca suspende nem hiberna, tela apaga em 5 minutos; pagefile fixo pelo tamanho da RAM (metade, entre 4 e 16 GB) no C: e compressão de memória desligada |
 | 13 | programas do `apps.json`, um a um, com resultado na tela: 44 do winget, e WhatsApp e Bloco de Notas da Loja. Instalador que recusa administrador (o do Spotify) vai por tarefa agendada sem elevação |
 | 14 | **Lightshot**: um atalho só, `Shift+PrintScreen`, os outros dois desligados |
-| 15 | **Chrome**: gerenciador de senhas desligado (fica só o Proton Pass), e Proton Pass e Enhancer for YouTube instalados por política |
+| 15 | **Chrome e Discord**: gerenciador de senhas do Chrome desligado (fica só o Proton Pass), Proton Pass e Enhancer for YouTube instalados por política; e o Discord recebe o **Vencord do fork `eualexandrerrr/Vencord`** (plugin `goLiveBypass` e o que mais estiver em `src/userplugins`), clonado em `~\Projetos\Vencord`, buildado com pnpm e injetado com `pnpm inject`. As configurações do Vencord (`%APPDATA%\Vencord`) moram em D: pela etapa 7 |
 | 16 | **Jogos**: RedM em `D:\Jogos\RedM` (ou `%LOCALAPPDATA%\RedM` sem a partição Dados) com atalho no menu Iniciar, que é o que a barra fixa; e a biblioteca do Steam semeada em `D:\Jogos\Steam`, que depois de uma formatação volta inteira sem baixar nada. O bootstrapper não tem modo silencioso (só entende `-ctracpkm`), então o primeiro clique ainda baixa o jogo numa janela própria |
 | 17 | `git config` com nome e e-mail |
 | 18 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`) |
@@ -257,7 +257,7 @@ PowerShell como administrador:
 
 ```powershell
 $env:MYWINISO_SENHA = '123'    # opcional: vira a senha do root do MariaDB
-irm https://raw.githubusercontent.com/eualexandrerrr/mywiniso/main/setup.ps1 | iex
+irm https://raw.githubusercontent.com/eualexandrerrr/MyWinISO/main/setup.ps1 | iex
 ```
 
 ## Depois de instalado

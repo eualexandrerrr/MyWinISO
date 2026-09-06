@@ -1,0 +1,70 @@
+﻿# MyWinISO: tema do Ventoy (GRUB2 gfxmenu). Fundo do Alexandre; fontes e icones do grub2-themes
+# (vinceliuice, GPL-3). Vermelho #D6002B, o mesmo accent do Windows.
+
+title-text: ""
+desktop-image: "background.jpg"
+desktop-image-scale-method: "crop"
+desktop-color: "#000000"
+terminal-font: "Terminus Regular 18"
+terminal-width: "100%"
+terminal-height: "100%"
+terminal-border: "0"
+
++ label {
+  top = 12%
+  left = 0
+  width = 100%
+  align = "center"
+  text = "MyWinISO"
+  color = "#ffffff"
+  font = "DejaVu Sans Regular 32"
+}
++ label {
+  top = 12%+44
+  left = 0
+  width = 100%
+  align = "center"
+  text = "Alexandre  Â·  Windows 11 26H2  Â·  Arch  Â·  ferramentas"
+  color = "#cfcfcf"
+  font = "DejaVu Sans Regular 16"
+}
+
++ boot_menu {
+  left = 25%
+  top = 30%
+  width = 50%
+  height = 46%
+  item_font = "DejaVu Sans Regular 24"
+  item_color = "#d0d0d0"
+  selected_item_color = "#ffffff"
+  icon_width = 48
+  icon_height = 48
+  item_icon_space = 24
+  item_height = 60
+  item_padding = 8
+  item_spacing = 14
+  selected_item_pixmap_style = "select_*.png"
+  scrollbar = true
+  scrollbar_width = 6
+  scrollbar_thumb = "select_c.png"
+}
+
++ label {
+  top = 82%
+  left = 0
+  width = 100%
+  align = "center"
+  id = "__timeout__"
+  text = "Iniciando em %d s"
+  color = "#D6002B"
+  font = "DejaVu Sans Regular 24"
+}
++ label {
+  top = 100%-40
+  left = 0
+  width = 100%
+  align = "center"
+  text = "Enter inicia   Â·   F5 ferramentas   Â·   Ctrl+I injeta plugin   Â·   Esc menu do Ventoy"
+  color = "#8a8a8a"
+  font = "DejaVu Sans Regular 16"
+}
