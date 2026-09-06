@@ -435,7 +435,18 @@ Faz 'Perfil padrão (a conta nasce assim): tema escuro, barra centralizada e só
         Reg 'add "HKU\DefaultUser\Control Panel\Keyboard" /v KeyboardDelay /t REG_SZ /d 0 /f'
         Reg 'add "HKU\DefaultUser\Control Panel\Keyboard" /v KeyboardSpeed /t REG_SZ /d 31 /f'
         Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowTaskViewButton /t REG_DWORD /d 0 /f'
-        Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarDa /t REG_DWORD /d 0 /f'
+        # TaskbarDa nao vai por reg.exe: o driver UCPD (24H2+) recusa escrita nesse valor vinda de processo
+        # chamado reg.exe ou powershell.exe, e recusa tambem como SYSTEM e tambem no hive do perfil padrao
+        # ("Acesso negado"). Como o Reg lanca em erro, ele levaria com ele as quatro chaves seguintes e o
+        # OneDriveSetup. Contorno do Sophia Script, o mesmo que o setup.ps1 usa em HKCU: gravar por uma
+        # copia renomeada do proprio powershell.
+        $psCopia = Join-Path $env:TEMP 'mywiniso-ps.exe'
+        try {
+            Copy-Item -LiteralPath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Destination $psCopia -Force
+            & $psCopia -NoProfile -Command "New-ItemProperty -Path 'Registry::HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name TaskbarDa -PropertyType DWord -Value 0 -Force | Out-Null"
+            if ($LASTEXITCODE -ne 0) { throw "a copia do powershell saiu com codigo $LASTEXITCODE" }
+        } catch { Write-Host "   FALHOU TaskbarDa (widgets ficam na barra de conta nova): $($_.Exception.Message)" -ForegroundColor Yellow }
+        finally { Remove-Item -LiteralPath $psCopia -Force -ErrorAction Ignore }
         Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f'
         Reg 'add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Search" /v SearchboxTaskbarMode /t REG_DWORD /d 0 /f'
         Reg 'add "HKU\DefaultUser\Software\Policies\Microsoft\Windows\WindowsCopilot" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f'
