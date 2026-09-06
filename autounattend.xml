@@ -618,10 +618,13 @@ Faz 'Outlook, Dev Home e Teams: sem instalação agendada depois do OOBE' {
 }
 
 Faz 'OneDrive: desinstalar' {
-    foreach ($exe in "$env:SystemRoot\System32\OneDriveSetup.exe", "$env:SystemRoot\SysWOW64\OneDriveSetup.exe") {
-        if (Test-Path -LiteralPath $exe) { Write-Host "   $exe /uninstall"; Start-Process -FilePath $exe -ArgumentList '/uninstall' -Wait }
-    }
+    # OneDriveSetup.exe /uninstall abre uma janela e nunca sai em specialize (sessao 0, sem desktop): o -Wait
+    # segurava a passagem para sempre. Aqui o OneDrive ainda nem esta instalado, ele so entra no primeiro logon
+    # pela chave Run, que o bloco seguinte apaga do perfil padrao junto com a politica DisableFileSyncNGSC.
     Remove-Item -LiteralPath 'C:\Users\Default\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\OneDrive.lnk' -Force -ErrorAction Ignore
+    cmd.exe /c 'reg.exe delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v OneDriveSetup /f >nul 2>&1'
+    cmd.exe /c 'reg.exe delete "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run" /v OneDriveSetup /f >nul 2>&1'
+    Write-Host '   sem instalacao no primeiro logon'
 }
 
 Faz 'Perfil padrão (a conta nasce assim): tema escuro, barra centralizada e só no monitor principal, sem busca, extensões visíveis, teclado rápido, sem OneDrive e Copilot' {
