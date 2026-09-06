@@ -1271,20 +1271,29 @@ Etapa 'Programas (apps.json)' {
         } else {
             winget.exe install --id $p.Id --exact --source $p.Fonte --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
             $codigo = $LASTEXITCODE
-            # Uma segunda tentativa antes de desistir. Falha de download nao diz nada sobre o pacote: o
-            # Proton Pass saiu com 0x80D05011 (a Delivery Optimization largou o download no meio) numa
-            # rodada e instalou de primeira na tentativa seguinte, sem nada ter mudado. O winget install
-            # e idempotente, entao repetir nao estraga nada, e trinta segundos aqui valem mais do que
-            # descobrir no resumo que faltou um programa. So uma vez: erro que persiste e erro de verdade.
-            if ($codigo -ne 0 -and $codigo -ne -1978335189) {
-                Passo ("saiu com 0x{0:X8}; tentando mais uma vez" -f $codigo)
-                Start-Sleep -Seconds 5
-                winget.exe install --id $p.Id --exact --source $p.Fonte --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-                $codigo = $LASTEXITCODE
-            }
+        }
+        # A tarefa agendada do caminho sem elevação devolve o código SEM sinal: o mesmo 0x8A15002B de "já
+        # instalado" chegava como 2316632107, não batia com a constante negativa e o Spotify entrava no
+        # resumo como programa que falhou, a cada formatação. Normaliza os dois caminhos para Int32.
+        if ($codigo -gt [int]::MaxValue) { $codigo = [int]($codigo - 4294967296) }
+        # 0x8A15002B: instalado e sem atualização. 0x8A150114: instalado, mas quem atualiza é o próprio
+        # programa (o Android Studio se atualiza sozinho e o winget diz isso). Nenhum dos dois é falha,
+        # e repetir não muda nada: o winget já respondeu sobre o pacote, não sobre a rede.
+        $JaInstalado = -1978335189, -1978334956
+        # Uma segunda tentativa antes de desistir, só para o que sobra. Falha de download não diz nada
+        # sobre o pacote: o Proton Pass saiu com 0x80D05011 (a Delivery Optimization largou o download no
+        # meio) numa rodada e instalou de primeira na seguinte, sem nada ter mudado. O winget install é
+        # idempotente, então repetir não estraga nada. Só uma vez: erro que persiste é erro de verdade.
+        if ($codigo -ne 0 -and $JaInstalado -notcontains $codigo -and $SemElevacao -notcontains $p.Id) {
+            Passo ("saiu com 0x{0:X8}; tentando mais uma vez" -f $codigo)
+            Start-Sleep -Seconds 5
+            winget.exe install --id $p.Id --exact --source $p.Fonte --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+            $codigo = $LASTEXITCODE
+            if ($codigo -gt [int]::MaxValue) { $codigo = [int]($codigo - 4294967296) }
         }
         if ($codigo -eq 0)                    { Write-Host '        OK' -ForegroundColor Green }
         elseif ($codigo -eq -1978335189)      { Write-Host '        já instalado, sem atualização' -ForegroundColor DarkGray }
+        elseif ($codigo -eq -1978334956)      { Write-Host '        já instalado; a atualização é pelo próprio programa' -ForegroundColor DarkGray }
         else                                  { Falha ("{0}: winget saiu com código {1} (0x{2:X8})" -f $p.Id, $codigo, $codigo) }
     }
     Refresh-Path
