@@ -113,7 +113,7 @@ try {
 
 $Repo = 'https://github.com/eualexandrerrr/MyWinISO'
 # Disco de dados. O instala.vbs cria uma partição "Alexandre" (rótulo) no fim do disco que sobrevive à formatação, e é
-# nela que mora o que é seu: jogos, Documentos, Downloads, Imagens, Vídeos e Música. Projetos não: essa
+# nela que mora o que é seu: os jogos e a pasta Downloads. Projetos não: essa
 # pasta o Alexandre monta na mão depois, e este clone continua em ~\Projetos no C:. Aqui só se garante a
 # letra D: (no primeiro boot o Windows pode ter dado D: ao pendrive Ventoy). Num Windows sem essa
 # partição, o setup roda em qualquer Windows 11, tudo fica nas pastas de sempre no C:.
@@ -592,19 +592,19 @@ Etapa 'Monitores (resolução, Hz, posição)' {
 # --- 7. Preferências do usuário ----------------------------------------------------------------------
 Etapa 'Preferências do usuário' {
     if ($Dados) {
-        Passo 'Documentos, Downloads, Imagens, Vídeos e Música em D:, onde a formatação não chega'
+        Passo 'Downloads em D:, onde a formatação não chega'
         # SHSetKnownFolderPath é o caminho oficial: ele mesmo grava as duas entradas de User Shell Folders
         # (nome antigo e GUID) e avisa o Explorer. Sem mover conteúdo (flag 0): num Windows recém-instalado
-        # as pastas estão vazias. A Área de Trabalho fica no C: de propósito, não foi pedida.
+        # as pastas estão vazias.
+        # Só a Downloads. Documentos, Imagens, Vídeos e Músicas ficam no C: como o Windows as cria: o que
+        # cai ali ou é descartável ou já vive na nuvem, e não vale o redirecionamento. A Área de Trabalho
+        # fica no C: pelo mesmo motivo. O que estiver em D:\Documentos e afins de instalações antigas
+        # continua lá, intocado; só deixa de ser o destino dessas pastas do Windows.
         if (-not ('Win32.KnownFolders' -as [type])) {
             Add-Type -Namespace Win32 -Name KnownFolders -MemberDefinition '[DllImport("shell32.dll", CharSet = CharSet.Unicode)] public static extern int SHSetKnownFolderPath(ref Guid rfid, uint dwFlags, IntPtr hToken, string pszPath);'
         }
         foreach ($kf in @(
-            @{ pasta = 'Documentos'; id = 'FDD39AD0-238F-46AF-ADB4-6C85480369C7' },
-            @{ pasta = 'Downloads';  id = '374DE290-123F-4565-9164-39C4925E467B' },
-            @{ pasta = 'Imagens';    id = '33E28130-4E1E-4676-835A-98395C3BC3BB' },
-            @{ pasta = 'Vídeos';     id = '18989B1D-99B5-455B-841C-AB7C74E4DDFC' },
-            @{ pasta = 'Músicas';    id = '4BD8D571-6D19-48D3-BE97-422220080E43' })) {
+            @{ pasta = 'Downloads';  id = '374DE290-123F-4565-9164-39C4925E467B' })) {
             $alvo = Join-Path $Dados $kf.pasta
             New-Item -ItemType Directory -Path $alvo -Force | Out-Null
             $g = [Guid]$kf.id
