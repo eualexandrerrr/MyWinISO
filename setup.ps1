@@ -608,7 +608,14 @@ Etapa 'Cascadia Mono, console e VS Code' {
             $familia = $gt.Win32FamilyNames.Values | Select-Object -First 1
             $face    = $gt.Win32FaceNames.Values   | Select-Object -First 1
             $nome = if ($face -and $face -ne 'Regular') { "$familia $face" } else { $familia }
-        } catch { $nome = $f.BaseName -replace '-', ' ' }
+        } catch {
+            # o construtor do GlyphTypeface falha em algumas fontes; o nome sai do arquivo e o erro não vira AVISO
+            if ($Error.Count) { $Error.RemoveAt(0) }
+            $partes  = $f.BaseName -split '-', 2
+            $familia2 = $partes[0] -creplace '(?<=[a-z])(?=[A-Z])', ' '
+            $face2    = if ($partes.Count -gt 1) { $partes[1] -creplace '(?<=[a-z])(?=Italic)', ' ' } else { '' }
+            $nome = if ($face2 -and $face2 -ne 'Regular') { "$familia2 $face2" } else { $familia2 }
+        }
         Set-ItemProperty -Path $regFontes -Name "$nome (TrueType)" -Value $f.Name -Type String
         $n++
     }
@@ -654,16 +661,15 @@ Etapa 'Barra de tarefas e tarefa de logon' {
         Remove-ItemProperty -Path $taskband -Name $n -ErrorAction Ignore      # força o Explorer a reler o layout
     }
     Passo 'pinos: Explorer, Firefox, Discord, VS Code, WinSCP, Chrome (aparecem quando o Explorer reiniciar)'
-    $utils = Join-Path $env:USERPROFILE 'Meu Drive\Utils'
-    New-Item -ItemType Directory -Path $utils -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $aqui 'startup\startup-onlogon.ps1') -Destination (Join-Path $utils 'startup-onlogon.ps1') -Force
-    $acao      = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$utils\startup-onlogon.ps1`""
+    # o script fica no próprio clone: o git pull atualiza a tarefa, e não depende do Google Drive estar sincronizado
+    $onlogon = Join-Path $aqui 'startup\startup-onlogon.ps1'
+    $acao      = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$onlogon`""
     $gatilho   = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
     $gatilho.Delay = 'PT30S'
     $config    = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable
     $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
     Register-ScheduledTask -TaskName 'Startup OnLogon' -Action $acao -Trigger $gatilho -Settings $config -Principal $principal -Force | Out-Null
-    Passo "tarefa 'Startup OnLogon': $utils\startup-onlogon.ps1, 30 s depois de entrar"
+    Passo "tarefa 'Startup OnLogon': $onlogon, 30 s depois de entrar"
     Passo 'reiniciando o Explorer para aplicar tema, barra e wallpaper'
     Stop-Process -Name explorer -Force -ErrorAction Ignore
 }
@@ -674,8 +680,11 @@ Etapa 'WSL com Debian' {
     if ($LASTEXITCODE -ne 0) {
         Passo 'WSL ainda não instalado; instalando sem distro (precisa reiniciar depois)'
         wsl.exe --install --no-distribution
-        if ($LASTEXITCODE -ne 0) { throw "wsl --install saiu com código $LASTEXITCODE" }
-        Passo 'AVISO: reinicie e rode mywiniso-setup.cmd de novo para instalar e configurar o Debian'
+        if ($LASTEXITCODE -ne 0) {
+            # num Windows recém-instalado o componente entra mas o wsl.exe ainda responde com erro até reiniciar
+            Falha "wsl --install saiu com código $LASTEXITCODE (normal antes do primeiro reinício)"
+        }
+        Passo 'reinicie e rode mywiniso-setup.cmd de novo para instalar e configurar o Debian'
     } else {
         $distros = ((wsl.exe --list --quiet 2>$null) -join "`n") -replace "`0", ''
         if ($distros -notmatch 'Debian') {
