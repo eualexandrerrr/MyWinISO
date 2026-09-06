@@ -182,9 +182,44 @@ function Set-Reg([string] $Path, [string] $Name, $Value, [string] $Type = 'DWord
     }
 }
 function Baixar([string] $Url, [string] $Destino) {
-    Passo "baixando $Url"
-    Invoke-WebRequest -UseBasicParsing -UserAgent 'Mozilla/5.0' -Uri $Url -OutFile $Destino
-    Passo ("{0:n1} MB em {1}" -f ((Get-Item -LiteralPath $Destino).Length / 1MB), $Destino)
+    # Download por stream, e nao Invoke-WebRequest -OutFile, para poder mostrar de onde vem, quanto tem e
+    # quanto ja veio. Sem isso um arquivo de 600 MB e uma janela parada por minutos sem nenhuma prova de
+    # que a rede esta trabalhando.
+    $uri = [uri]$Url
+    Passo "baixando de $($uri.Host): $($uri.AbsolutePath.TrimStart('/'))"
+    $req = [System.Net.HttpWebRequest]::Create($uri)
+    $req.UserAgent = 'Mozilla/5.0'
+    $req.Timeout = 60000
+    $req.ReadWriteTimeout = 120000
+    $resp = $req.GetResponse()
+    $total = $resp.ContentLength
+    Passo ("HTTP {0} | servidor {1} | {2}" -f [int]$resp.StatusCode, $(if ($resp.Headers['Server']) { $resp.Headers['Server'] } else { 'sem cabecalho Server' }), $(if ($total -gt 0) { '{0:n1} MB' -f ($total / 1MB) } else { 'tamanho nao informado' }))
+    $entrada = $resp.GetResponseStream()
+    $saida   = [System.IO.File]::Create($Destino)
+    $buffer  = New-Object byte[] 262144
+    $lidos   = 0L
+    $marco   = 0
+    $sw      = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        while (($n = $entrada.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $saida.Write($buffer, 0, $n)
+            $lidos += $n
+            $seg = [math]::Max($sw.Elapsed.TotalSeconds, 0.1)
+            if ($total -gt 0) {
+                $pct = [int](100 * $lidos / $total)
+                if ($pct -ge $marco + 10) {
+                    $marco = $pct - ($pct % 10)
+                    Passo ("  {0}% | {1:n1} de {2:n1} MB | {3:n1} MB/s" -f $pct, ($lidos / 1MB), ($total / 1MB), ($lidos / 1MB / $seg))
+                }
+            } elseif (($lidos / 1MB) -ge $marco + 10) {
+                $marco = [int]($lidos / 1MB)
+                Passo ("  {0:n1} MB | {1:n1} MB/s" -f ($lidos / 1MB), ($lidos / 1MB / $seg))
+            }
+        }
+    } finally {
+        $saida.Close(); $entrada.Close(); $resp.Close(); $sw.Stop()
+    }
+    Passo ("pronto: {0:n1} MB em {1:n0} s -> {2}" -f ((Get-Item -LiteralPath $Destino).Length / 1MB), $sw.Elapsed.TotalSeconds, $Destino)
 }
 function Silencioso([scriptblock] $Corpo) {
     # Roda o bloco e apaga o que ele deixou em $Error. É para comando que escreve em stderr sem ter falhado:
@@ -289,7 +324,7 @@ function Update-Winget {
         Passo "winget $atual está em dia (release atual: $alvo)"
         return
     }
-    Passo "winget $atual é antigo; instalando o $alvo do GitHub"
+    Passo "winget $atual é antigo; instalando o $alvo do GitHub (microsoft/winget-cli, release $($rel.tag_name) de $([datetime]$rel.published_at | Get-Date -Format 'dd/MM/yyyy'))"
     $bundle = @($rel.assets | Where-Object { $_.name -like '*.msixbundle' })[0]
     $deps   = @($rel.assets | Where-Object { $_.name -eq 'DesktopAppInstaller_Dependencies.zip' })[0]
     if (-not $bundle -or -not $deps) { throw "release $($rel.tag_name) sem msixbundle ou sem DesktopAppInstaller_Dependencies.zip" }
@@ -357,7 +392,10 @@ if (-not ($aqui -and (Test-Path -LiteralPath (Join-Path $aqui 'apps.json')))) {
                 if (Test-Path -LiteralPath $Dir) { Passo "$Dir existe sem .git (veio do zip); trocando pelo clone"; Remove-Item -LiteralPath $Dir -Recurse -Force }
                 Passo "git clone $Repo -> $Dir"
                 New-Item -ItemType Directory -Path (Split-Path -Parent $Dir) -Force | Out-Null
-                git.exe clone $Repo $Dir
+                git.exe clone --progress $Repo $Dir 2>&1 | Out-Host
+            }
+            if (Test-Path -LiteralPath (Join-Path $Dir '.git')) {
+                Passo ("no commit " + (git.exe -C $Dir log -1 --format='%h %ad %s' --date=format:'%d/%m/%Y %H:%M'))
             }
         }
         if (-not (Test-Path -LiteralPath (Join-Path $Dir 'apps.json'))) {
@@ -1303,9 +1341,10 @@ Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
     } else {
         $vsrc = Join-Path $env:USERPROFILE 'Projetos\Vencord'
         try {
-            if (Test-Path -LiteralPath (Join-Path $vsrc '.git')) { Passo 'git pull no fork'; git.exe -C $vsrc pull --ff-only -q }
-            else { Passo "git clone do fork em $vsrc"; git.exe clone -q https://github.com/eualexandrerrr/Vencord $vsrc }
+            if (Test-Path -LiteralPath (Join-Path $vsrc '.git')) { Passo 'git pull no fork'; git.exe -C $vsrc pull --ff-only 2>&1 | Out-Host }
+            else { Passo "git clone do fork em $vsrc"; git.exe clone --progress https://github.com/eualexandrerrr/Vencord $vsrc 2>&1 | Out-Host }
             if ($LASTEXITCODE -ne 0) { throw "git saiu com código $LASTEXITCODE" }
+            Passo ("fork no commit " + (git.exe -C $vsrc log -1 --format='%h %ad %s' --date=format:'%d/%m/%Y %H:%M'))
             # o pnpm vem pelo corepack do próprio Node, na versão que o package.json pede; sem prompt
             $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
             Get-Process -Name Discord -ErrorAction Ignore | Stop-Process -Force -ErrorAction Ignore
@@ -1507,6 +1546,7 @@ Etapa 'MariaDB' {
 Etapa 'Cascadia Mono, console e VS Code' {
     $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/cascadia-code/releases/latest' -Headers @{ 'User-Agent' = 'PowerShell' }
     $asset = $rel.assets | Where-Object { $_.name -like 'CascadiaCode-*.zip' } | Select-Object -First 1
+    Passo "microsoft/cascadia-code release $($rel.tag_name): $($asset.name)"
     $zip = Join-Path $env:TEMP 'CascadiaCode.zip'
     $tmp = Join-Path $env:TEMP 'CascadiaCode'
     Baixar $asset.browser_download_url $zip

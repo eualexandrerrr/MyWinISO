@@ -61,7 +61,11 @@ travou de verdade.
 - **specialize**: cada bloco aparece como `-> nome`, com a hora, os pacotes removidos um a um, e termina em
   `OK (N s)` ou `ERRO` com a mensagem.
 - **primeiro logon**: uma janela de console que diz o que está fazendo (espera pela rede com contagem de tentativas,
-  download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela.
+  download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela. O download
+  mostra a resposta do GitHub: código HTTP, servidor, tamanho, `ETag` (que no `raw.githubusercontent` é o sha do
+  blob) e a data de modificação, mais o tamanho e as linhas do arquivo gravado — prova de que veio de lá agora.
+- **downloads em geral**: cada um diz de que host vem, o código HTTP, o tamanho anunciado e o progresso a cada 10%
+  com a velocidade. Os `git clone` vão com `--progress` e, no fim, o commit em que o clone ficou.
 - **setup.ps1**: cada etapa como `[n/28] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
   `já instalado` ou `FALHOU (código)`, e no fim de cada etapa `OK`, `AVISO` (erros não fatais, listados) ou
   `ERRO` (a etapa parou, a mensagem aparece). Uma etapa com erro não derruba as seguintes. No final, um resumo

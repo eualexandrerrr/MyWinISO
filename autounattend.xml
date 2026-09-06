@@ -854,7 +854,13 @@ $ok = $false
 for ($i = 1; $i -le 60 -and -not $ok; $i++) {          # até 5 minutos esperando a rede
     Write-Host ("baixando $raw/setup.ps1 (tentativa {0}/60, ate 15 s cada, desiste em 5 min) | {1}" -f $i, (Get-Date -Format 'HH:mm:ss'))
     try {
-        Invoke-WebRequest -UseBasicParsing -Uri "$raw/setup.ps1" -OutFile $destino -TimeoutSec 15
+        # sem -OutFile de proposito: assim da para mostrar a resposta do GitHub (codigo, servidor, tamanho,
+        # ETag, que no raw.githubusercontent e o sha do blob) e provar que o arquivo veio de la agora.
+        $r = Invoke-WebRequest -UseBasicParsing -Uri "$raw/setup.ps1" -TimeoutSec 15
+        $bytes = $r.RawContentStream.ToArray()
+        [System.IO.File]::WriteAllBytes($destino, $bytes)
+        Write-Host ("  HTTP {0} | servidor {1} | {2:n0} KB | ETag {3} | modificado em {4}" -f [int]$r.StatusCode, $r.Headers['Server'], ($bytes.Length / 1KB), $r.Headers['ETag'], $r.Headers['Last-Modified']) -ForegroundColor Green
+        Write-Host ("  gravado em {0} ({1:n0} bytes, {2} linhas)" -f $destino, (Get-Item -LiteralPath $destino).Length, (Get-Content -LiteralPath $destino).Count) -ForegroundColor Green
         $ok = $true
     } catch { Write-Host "  sem resposta: $($_.Exception.Message)" -ForegroundColor Yellow; Start-Sleep -Seconds 5 }
 }
