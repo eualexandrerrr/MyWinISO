@@ -6,3 +6,5 @@ wsl.conf  text eol=lf
 *.json    text eol=lf
 *.md      text eol=lf
 *.jpg     binary
+*.exe     binary
+*.dll     binary

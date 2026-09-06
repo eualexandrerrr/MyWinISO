@@ -1,4 +1,4 @@
-<#
+﻿<#
   Coloca o autounattend.xml no pendrive SEM formatar e SEM mexer nas ISOs que já estão lá.
 
     powershell -ExecutionPolicy Bypass -File .\pendrive.ps1 E: -Senha 123          # letra do pendrive

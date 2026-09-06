@@ -29,7 +29,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
 | 6 | `primeiro-logon.ps1` | baixa o `setup.ps1` deste repositório e roda; deixa `mywiniso-setup.cmd` na área de trabalho |
-| 7 | `setup.ps1` | as 17 etapas abaixo |
+| 7 | `setup.ps1` | as 18 etapas abaixo |
 
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção. No WinPE,
@@ -53,7 +53,7 @@ Cada script mostra o estado real, não uma barra decorativa:
 - **specialize**: cada bloco aparece como `-> nome`, com os pacotes removidos um a um, e termina em `OK` ou `ERRO` com a mensagem.
 - **primeiro logon**: uma janela de console que diz o que está fazendo (espera pela rede com contagem de tentativas,
   download do `setup.ps1`, execução) e **fica aberta até você apertar Enter**, com o resultado na tela.
-- **setup.ps1**: cada etapa como `[n/17] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
+- **setup.ps1**: cada etapa como `[n/18] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
   `já instalado` ou `FALHOU (código)`, e no fim de cada etapa `OK`, `AVISO` (erros não fatais, listados) ou
   `ERRO` (a etapa parou, a mensagem aparece). Uma etapa com erro não derruba as seguintes. No final, um resumo
   de todas as etapas com tempo, a lista de programas que falharam e o caminho do log.
@@ -66,23 +66,24 @@ Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou 
 
 | # | Etapa |
 |:--|:--|
-| 1 | garante que o winget funciona (em instalação nova ele demora a registrar) |
-| 2 | instala o Git e clona este repositório em `~\Projetos\mywiniso` |
+| 1 | garante que o winget funciona e, se a ISO trouxe um velho (o 1.9 não fala mais com a msstore), instala o release atual do GitHub |
+| 2 | instala o Git e clona este repositório em `~\Projetos\mywiniso`; sem Git, baixa o zip e segue |
 | 3 | programas do `apps.json`, um a um, com resultado na tela: 45 do winget, e WhatsApp e Bloco de Notas da Loja |
 | 4 | RedM na área de trabalho (o instalador não tem modo silencioso) |
 | 5 | `git config` com nome e e-mail |
 | 6 | preferências do usuário (tabela abaixo) |
-| 7 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`) |
-| 8 | wallpaper nos dois monitores e na tela de bloqueio |
-| 9 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
-| 10 | energia: plano Desempenho Máximo, nunca suspende, nunca apaga a tela, sem hibernação |
-| 11 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
-| 12 | MariaDB como serviço, root com a senha da conta e acesso remoto |
-| 13 | fonte Cascadia Mono na máquina, no console e no terminal do VS Code |
-| 14 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
-| 15 | barra de tarefas com Explorer, Firefox, Discord, VS Code, WinSCP e Chrome; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar |
-| 16 | WSL com Debian: usuário `alexandre`, sudo sem senha, systemd (`wsl/debian.sh`) |
-| 17 | drivers e atualizações pelo Windows Update |
+| 7 | Explorer em Detalhes em todas as pastas, com as colunas do Alexandre, pelo WinSetView (`explorer/WinSetView/`) |
+| 8 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`) |
+| 9 | wallpaper nos dois monitores e na tela de bloqueio |
+| 10 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
+| 11 | energia: plano Desempenho Máximo, nunca suspende, nunca apaga a tela, sem hibernação |
+| 12 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
+| 13 | MariaDB como serviço, root com a senha da conta e acesso remoto |
+| 14 | fonte Cascadia Mono na máquina, no console e no terminal do VS Code |
+| 15 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
+| 16 | barra de tarefas com Explorer, Firefox, Discord, VS Code, WinSCP e Chrome; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar |
+| 17 | WSL com Debian: usuário `alexandre`, sudo sem senha, systemd (`wsl/debian.sh`) |
+| 18 | drivers e atualizações pelo Windows Update |
 
 ## Programas
 
@@ -112,6 +113,7 @@ Insync e Maestro não existem no winget; Google Drive oficial entra no lugar do 
 | `wallpaper/` | imagem dos dois monitores e da tela de bloqueio |
 | `powershell/profile.ps1` | perfil do PowerShell 7 |
 | `taskbar/LayoutModification.xml` | pinos da barra de tarefas |
+| `explorer/WinSetView/` | WinSetView (Les Ferch, MIT) com o modo de exibição do Explorer em `AppData/Win10.ini`; ver o README da pasta |
 | `startup/startup-onlogon.ps1` | tarefa de logon: maximiza o Discord, posiciona duas janelas do Chrome no monitor vertical, backup do histórico do terminal |
 | `vscode/settings.json` | o que o `setup.ps1` mescla no `settings.json` do VS Code |
 | `wsl/debian.sh`, `wsl/wsl.conf` | configuração do Debian no WSL |
@@ -189,7 +191,7 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 
 | Área | O que fica |
 |:--|:--|
-| Explorer | extensões visíveis, abre em Este Computador, menu de contexto clássico |
+| Explorer | extensões visíveis, abre em Este Computador, menu de contexto clássico; Detalhes em todas as pastas com Nome, Caminho, Data de modificação, Tipo e Tamanho (WinSetView) |
 | Barra e Iniciar | ícones à esquerda, sem busca, Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito; pinos fixos |
 | Tema | escuro desde o primeiro boot, sem transparência, cor de destaque puxada do wallpaper |
 | Desligar | apps travados são encerrados sozinhos (`AutoEndTasks`), sem "este aplicativo está impedindo o desligamento" |

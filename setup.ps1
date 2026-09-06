@@ -6,21 +6,31 @@
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
 
-  O console mostra cada etapa como [n/17], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
+  O console mostra cada etapa como [n/18], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
   listados) ou ERRO (a etapa parou; a mensagem aparece). Nenhuma etapa derruba as seguintes. No final sai um
   resumo de todas as etapas e dos programas que falharam. Tudo vai também para ~\mywiniso-setup.log.
 
-   1. garante que o winget funciona           9. Área de Trabalho Remota e política de senha
-   2. Git e clone em ~\Projetos\mywiniso     10. energia: Desempenho Máximo, nunca suspender
-   3. programas do apps.json, um a um        11. NVIDIA App (instalador silencioso)
-   4. RedM na área de trabalho               12. MariaDB: serviço e root
-   5. git config                             13. fonte Cascadia Mono, console e VS Code
-   6. preferências do usuário                14. perfil do PowerShell
-   7. Office                                 15. barra de tarefas e tarefa de logon
-   8. wallpaper                              16. WSL com Debian
-                                             17. Windows Update (drivers)
+   1. garante que o winget funciona          10. Área de Trabalho Remota e política de senha
+   2. Git e clone em ~\Projetos\mywiniso     11. energia: Desempenho Máximo, nunca suspender
+   3. programas do apps.json, um a um        12. NVIDIA App (instalador silencioso)
+   4. RedM na área de trabalho               13. MariaDB: serviço e root
+   5. git config                             14. fonte Cascadia Mono, console e VS Code
+   6. preferências do usuário                15. perfil do PowerShell
+   7. Explorer em Detalhes (WinSetView)      16. barra de tarefas e tarefa de logon
+   8. Office                                 17. WSL com Debian
+   9. wallpaper                              18. Windows Update (drivers)
 #>
 param([string] $Senha = $env:MYWINISO_SENHA)
+
+# Este arquivo é UTF-8 sem BOM: com BOM, "irm | iex" no Windows PowerShell engasga no primeiro caractere. Só que
+# sem BOM o Windows PowerShell lê .ps1 pelo -File (ou por &) como ANSI e os acentos viram "Ã¡". Se o texto chegou
+# aqui assim, relê o próprio arquivo como UTF-8 e roda de novo, passando a pasta e a senha por variáveis de ambiente.
+if ($PSCommandPath -and 'á'.Length -ne 1) {
+    $env:MYWINISO_SENHA = $Senha
+    $env:MYWINISO_RAIZ  = $PSScriptRoot
+    & ([scriptblock]::Create([System.IO.File]::ReadAllText($PSCommandPath, [System.Text.Encoding]::UTF8)))
+    exit $LASTEXITCODE
+}
 
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
@@ -36,7 +46,7 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$TotalEtapas = 17
+$TotalEtapas = 18
 $NumEtapa    = 0
 $Resultado   = New-Object System.Collections.Generic.List[object]
 $Falhas      = New-Object System.Collections.Generic.List[string]
@@ -91,13 +101,50 @@ if (-not $eu.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 Write-Host "mywiniso setup | $(Get-Date -Format 'dd/MM/yyyy HH:mm') | usuário $env:USERNAME | senha: $(if ($Senha) { 'sim' } else { 'não' }) | log: $Log"
 
 # --- 1. winget -------------------------------------------------------------------------------------
+# A ISO traz um App Installer velho (1.9 na 25H2) que não fala mais com a fonte msstore (certificado, 0x8a15005e)
+# e faz qualquer "winget install" sem --source parar pedindo para escolher fonte. Então, além de garantir que o
+# winget existe, esta etapa o troca pelo release atual do GitHub quando ele estiver mais de uma versão atrás.
+function Test-Winget { [bool](Get-Command winget.exe -ErrorAction Ignore) }
+function Get-WingetVersao {
+    try {
+        $txt = @(winget.exe --version 2>$null | Where-Object { $_ -match '\d+\.\d+' })[-1]
+        [version](($txt -replace '^\s*v', '' -replace '-.*$', '').Trim())
+    } catch { [version]'0.0' }
+}
+function Update-Winget {
+    $rel   = Invoke-RestMethod -UseBasicParsing -UserAgent 'mywiniso' -TimeoutSec 30 -Uri 'https://api.github.com/repos/microsoft/winget-cli/releases/latest'
+    $alvo  = [version]($rel.tag_name -replace '^v', '' -replace '-.*$', '')
+    $atual = if (Test-Winget) { Get-WingetVersao } else { [version]'0.0' }
+    if ($atual.Major -gt $alvo.Major -or ($atual.Major -eq $alvo.Major -and $atual.Minor -ge ($alvo.Minor - 1))) {
+        Passo "winget $atual está em dia (release atual: $alvo)"
+        return
+    }
+    Passo "winget $atual é antigo; instalando o $alvo do GitHub"
+    $bundle = @($rel.assets | Where-Object { $_.name -like '*.msixbundle' })[0]
+    $deps   = @($rel.assets | Where-Object { $_.name -eq 'DesktopAppInstaller_Dependencies.zip' })[0]
+    if (-not $bundle -or -not $deps) { throw "release $($rel.tag_name) sem msixbundle ou sem DesktopAppInstaller_Dependencies.zip" }
+    $tmp = Join-Path $env:TEMP 'mywiniso-winget'
+    Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction Ignore
+    New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+    Baixar $bundle.browser_download_url (Join-Path $tmp $bundle.name)
+    Baixar $deps.browser_download_url (Join-Path $tmp 'deps.zip')
+    Expand-Archive -Path (Join-Path $tmp 'deps.zip') -DestinationPath (Join-Path $tmp 'deps') -Force
+    $appx = @(Get-ChildItem -Path (Join-Path $tmp 'deps\x64') -Filter '*.appx' | Select-Object -ExpandProperty FullName)
+    Passo "Add-AppxPackage $($bundle.name) com $($appx.Count) dependências: $(($appx | Split-Path -Leaf) -join ', ')"
+    Add-AppxPackage -Path (Join-Path $tmp $bundle.name) -DependencyPath $appx -ForceApplicationShutdown
+    Refresh-Path
+    for ($i = 0; $i -lt 10 -and (Get-WingetVersao) -lt $alvo; $i++) { Start-Sleep -Seconds 3 }   # o alias winget.exe leva uns segundos para apontar para o novo
+    $agora = Get-WingetVersao
+    if ($agora -lt $alvo) { throw "instalei o $alvo mas 'winget --version' ainda responde $agora" }
+    Passo "winget agora é $agora"
+}
 Etapa 'winget' {
-    function Test-Winget { [bool](Get-Command winget.exe -ErrorAction Ignore) }
     if (-not (Test-Winget)) {
         Passo 'winget não responde; registrando o App Installer'
         Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe -ErrorAction Ignore
         Refresh-Path
     }
+    try { Update-Winget } catch { Falha "atualização do winget: $($_.Exception.Message)" }
     if (-not (Test-Winget)) {
         Passo 'ainda não; instalando pelo módulo Microsoft.WinGet.Client (demora uns minutos)'
         Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null
@@ -107,35 +154,63 @@ Etapa 'winget' {
         Refresh-Path
     }
     if (-not (Test-Winget)) { throw 'winget não ficou disponível. Abra a Microsoft Store, atualize o "Instalador de Aplicativo" e rode de novo.' }
-    Passo "winget $(winget.exe --version)"
+    Passo "winget $(Get-WingetVersao)"
     winget.exe source update --disable-interactivity | Out-Null
 }
 
 # --- 2. Git e clone ---------------------------------------------------------------------------------
-$aqui = if ($PSScriptRoot) { $PSScriptRoot } else { '' }
+# Rodando pelo irm/-File (sem apps.json ao lado): instala o Git, clona o repositório e continua pela cópia clonada.
+# Se o Git não entrar, baixa o repositório como zip, para que o resto do setup não dependa dele; o Git é tentado
+# de novo na etapa 3, porque está no apps.json.
+$aqui = if ($PSScriptRoot) { $PSScriptRoot } elseif ($env:MYWINISO_RAIZ) { $env:MYWINISO_RAIZ } else { '' }
 if (-not ($aqui -and (Test-Path -LiteralPath (Join-Path $aqui 'apps.json')))) {
     Etapa 'Git e clone do repositório' {
         if (-not (Get-Command git.exe -ErrorAction Ignore)) {
-            Passo 'instalando Git'
-            winget.exe install --id Git.Git -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+            Passo 'instalando Git (winget, fonte winget)'
+            winget.exe install --id Git.Git --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+            if ($LASTEXITCODE -ne 0) { Falha ("Git.Git: winget saiu com código {0} (0x{0:X8})" -f $LASTEXITCODE) }
             Refresh-Path
         }
-        if (Test-Path -LiteralPath $Dir) {
-            Passo "git pull em $Dir"
-            git.exe -C $Dir pull --ff-only
-        } else {
-            Passo "git clone $Repo -> $Dir"
-            New-Item -ItemType Directory -Path (Split-Path -Parent $Dir) -Force | Out-Null
-            git.exe clone $Repo $Dir
+        if (Get-Command git.exe -ErrorAction Ignore) {
+            if (Test-Path -LiteralPath (Join-Path $Dir '.git')) {
+                Passo "git pull em $Dir"
+                git.exe -C $Dir pull --ff-only
+            } else {
+                if (Test-Path -LiteralPath $Dir) { Passo "$Dir existe sem .git (veio do zip); trocando pelo clone"; Remove-Item -LiteralPath $Dir -Recurse -Force }
+                Passo "git clone $Repo -> $Dir"
+                New-Item -ItemType Directory -Path (Split-Path -Parent $Dir) -Force | Out-Null
+                git.exe clone $Repo $Dir
+            }
         }
-        if (-not (Test-Path -LiteralPath (Join-Path $Dir 'apps.json'))) { throw "não consegui clonar $Repo em $Dir" }
+        if (-not (Test-Path -LiteralPath (Join-Path $Dir 'apps.json'))) {
+            Passo 'sem Git ou sem clone; baixando o repositório como zip'
+            $zip = Join-Path $env:TEMP 'mywiniso-main.zip'
+            $tmp = Join-Path $env:TEMP 'mywiniso-main'
+            Remove-Item -LiteralPath $zip, $tmp -Recurse -Force -ErrorAction Ignore
+            Baixar "$Repo/archive/refs/heads/main.zip" $zip
+            Expand-Archive -Path $zip -DestinationPath $tmp -Force
+            New-Item -ItemType Directory -Path (Split-Path -Parent $Dir) -Force | Out-Null
+            Remove-Item -LiteralPath $Dir -Recurse -Force -ErrorAction Ignore
+            Move-Item -LiteralPath (Join-Path $tmp 'mywiniso-main') -Destination $Dir
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $Dir 'apps.json'))) { throw "não consegui obter $Repo em $Dir" }
     }
-    Passo 'continuando pela cópia clonada, que tem os arquivos ao lado'
+    if (-not (Test-Path -LiteralPath (Join-Path $Dir 'setup.ps1'))) {
+        Write-Host "Sem $Dir\setup.ps1 não dá para continuar. Veja o erro acima; com internet, rode mywiniso-setup.cmd de novo." -ForegroundColor Red
+        try { Stop-Transcript | Out-Null } catch { }
+        exit 1
+    }
+    Passo "continuando pela cópia em $Dir, que tem os arquivos ao lado"
     try { Stop-Transcript | Out-Null } catch { }
     & (Join-Path $Dir 'setup.ps1') -Senha $Senha
     exit $LASTEXITCODE
 }
-Etapa 'Git e clone do repositório' { Passo "rodando de $aqui"; git.exe -C $aqui pull --ff-only 2>&1 | ForEach-Object { Passo $_ } }
+Etapa 'Git e clone do repositório' {
+    Passo "rodando de $aqui"
+    if ((Get-Command git.exe -ErrorAction Ignore) -and (Test-Path -LiteralPath (Join-Path $aqui '.git'))) {
+        git.exe -C $aqui pull --ff-only 2>&1 | ForEach-Object { Passo "$_" }
+    } else { Passo 'cópia sem .git ou sem Git; nada a atualizar' }
+}
 
 # --- 3. Programas, um a um, com resultado ----------------------------------------------------------
 Etapa 'Programas (apps.json)' {
@@ -286,7 +361,26 @@ Etapa 'Preferências do usuário' {
     Remove-Item -LiteralPath (Join-Path $desktop 'Microsoft Edge.lnk'), 'C:\Users\Public\Desktop\Microsoft Edge.lnk' -Force -ErrorAction Ignore
 }
 
-# --- 7. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) ------------------------
+# --- 7. Explorer em Detalhes (WinSetView) ------------------------------------------------------------
+# WinSetView (Les Ferch, MIT) grava em HKCU os padrões de exibição de todos os tipos de pasta e reinicia o Explorer.
+# O INI é o do Alexandre (explorer\WinSetView\README.md). Roda em outro processo: o script mexe em Set-Location e
+# solta dezenas de linhas do reg.exe, que vão para um log próprio em vez do console.
+Etapa 'Explorer em Detalhes (WinSetView)' {
+    $wsv = Join-Path $aqui 'explorer\WinSetView'
+    $ini = Join-Path $wsv 'AppData\Win10.ini'
+    if (-not (Test-Path -LiteralPath $ini)) { throw "não achei $ini" }
+    $ps1 = Join-Path $wsv 'WinSetView.ps1'
+    $logWsv = Join-Path $env:USERPROFILE 'mywiniso-winsetview.log'
+    Passo 'Detalhes em todas as pastas: Nome, Caminho, Data de modificação, Tipo, Tamanho; por nome, sem agrupar; extensões visíveis; menu clássico'
+    Passo "log: $logWsv"
+    # Start-Process em vez de chamar direto: as dezenas de linhas do reg.exe não entram em $Error (viraria AVISO)
+    $p = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$ps1`"", "`"$ini`"" `
+        -Wait -PassThru -NoNewWindow -RedirectStandardOutput $logWsv -RedirectStandardError "$logWsv.err"
+    if ($p.ExitCode -ne 0) { throw "WinSetView.ps1 saiu com código $($p.ExitCode); veja $logWsv" }
+    Passo 'aplicado; o Explorer foi reiniciado'
+}
+
+# --- 8. Office LTSC 2024 (Office Deployment Tool + office\Configuracao.xml) ------------------------
 Etapa 'Office' {
     $odt = Join-Path $env:TEMP 'odt'
     New-Item -ItemType Directory -Path $odt -Force | Out-Null
@@ -298,7 +392,7 @@ Etapa 'Office' {
     Passo 'instalado'
 }
 
-# --- 8. Wallpaper nos dois monitores e na tela de bloqueio ------------------------------------------
+# --- 9. Wallpaper nos dois monitores e na tela de bloqueio ------------------------------------------
 Etapa 'Wallpaper' {
     $wallDir = Join-Path $env:SystemRoot 'Web\Wallpaper\mywiniso'     # legível pelo SYSTEM, que desenha a tela de bloqueio
     New-Item -ItemType Directory -Path $wallDir -Force | Out-Null
@@ -317,7 +411,7 @@ Etapa 'Wallpaper' {
     Set-Reg $csp 'LockScreenImageStatus' 1
 }
 
-# --- 9. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados ----------
+# --- 10. Área de Trabalho Remota (este PC como host), senha sem validade, scripts liberados ----------
 Etapa 'Área de Trabalho Remota e contas' {
     Passo 'RDP ligado com autenticação de rede; regra de firewall'
     Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' 'fDenyTSConnections' 0
@@ -330,12 +424,19 @@ Etapa 'Área de Trabalho Remota e contas' {
     Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force
 }
 
-# --- 10. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação ----------
+# --- 11. Energia: Desempenho Máximo, nunca suspender, nunca apagar a tela, sem hibernação ----------
 Etapa 'Energia' {
+    # Desempenho Máximo (Ultimate Performance) vem oculto no Windows 11; /duplicatescheme cria uma cópia visível.
+    # Se a cópia já existe (segunda execução), reaproveita em vez de criar outra.
     $guid = $null
-    $saida = powercfg.exe /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>&1 | Out-String    # Ultimate Performance (oculto)
-    if ($saida -match '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})') { $guid = $Matches[1]; Passo "plano Desempenho Máximo: $guid" }
-    else { $guid = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'; Passo 'Desempenho Máximo não disponível; usando Alto desempenho' }
+    $lista = (powercfg.exe /list 2>&1) -join "`n"
+    if ($lista -match '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\s+\((Desempenho M.ximo|Ultimate Performance)\)') {
+        $guid = $Matches[1]; Passo "plano Desempenho Máximo já existe: $guid"
+    } else {
+        $saida = (powercfg.exe /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>&1) -join "`n"
+        if ($saida -match '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})') { $guid = $Matches[1]; Passo "plano Desempenho Máximo criado: $guid" }
+        else { $guid = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'; Passo 'Desempenho Máximo não disponível; usando Alto desempenho' }
+    }
     powercfg.exe /setactive $guid
     Passo 'nunca suspender, nunca apagar a tela, hibernação desligada'
     powercfg.exe /change standby-timeout-ac 0
@@ -345,7 +446,7 @@ Etapa 'Energia' {
     Passo ((powercfg.exe /getactivescheme) -join ' ')
 }
 
-# --- 11. NVIDIA App (não está no winget; instalador silencioso com /s) -----------------------------
+# --- 12. NVIDIA App (não está no winget; instalador silencioso com /s) -----------------------------
 Etapa 'NVIDIA App' {
     $url = 'https://us.download.nvidia.com/nvapp/client/11.0.9.251/NVIDIA_app_v11.0.9.251.exe'   # reserva, caso a página mude
     try {
@@ -361,7 +462,7 @@ Etapa 'NVIDIA App' {
     if ($p.ExitCode -ne 0) { throw "instalador da NVIDIA saiu com código $($p.ExitCode); instale pelo nvidia.com" }
 }
 
-# --- 12. MariaDB: serviço automático, root com a senha da conta e acesso remoto --------------------
+# --- 13. MariaDB: serviço automático, root com a senha da conta e acesso remoto --------------------
 Etapa 'MariaDB' {
     $maria = Get-ChildItem -Path 'C:\Program Files\MariaDB*' -Directory -ErrorAction Ignore | Select-Object -First 1
     if (-not $maria) { throw 'não instalado (MariaDB.Server falhou no winget?)' }
@@ -391,7 +492,7 @@ Etapa 'MariaDB' {
     }
 }
 
-# --- 13. Fonte Cascadia Mono (máquina), console e VS Code --------------------------------------------
+# --- 14. Fonte Cascadia Mono (máquina), console e VS Code --------------------------------------------
 Etapa 'Cascadia Mono, console e VS Code' {
     $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/cascadia-code/releases/latest' -Headers @{ 'User-Agent' = 'PowerShell' }
     $asset = $rel.assets | Where-Object { $_.name -like 'CascadiaCode-*.zip' } | Select-Object -First 1
@@ -436,7 +537,7 @@ Etapa 'Cascadia Mono, console e VS Code' {
     Passo "VS Code: $vsArq"
 }
 
-# --- 14. Perfil do PowerShell (powershell\profile.ps1) ----------------------------------------------
+# --- 15. Perfil do PowerShell (powershell\profile.ps1) ----------------------------------------------
 Etapa 'Perfil do PowerShell' {
     $docs = [Environment]::GetFolderPath('MyDocuments')
     New-Item -ItemType Directory -Path (Join-Path $docs 'PowerShell'), (Join-Path $docs 'WindowsPowerShell') -Force | Out-Null
@@ -445,7 +546,7 @@ Etapa 'Perfil do PowerShell' {
     Passo "$docs\PowerShell\profile.ps1 (o do Windows PowerShell aponta para ele)"
 }
 
-# --- 15. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" --------------
+# --- 16. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" --------------
 Etapa 'Barra de tarefas e tarefa de logon' {
     $layout = Join-Path $aqui 'taskbar\LayoutModification.xml'
     foreach ($shell in (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Shell'), 'C:\Users\Default\AppData\Local\Microsoft\Windows\Shell') {
@@ -471,7 +572,7 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     Stop-Process -Name explorer -Force -ErrorAction Ignore
 }
 
-# --- 16. WSL com Debian (wsl\debian.sh configura por dentro) ---------------------------------------
+# --- 17. WSL com Debian (wsl\debian.sh configura por dentro) ---------------------------------------
 Etapa 'WSL com Debian' {
     wsl.exe --status 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
@@ -495,7 +596,7 @@ Etapa 'WSL com Debian' {
     }
 }
 
-# --- 17. Drivers e atualizações pelo Windows Update ------------------------------------------------
+# --- 18. Drivers e atualizações pelo Windows Update ------------------------------------------------
 Etapa 'Windows Update (drivers)' {
     Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null
     Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
