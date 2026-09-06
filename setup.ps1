@@ -1557,6 +1557,16 @@ Etapa 'Windows Update (drivers)' {
     Import-Module PSWindowsUpdate
     Passo 'procurando e instalando o resto das atualizações e drivers (o de vídeo já veio na etapa 4)'
     Get-WindowsUpdate -AcceptAll -Install -IgnoreReboot | Out-Host
+
+    # Ativação. Esta máquina tem licença digital do Windows 11 Pro gravada no hardware (canal Retail,
+    # "ativada permanentemente"): reinstalando a mesma edição no mesmo PC, a Microsoft reativa sozinha
+    # quando há rede. Aqui só se pede a ativação agora (slmgr /ato) em vez de esperar o Windows
+    # lembrar, e o estado vai para o resumo. Nada de chave nem de ativador: não precisa.
+    Passo 'ativação do Windows pela licença digital do hardware'
+    Silencioso { cscript.exe //nologo "$env:SystemRoot\System32\slmgr.vbs" /ato 2>&1 | Out-Null }
+    $lic = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL AND ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f'" -ErrorAction Ignore | Select-Object -First 1
+    if ($lic -and $lic.LicenseStatus -eq 1) { Passo "Windows ativado ($($lic.ProductKeyChannel), chave ...$($lic.PartialProductKey))" }
+    else { Falha "Windows ainda não ativado (status $($lic.LicenseStatus)); a licença digital reativa sozinha com rede, confira em Configurações > Sistema > Ativação" }
 }
 
 # --- 27. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) ---------------

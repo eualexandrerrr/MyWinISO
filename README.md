@@ -104,7 +104,7 @@ perde a imagem dele; com ela, sobrevive. Medido nesta máquina, não suposto.
 | 23 | perfil do PowerShell (`powershell/profile.ps1`: atalhos `c` e `x`, histórico com setas, prompt curto) |
 | 24 | barra de tarefas, nesta ordem: **Explorer, Chrome, RedM, Discord, VS Code**; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar. Depois dos programas, porque os pinos precisam dos atalhos existindo (o do VS Code fica em `%AppData%`, porque o winget o instala por usuário) |
 | 25 | WSL com Debian: usuário `alexandre` com zsh, sudo sem senha, systemd (`wsl/debian.sh`). Com a partição Dados o disco do Debian fica em `D:\WSL\Debian` e, na reinstalação, volta como estava sem rodar nada |
-| 26 | resto dos drivers e as atualizações, pelo Windows Update (o de vídeo já veio na etapa 5) |
+| 26 | resto dos drivers e as atualizações, pelo Windows Update (o de vídeo já veio na etapa 5); e a **ativação** pela licença digital gravada no hardware (`slmgr /ato` e o estado no resumo) — sem chave e sem ativador, porque esta máquina já tem a licença do Pro vinculada |
 | 27 | Windows Terminal instalado, atualizado e como console padrão do sistema, com cinco shells em abas (`terminal/settings.json`) |
 | 28 | manutenção: três tarefas de limpeza que rodam sozinhas, a tarefa **Standby list** (o que o Intelligent Standby List Cleaner faz: a cada minuto, se a RAM livre caiu abaixo de um quarto e a standby list passou de 1 GB, esvazia a standby list pela mesma chamada do ISLC, `manutencao/standby.ps1`), armazenamento reservado liberado, sem compartilhar updates com a internet, backup do registro e as tarefas de telemetria de fundo desligadas |
 
