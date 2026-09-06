@@ -178,7 +178,11 @@ foreach ($q in $cfg.monitores) {
     $aplicar += [pscustomobject]@{ Alvo = $alvo; Quer = $q }
 }
 
-if ($aplicar.Count -eq 0) { throw 'nenhum monitor do monitores.json está ligado' }
+if ($aplicar.Count -eq 0) {
+    # noutra máquina (ou numa VM) nenhum destes monitores existe; isso é aviso, não falha do script
+    Write-Host '  nenhum monitor do monitores.json está ligado; nada a aplicar' -ForegroundColor Yellow
+    exit $erros
+}
 
 # 1) grava o modo de cada monitor sem aplicar; o primário primeiro, para as posições relativas fecharem
 foreach ($par in ($aplicar | Sort-Object { -not $_.Quer.primario })) {
