@@ -256,7 +256,7 @@ Etapa 'Preferências do usuário' {
         'Microsoft.OutlookForWindows', 'Microsoft.Paint', 'Microsoft.People', 'Microsoft.PowerAutomateDesktop',
         'Microsoft.ScreenSketch', 'Microsoft.SkypeApp', 'Microsoft.Todos', 'Microsoft.Wallet', 'Microsoft.Windows.DevHome',
         'Microsoft.WindowsAlarms', 'Microsoft.WindowsCamera', 'Microsoft.WindowsFeedbackHub', 'Microsoft.WindowsMaps',
-        'Microsoft.WindowsNotepad', 'Microsoft.WindowsSoundRecorder', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxApp',
+        'Microsoft.WindowsSoundRecorder', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxApp',
         'Microsoft.XboxGameOverlay', 'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone',
         'Microsoft.ZuneMusic', 'Microsoft.ZuneVideo', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
         'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps', 'MicrosoftWindows.Client.WebExperience',
@@ -274,6 +274,8 @@ Etapa 'Preferências do usuário' {
             if (Test-Path -LiteralPath $exe) { Start-Process -FilePath $exe -ArgumentList '/uninstall' -Wait }
         }
     }
+    Passo 'Bloco de Notas sem o banner da Loja'
+    Set-Reg 'HKCU:\Software\Microsoft\Notepad' 'ShowStoreBanner' 0
     Passo 'Modo Jogo ligado, apps em segundo plano desligados, cor de destaque puxada do wallpaper'
     Set-Reg 'HKCU:\Software\Microsoft\GameBar' 'AutoGameModeEnabled' 1
     Set-Reg 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode'   1

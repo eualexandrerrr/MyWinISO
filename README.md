@@ -58,7 +58,7 @@ Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou 
 |:--|:--|
 | 1 | garante que o winget funciona (em instalação nova ele demora a registrar) |
 | 2 | instala o Git e clona este repositório em `~\Projetos\mywiniso` |
-| 3 | programas do `apps.json`, um a um, com resultado na tela: 45 do winget e o WhatsApp da Loja |
+| 3 | programas do `apps.json`, um a um, com resultado na tela: 45 do winget, e WhatsApp e Bloco de Notas da Loja |
 | 4 | RedM na área de trabalho (o instalador não tem modo silencioso) |
 | 5 | `git config` com nome e e-mail |
 | 6 | preferências do usuário (tabela abaixo) |
@@ -80,7 +80,7 @@ Roda no primeiro logon e em qualquer Windows 11 depois (`mywiniso-setup.cmd` ou 
 
 | | |
 |:--|:--|
-| Dia a dia | Chrome, Firefox, Google Drive, Discord, WhatsApp, Spotify, Obsidian, VLC, Lightshot, WinRAR, 7-Zip, TranslucentTB |
+| Dia a dia | Chrome, Firefox, Google Drive, Discord, WhatsApp, Spotify, Obsidian, VLC, Lightshot, WinRAR, 7-Zip, TranslucentTB, Bloco de Notas |
 | Jogos | Steam, Radmin VPN, OBS Studio, RedM (área de trabalho), NVIDIA App |
 | Dev | Git, GitHub CLI, VS Code, Claude Code, PowerShell 7, Node.js, Bun, Python 3.13, uv, Docker Desktop, cloudflared, MariaDB, HeidiSQL, WinSCP |
 | CLI | starship, zoxide, fzf, bat, fd, ripgrep, eza, jq, ffmpeg, rclone, JetBrainsMono Nerd Font |
@@ -150,10 +150,10 @@ de qualquer usuário existir, e a lista está legível no `especializar.ps1` den
 
 | | |
 |:--|:--|
-| Apps removidos | Clipchamp, Cortana, Notícias, Clima, Bing Search, Copilot, Game Assist, app Xbox, Game Bar, Obter Ajuda, Dicas, Office Hub, Solitaire, Sticky Notes, Outlook, Pessoas, Power Automate, To Do, Dev Home, Alarmes, Câmera, Feedback Hub, Mapas, Gravador, Telefone, Mídia, Filmes e TV, Família, Assistência Rápida, Teams, Mail e Calendário, Skype, Carteira, OneNote, 3D Viewer, Mixed Reality, Widgets (app e runtime), Cross Device, Take a Test, **Bloco de Notas, Paint e Ferramenta de Captura** (VS Code e Lightshot no lugar) |
+| Apps removidos | Clipchamp, Cortana, Notícias, Clima, Bing Search, Copilot, Game Assist, app Xbox, Game Bar, Obter Ajuda, Dicas, Office Hub, Solitaire, Sticky Notes, Outlook, Pessoas, Power Automate, To Do, Dev Home, Alarmes, Câmera, Feedback Hub, Mapas, Gravador, Telefone, Mídia, Filmes e TV, Família, Assistência Rápida, Teams, Mail e Calendário, Skype, Carteira, OneNote, 3D Viewer, Mixed Reality, Widgets (app e runtime), Cross Device, Take a Test, **Paint e Ferramenta de Captura** (Lightshot no lugar) |
 | Capacidades removidas | Internet Explorer, WordPad, Fax e Scanner, Windows Media Player legado, Steps Recorder, Math Input, Handwriting, Speech e TTS, Hello Face, OneSync, OpenSSH Client (o Git traz o dele), PowerShell ISE |
 | Recursos removidos | PowerShell 2.0, cliente de Área de Trabalho Remota (`mstsc`), Recall, Captura |
-| Ficam | Loja e App Installer (o winget depende deles), Calculadora, Fotos, Terminal, Xbox Identity Provider, MediaPlayback (jogos e apps usam para vídeo) |
+| Ficam | Loja e App Installer (o winget depende deles), Bloco de Notas (sem o banner da Loja), Calculadora, Fotos, Terminal, Xbox Identity Provider, MediaPlayback (jogos e apps usam para vídeo) |
 | Também sai | OneDrive (desinstalado e proibido de voltar por política), agendamento pós-OOBE do Outlook, Dev Home e Teams, ícone do Edge, sons do sistema |
 | Políticas | telemetria no mínimo, sem sugestões e apps promovidos, sem Copilot (app, provider, política e barra lateral do Edge), sem widgets, sem ID de anúncio, Edge sem tela inicial e sem startup boost, Edge desinstalável, busca sem Bing, Iniciar sem nada fixado |
 | Fica de fora de propósito | o Edge em si: o Windows usa o WebView2 dele em várias telas e o Windows Update o traz de volta; ele fica desinstalável para você decidir |

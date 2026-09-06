@@ -62,7 +62,8 @@
     },
     {
       "Packages": [
-        { "PackageIdentifier": "9NBDXK71NK08" }
+        { "PackageIdentifier": "9NBDXK71NK08" },
+        { "PackageIdentifier": "9MSMLRH6LZF3" }
       ],
       "SourceDetails": {
         "Argument": "https://storeedgefd.dsx.mp.microsoft.com/v9.0",

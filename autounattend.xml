@@ -243,8 +243,8 @@ function Set-Reg([string] $Path, [string] $Name, $Value, [string] $Type = 'DWord
 function Reg([string] $Args) { $saida = cmd.exe /c "reg.exe $Args 2>&1"; if ($LASTEXITCODE -ne 0) { throw "reg.exe $Args -> $saida" } }
 
 Faz 'Bloatware: pacotes provisionados' {
-    # Ficam: Loja e App Installer (o winget depende deles), Calculadora, Fotos, Terminal, Xbox Identity Provider.
-    # Bloco de Notas, Paint e Ferramenta de Captura saem: VS Code e Lightshot no lugar.
+    # Ficam: Loja e App Installer (o winget depende deles), Bloco de Notas, Calculadora, Fotos, Terminal, Xbox Identity Provider.
+    # Paint e Ferramenta de Captura saem (Lightshot no lugar). Bloco de Notas fica.
     $bloat = @(
         'Clipchamp.Clipchamp', 'Microsoft.549981C3F5F10', 'Microsoft.BingNews', 'Microsoft.BingSearch',
         'Microsoft.BingWeather', 'Microsoft.Copilot', 'Microsoft.Edge.GameAssist', 'Microsoft.GamingApp',
@@ -253,7 +253,7 @@ Faz 'Bloatware: pacotes provisionados' {
         'Microsoft.MSPaint', 'Microsoft.Office.OneNote', 'Microsoft.OutlookForWindows', 'Microsoft.Paint',
         'Microsoft.People', 'Microsoft.PowerAutomateDesktop', 'Microsoft.ScreenSketch', 'Microsoft.SkypeApp',
         'Microsoft.Todos', 'Microsoft.Wallet', 'Microsoft.Windows.DevHome', 'Microsoft.WindowsAlarms',
-        'Microsoft.WindowsCamera', 'Microsoft.WindowsFeedbackHub', 'Microsoft.WindowsMaps', 'Microsoft.WindowsNotepad',
+        'Microsoft.WindowsCamera', 'Microsoft.WindowsFeedbackHub', 'Microsoft.WindowsMaps',
         'Microsoft.WindowsSoundRecorder', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxApp', 'Microsoft.XboxGameOverlay',
         'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone', 'Microsoft.ZuneMusic',
         'Microsoft.ZuneVideo', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
@@ -301,13 +301,6 @@ Faz 'Outlook, Dev Home e Teams: sem instalação agendada depois do OOBE' {
         Remove-Item -LiteralPath "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\$k" -Force -ErrorAction Ignore
     }
     Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Communications' 'ConfigureChatAutoInstall' 0
-}
-
-Faz 'Sem o Bloco de Notas, "Novo > Documento de Texto" continua existindo' {
-    Reg 'add "HKCR\txtfilelegacy" /ve /t REG_SZ /d "Text Document" /f'
-    Reg 'add "HKCR\txtfilelegacy" /v FriendlyTypeName /t REG_EXPAND_SZ /d "@C:\Windows\system32\notepad.exe,-469" /f'
-    Reg 'add "HKCR\.txt\ShellNew" /v ItemName /t REG_EXPAND_SZ /d "@C:\Windows\system32\notepad.exe,-470" /f'
-    Reg 'add "HKCR\.txt\ShellNew" /v NullFile /t REG_SZ /f'
 }
 
 Faz 'OneDrive: desinstalar' {
