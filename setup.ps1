@@ -147,6 +147,30 @@ function Silencioso([scriptblock] $Corpo) {
     try { & $Corpo } catch { }
     while ($Error.Count -gt $antes) { $Error.RemoveAt(0) }
 }
+function Junction([string] $Alvo, [string] $Destino) {
+    # $Alvo (no C:) vira uma junção para $Destino (em D:), e todo programa continua lendo e gravando no caminho
+    # de sempre sem saber que está em D:. Conteúdo: se só o C: tem, vai para D:; se os dois têm, o de D: manda
+    # (é o que sobreviveu à formatação) e o de C: vai para <nome>.antigo; se nenhum tem, D: nasce vazio.
+    # Junção e não symlink: dispensa privilégio e todo programa a enxerga como pasta comum. Devolve o que fez.
+    $item = Get-Item -LiteralPath $Alvo -ErrorAction Ignore
+    if ($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return 'já era junção' }
+    New-Item -ItemType Directory -Path (Split-Path -Parent $Destino), (Split-Path -Parent $Alvo) -Force | Out-Null
+    if ($item) {
+        if (Test-Path -LiteralPath $Destino) {
+            Remove-Item -LiteralPath "$Alvo.antigo" -Recurse -Force -ErrorAction Ignore
+            Move-Item -LiteralPath $Alvo -Destination "$Alvo.antigo" -Force
+            $como = 'D: manda; o que havia no C: ficou em .antigo'
+        } else {
+            Move-Item -LiteralPath $Alvo -Destination $Destino -Force
+            $como = 'o conteúdo do C: foi para D:'
+        }
+    } else {
+        New-Item -ItemType Directory -Path $Destino -Force | Out-Null
+        $como = if ((Get-ChildItem -LiteralPath $Destino -Force | Measure-Object).Count) { 'voltou de D:' } else { 'novo, vazio' }
+    }
+    New-Item -ItemType Junction -Path $Alvo -Target $Destino -ErrorAction Stop | Out-Null
+    return $como
+}
 function Invoke-SemElevacao([string] $Exe, [string] $Argumentos, [int] $TimeoutSeg = 1800) {
     # Alguns instaladores recusam rodar como administrador e o winget devolve 0x8A150056 (o do Spotify faz
     # isso). O setup todo roda elevado, então o jeito de chamar um deles é por uma tarefa agendada com
@@ -474,6 +498,47 @@ Etapa 'Preferências do usuário' {
             if ($hr -ne 0) { Falha ("pasta {0} -> {1}: SHSetKnownFolderPath devolveu 0x{2:X8}" -f $kf.pasta, $alvo, $hr) }
         }
         New-Item -ItemType Directory -Path (Join-Path $Dados 'Jogos'), (Join-Path $Dados 'WSL') -Force | Out-Null   # Projetos em D: é o Alexandre quem cria
+
+        Passo 'perfil dos programas em D:\Perfil: as preferências voltam depois da formatação'
+        # Uma junção por programa, e não o AppData inteiro. Dois motivos, os dois medidos: o Roaming já está em
+        # uso pelo Explorer no primeiro logon (Recent, Start Menu) e não dá para movê-lo; e o Local guarda os
+        # apps da Loja (Packages), que quebram fora de lugar. Nesta altura nenhum destes programas foi instalado,
+        # então a junção nasce antes deles e o instalador já grava em D: sem saber. Na reinstalação a pasta em
+        # D: existe com o conteúdo de antes, e a junção aponta para ela: as preferências voltam.
+        # O que NÃO volta, por desenho do Windows: o que os programas cifram com a DPAPI da conta (cookies e
+        # sessões do Chrome, token do Discord e do Spotify, credencial do git). A conta nova tem chave nova,
+        # então esses pedem login de novo. Senhas estão no Proton Pass. Programa novo no apps.json que guarde
+        # preferência ganha uma linha aqui.
+        $perfil = Join-Path $Dados 'Perfil'
+        foreach ($j in @(
+            @{ de = "$env:LOCALAPPDATA\Google\Chrome\User Data"; para = 'Chrome' },        # perfil inteiro: extensões, favoritos, histórico, configurações
+            @{ de = "$env:APPDATA\discord";                      para = 'discord' },
+            @{ de = "$env:APPDATA\Spotify";                      para = 'Spotify' },
+            @{ de = "$env:APPDATA\Code";                         para = 'Code' },           # VS Code: settings, keybindings, estado
+            @{ de = "$env:USERPROFILE\.vscode";                  para = '.vscode' },        # VS Code: extensões
+            @{ de = "$env:APPDATA\obsidian";                     para = 'obsidian' },
+            @{ de = "$env:APPDATA\obs-studio";                   para = 'obs-studio' },     # cenas, perfis, chaves de stream
+            @{ de = "$env:APPDATA\vlc";                          para = 'vlc' },
+            @{ de = "$env:APPDATA\GitHub CLI";                   para = 'GitHub CLI' },     # gh: hosts.yml (o token é DPAPI, pede login)
+            @{ de = "$env:USERPROFILE\.claude";                  para = '.claude' },        # Claude Code: memória, projetos, configurações
+            @{ de = "$env:USERPROFILE\.ssh";                     para = '.ssh' },
+            @{ de = "$env:USERPROFILE\.config";                  para = '.config' })) {     # starship e afins
+            $para = Join-Path $perfil $j.para
+            try { Passo ("  {0} -> {1}: {2}" -f $j.de.Replace($env:USERPROFILE, '~'), $para, (Junction $j.de $para)) }
+            catch { Falha ("junção {0}: {1}" -f $j.de, $_.Exception.Message) }
+        }
+        # Arquivo solto vai por symlink (junção é só de pasta). O ~\.claude.json é a sessão do Claude Code. O link
+        # pode nascer apontando para um arquivo que ainda não existe: o primeiro gravar cria o alvo em D:.
+        foreach ($f in '.claude.json') {
+            $de = Join-Path $env:USERPROFILE $f; $para = Join-Path $perfil $f
+            try {
+                $it = Get-Item -LiteralPath $de -ErrorAction Ignore
+                if ($it -and ($it.Attributes -band [IO.FileAttributes]::ReparsePoint)) { Passo "  ~\$f já era link"; continue }
+                if ($it) { if (Test-Path -LiteralPath $para) { Remove-Item -LiteralPath $de -Force } else { Move-Item -LiteralPath $de -Destination $para -Force } }
+                New-Item -ItemType SymbolicLink -Path $de -Target $para -ErrorAction Stop | Out-Null
+                Passo "  ~\$f -> $para"
+            } catch { Falha "link ~\$f : $($_.Exception.Message)" }
+        }
         # Android SDK, emuladores e o .android em D:, para não baixar de novo a cada formatação. O Android
         # Studio lê ANDROID_HOME no assistente inicial e propõe esse caminho para o SDK; o AVD e o .android
         # seguem as variáveis próprias. Variáveis de máquina, então valem para qualquer conta e terminal.
@@ -488,6 +553,27 @@ Etapa 'Preferências do usuário' {
     $adv = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
     Set-Reg $adv 'HideFileExt'        0
     Set-Reg $adv 'LaunchTo'           1
+    Passo 'pastas com o nome real: Program Files, Users, Public, e não a tradução'
+    # A tradução ("Arquivos de Programas") vem do LocalizedResourceName no desktop.ini de cada pasta. Só isso:
+    # medido, tirar a linha basta e o FolderDescriptions do registro não precisa ser tocado. O arquivo é
+    # UTF-16 com BOM e tem os atributos sistema+oculto; por isso .NET e não attrib/Set-Content.
+    foreach ($pasta in "$env:ProgramFiles", "${env:ProgramFiles(x86)}", "$env:ProgramFiles\Common Files", "${env:ProgramFiles(x86)}\Common Files", "$env:SystemDrive\Users", "$env:PUBLIC") {
+        $ini = Join-Path $pasta 'desktop.ini'
+        if (-not (Test-Path -LiteralPath $ini)) { continue }
+        try {
+            $bytes = [IO.File]::ReadAllBytes($ini)
+            $enc = if ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) { [Text.Encoding]::Unicode } else { [Text.Encoding]::Default }
+            $txt = $enc.GetString($bytes)
+            if ($txt -notmatch '(?m)^LocalizedResourceName=') { continue }
+            $attr = [IO.File]::GetAttributes($ini)
+            [IO.File]::SetAttributes($ini, 'Normal')
+            [IO.File]::WriteAllBytes($ini, $enc.GetPreamble() + $enc.GetBytes(($txt -replace '(?m)^LocalizedResourceName=.*\r?\n?', '')))
+            [IO.File]::SetAttributes($ini, $attr)
+        } catch { Falha "desktop.ini de ${pasta}: $($_.Exception.Message)" }
+    }
+    # caminho completo na barra de título. Na barra de endereço o Windows 11 só mostra a trilha (clicar nela
+    # mostra o caminho): não há ajuste para deixá-la literal; o que dá é o nome de cada pasta ser o real.
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CabinetState' 'FullPath' 1
     # área de trabalho limpa: nenhum ícone aparece. Os arquivos continuam lá (o RedM.exe e o
     # mywiniso-setup.cmd que o setup deixa), só não são desenhados; para chegar neles, Win+E e ir na
     # pasta Área de Trabalho. O Explorer relê isso quando reiniciar, na etapa 10.
@@ -1123,6 +1209,15 @@ Etapa 'Jogos: RedM e biblioteca do Steam' {
         New-Item -ItemType Directory -Path (Join-Path $biblio 'steamapps') -Force | Out-Null
         $steam = 'C:\Program Files (x86)\Steam'
         $vdf   = Join-Path $steam 'steamapps\libraryfolders.vdf'
+        if (Test-Path -LiteralPath $steam) {
+            # login lembrado, configurações e saves na nuvem local (userdata) e config: em D:, pela mesma junção
+            # do perfil. O Steam ainda não abriu nesta altura, então as duas pastas nascem já em D:.
+            foreach ($j in 'config', 'userdata') {
+                $para = Join-Path $biblio "_perfil\$j"
+                try { Passo ("  Steam\{0} -> {1}: {2}" -f $j, $para, (Junction (Join-Path $steam $j) $para)) }
+                catch { Falha "Steam\$j : $($_.Exception.Message)" }
+            }
+        }
         if (-not (Test-Path -LiteralPath $steam)) { Passo 'Steam não está instalado; a biblioteca em D: fica para a próxima rodada' }
         elseif (Test-Path -LiteralPath $vdf) { Passo "o Steam já rodou; adicione $biblio em Configurações > Armazenamento e marque como padrão" }
         else {
