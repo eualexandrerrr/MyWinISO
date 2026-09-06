@@ -1271,6 +1271,17 @@ Etapa 'Programas (apps.json)' {
         } else {
             winget.exe install --id $p.Id --exact --source $p.Fonte --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
             $codigo = $LASTEXITCODE
+            # Uma segunda tentativa antes de desistir. Falha de download nao diz nada sobre o pacote: o
+            # Proton Pass saiu com 0x80D05011 (a Delivery Optimization largou o download no meio) numa
+            # rodada e instalou de primeira na tentativa seguinte, sem nada ter mudado. O winget install
+            # e idempotente, entao repetir nao estraga nada, e trinta segundos aqui valem mais do que
+            # descobrir no resumo que faltou um programa. So uma vez: erro que persiste e erro de verdade.
+            if ($codigo -ne 0 -and $codigo -ne -1978335189) {
+                Passo ("saiu com 0x{0:X8}; tentando mais uma vez" -f $codigo)
+                Start-Sleep -Seconds 5
+                winget.exe install --id $p.Id --exact --source $p.Fonte --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+                $codigo = $LASTEXITCODE
+            }
         }
         if ($codigo -eq 0)                    { Write-Host '        OK' -ForegroundColor Green }
         elseif ($codigo -eq -1978335189)      { Write-Host '        já instalado, sem atualização' -ForegroundColor DarkGray }
