@@ -290,6 +290,7 @@ Etapa 'winget' {
 # Se o Git não entrar, baixa o repositório como zip, para que o resto do setup não dependa dele; o Git é tentado
 # de novo na etapa 3, porque está no apps.json.
 $aqui = if ($PSScriptRoot) { $PSScriptRoot } elseif ($env:MYWINISO_RAIZ) { $env:MYWINISO_RAIZ } else { '' }
+$PerfilNoD = Join-Path $aqui 'manutencao\perfil.ps1'   # regra que leva o perfil de todo programa para D: (etapas 7, 13 e 28)
 if (-not ($aqui -and (Test-Path -LiteralPath (Join-Path $aqui 'apps.json')))) {
     Etapa 'Git e clone do repositório' {
         if (-not (Get-Command git.exe -ErrorAction Ignore)) {
@@ -499,48 +500,26 @@ Etapa 'Preferências do usuário' {
         }
         New-Item -ItemType Directory -Path (Join-Path $Dados 'Jogos'), (Join-Path $Dados 'WSL') -Force | Out-Null   # Projetos em D: é o Alexandre quem cria
 
-        Passo 'perfil dos programas em D:\Perfil: as preferências voltam depois da formatação'
-        # Uma junção por programa, e não o AppData inteiro. Dois motivos, os dois medidos: o Roaming já está em
-        # uso pelo Explorer no primeiro logon (Recent, Start Menu) e não dá para movê-lo; e o Local guarda os
-        # apps da Loja (Packages), que quebram fora de lugar. Nesta altura nenhum destes programas foi instalado,
-        # então a junção nasce antes deles e o instalador já grava em D: sem saber. Na reinstalação a pasta em
-        # D: existe com o conteúdo de antes, e a junção aponta para ela: as preferências voltam.
-        # O que NÃO volta, por desenho do Windows: o que os programas cifram com a DPAPI da conta (cookies e
-        # sessões do Chrome, token do Discord e do Spotify, credencial do git). A conta nova tem chave nova,
-        # então esses pedem login de novo. Senhas estão no Proton Pass. Programa novo no apps.json que guarde
-        # preferência ganha uma linha aqui.
-        $perfil = Join-Path $Dados 'Perfil'
-        foreach ($j in @(
-            @{ de = "$env:LOCALAPPDATA\Google\Chrome\User Data"; para = 'Chrome' },        # perfil inteiro: extensões, favoritos, histórico, configurações
-            @{ de = "$env:APPDATA\discord";                      para = 'discord' },
-            @{ de = "$env:APPDATA\Vencord";                      para = 'Vencord' },        # settings.json, quickCss, temas e plugins do Vencord
-            @{ de = "$env:APPDATA\Spotify";                      para = 'Spotify' },
-            @{ de = "$env:APPDATA\Code";                         para = 'Code' },           # VS Code: settings, keybindings, estado
-            @{ de = "$env:USERPROFILE\.vscode";                  para = '.vscode' },        # VS Code: extensões
-            @{ de = "$env:APPDATA\obsidian";                     para = 'obsidian' },
-            @{ de = "$env:APPDATA\obs-studio";                   para = 'obs-studio' },     # cenas, perfis, chaves de stream
-            @{ de = "$env:APPDATA\GitHub CLI";                   para = 'GitHub CLI' },     # gh: hosts.yml (o token é DPAPI, pede login)
-            @{ de = "$env:USERPROFILE\.claude";                  para = '.claude' },        # Claude Code: memória, projetos, transcrições, configurações
-            @{ de = "$env:USERPROFILE\.engram";                  para = '.engram' },        # engram.db do Claude
-            @{ de = "$env:APPDATA\Claude Code";                  para = 'Claude Code' },    # host nativo da extensão do Chrome
-            @{ de = "$env:USERPROFILE\.ssh";                     para = '.ssh' },
-            @{ de = "$env:USERPROFILE\.config";                  para = '.config' })) {     # starship e afins
-            $para = Join-Path $perfil $j.para
-            try { Passo ("  {0} -> {1}: {2}" -f $j.de.Replace($env:USERPROFILE, '~'), $para, (Junction $j.de $para)) }
-            catch { Falha ("junção {0}: {1}" -f $j.de, $_.Exception.Message) }
-        }
-        # Arquivo solto vai por symlink (junção é só de pasta). O ~\.claude.json é a sessão do Claude Code. O link
-        # pode nascer apontando para um arquivo que ainda não existe: o primeiro gravar cria o alvo em D:.
-        foreach ($f in '.claude.json') {
-            $de = Join-Path $env:USERPROFILE $f; $para = Join-Path $perfil $f
-            try {
-                $it = Get-Item -LiteralPath $de -ErrorAction Ignore
-                if ($it -and ($it.Attributes -band [IO.FileAttributes]::ReparsePoint)) { Passo "  ~\$f já era link"; continue }
-                if ($it) { if (Test-Path -LiteralPath $para) { Remove-Item -LiteralPath $de -Force } else { Move-Item -LiteralPath $de -Destination $para -Force } }
-                New-Item -ItemType SymbolicLink -Path $de -Target $para -ErrorAction Stop | Out-Null
-                Passo "  ~\$f -> $para"
-            } catch { Falha "link ~\$f : $($_.Exception.Message)" }
-        }
+        Passo 'perfil dos programas em D:\Perfil: toda pasta de configuração de todo programa, por regra'
+        # manutencao\perfil.ps1: cada pasta que há (ou houver) em Roaming, Local, LocalLow e nos .dotfolders do
+        # perfil vai para D:\Perfil\<raiz>\<pasta> e vira junção, menos o que é do próprio Windows (Microsoft,
+        # Packages, Temp, Programs). Roda aqui, antes de instalar qualquer programa, para as junções das
+        # pastas que sobreviveram à formatação já existirem quando o instalador gravar; roda de novo no fim
+        # dos Programas e no fim do setup, e depois pela tarefa 'Perfil no D' a cada logon e de hora em hora,
+        # para programa instalado depois. Por que não o AppData inteiro está explicado no próprio script.
+        # O que não volta, por desenho do Windows: o que os programas cifram com a DPAPI da conta (cookies,
+        # sessões, tokens, credencial do git). A conta nova tem chave nova; esses pedem login de novo.
+        if (Test-Path -LiteralPath $PerfilNoD) {
+            & $PerfilNoD
+            $sid       = ([Security.Principal.NTAccount]"$env:USERDOMAIN\$env:USERNAME").Translate([Security.Principal.SecurityIdentifier]).Value
+            $principal = New-ScheduledTaskPrincipal -UserId $sid -RunLevel Highest
+            $cfg       = New-ScheduledTaskSettingsSet -Compatibility Win8 -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 30) -Hidden
+            $gatilhos  = @((New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"),
+                           (New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Hours 1) -RepetitionDuration (New-TimeSpan -Days 3650)))
+            Register-ScheduledTask -TaskName 'Perfil no D' -TaskPath '\mywiniso' -Force -Settings $cfg -Principal $principal -Trigger $gatilhos `
+                -Action (New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$PerfilNoD`" -Quieto") | Out-Null
+            Passo "tarefa 'Perfil no D': a cada logon e de hora em hora, leva para D: o perfil de programa novo"
+        } else { Falha "não achei $PerfilNoD" }
         # Android SDK, emuladores e o .android em D:, para não baixar de novo a cada formatação. O Android
         # Studio lê ANDROID_HOME no assistente inicial e propõe esse caminho para o SDK; o AVD e o .android
         # seguem as variáveis próprias. Variáveis de máquina, então valem para qualquer conta e terminal.
@@ -1182,6 +1161,13 @@ Etapa 'Programas (apps.json)' {
         else                                  { Falha ("{0}: winget saiu com código {1} (0x{2:X8})" -f $p.Id, $codigo, $codigo) }
     }
     Refresh-Path
+    if ($Dados -and (Test-Path -LiteralPath $PerfilNoD)) {
+        # instalador que abre o programa no fim (Discord, Spotify) deixa a pasta em uso; fecha para ela ir a D: agora
+        Passo 'perfil do que acabou de ser instalado vai para D:'
+        Stop-Process -Name Discord, Spotify, steam, chrome, Code, obsidian, Update -Force -ErrorAction Ignore
+        Start-Sleep -Seconds 2
+        & $PerfilNoD
+    }
 }
 
 # --- 14. Lightshot: um atalho só, Shift+PrintScreen -----------------------------------------------
@@ -1412,14 +1398,28 @@ Etapa 'MariaDB' {
     if (-not $maria) { throw 'não instalado (MariaDB.Server falhou no winget?)' }
     $bin = Join-Path $maria.FullName 'bin'
     Passo "em $($maria.FullName)"
+    # Os bancos moram em D:\Perfil\MariaDB\data quando a partição Alexandre existe: sobrevivem à formatação.
+    # Na reinstalação o data dir já está lá (tem a pasta mysql\ dentro), e aí não se roda o install-db, que
+    # se recusaria; só se registra o serviço em cima dele, com um my.ini apontando o datadir. A senha do
+    # root já está gravada dentro do data dir; o ALTER USER abaixo entra pelo caminho "já configurado".
+    $data = if ($Dados) { Join-Path $Dados 'Perfil\MariaDB\data' } else { Join-Path $maria.FullName 'data' }
     if (-not (Get-Service -Name MariaDB -ErrorAction Ignore)) {
-        Passo 'serviço MariaDB não existe; criando data dir e serviço'
-        $data = Join-Path $maria.FullName 'data'
-        if (Test-Path -LiteralPath $data) { Remove-Item -LiteralPath $data -Recurse -Force }
-        $args = @("--datadir=$data", '--service=MariaDB')
-        if ($Senha) { $args += "--password=$Senha" }
-        & (Join-Path $bin 'mariadb-install-db.exe') @args
-        if ($LASTEXITCODE -ne 0) { throw "mariadb-install-db saiu com código $LASTEXITCODE" }
+        if (Test-Path -LiteralPath (Join-Path $data 'mysql')) {
+            Passo "bancos de antes da formatação em $data; registrando o serviço em cima deles"
+            $ini = Join-Path (Split-Path $data -Parent) 'my.ini'
+            "[mysqld]`r`ndatadir=$($data -replace '\\', '/')`r`n" | Set-Content -LiteralPath $ini -Encoding ASCII
+            $daemon = @('mariadbd.exe', 'mysqld.exe') | ForEach-Object { Join-Path $bin $_ } | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+            & $daemon --install MariaDB "--defaults-file=$ini"
+            if ($LASTEXITCODE -ne 0) { throw "$(Split-Path $daemon -Leaf) --install saiu com código $LASTEXITCODE" }
+        } else {
+            Passo "serviço MariaDB não existe; criando data dir em $data e o serviço"
+            if ((Test-Path -LiteralPath $data) -and -not $Dados) { Remove-Item -LiteralPath $data -Recurse -Force }
+            New-Item -ItemType Directory -Path (Split-Path $data -Parent) -Force | Out-Null
+            $args = @("--datadir=$data", '--service=MariaDB')
+            if ($Senha) { $args += "--password=$Senha" }
+            & (Join-Path $bin 'mariadb-install-db.exe') @args
+            if ($LASTEXITCODE -ne 0) { throw "mariadb-install-db saiu com código $LASTEXITCODE" }
+        }
     }
     Set-Service -Name MariaDB -StartupType Automatic
     Start-Service -Name MariaDB
@@ -1433,6 +1433,25 @@ Etapa 'MariaDB' {
         Passo 'root com senha, acesso local e remoto'
     } else {
         Passo 'sem senha: root sem senha, só local'
+    }
+
+    # HeidiSQL guarda sessões e preferências no registro (HKCU\Software\HeidiSQL), que a formatação leva.
+    # Com um portable_settings.txt ao lado do heidisql.exe ele passa a gravar nesse arquivo; o arquivo é um
+    # symlink para D:\Perfil\HeidiSQL, então as conexões salvas voltam junto com os bancos.
+    if ($Dados) {
+        $heidi = Get-ChildItem 'C:\Program Files\HeidiSQL', "$env:LOCALAPPDATA\Programs\HeidiSQL" -Filter heidisql.exe -ErrorAction Ignore | Select-Object -First 1
+        if ($heidi) {
+            $alvo = Join-Path $Dados 'Perfil\HeidiSQL\portable_settings.txt'
+            New-Item -ItemType Directory -Path (Split-Path $alvo -Parent) -Force | Out-Null
+            if (-not (Test-Path -LiteralPath $alvo)) { New-Item -ItemType File -Path $alvo -Force | Out-Null }
+            $link = Join-Path $heidi.DirectoryName 'portable_settings.txt'
+            $it = Get-Item -LiteralPath $link -ErrorAction Ignore
+            if (-not ($it -and ($it.Attributes -band [IO.FileAttributes]::ReparsePoint))) {
+                Remove-Item -LiteralPath $link -Force -ErrorAction Ignore
+                try { New-Item -ItemType SymbolicLink -Path $link -Target $alvo -ErrorAction Stop | Out-Null; Passo "HeidiSQL em modo portátil, sessões em $alvo" }
+                catch { Falha "HeidiSQL portable_settings.txt: $($_.Exception.Message)" }
+            } else { Passo 'HeidiSQL já em modo portátil' }
+        } else { Passo 'HeidiSQL não instalado; fica para a próxima rodada' }
     }
 }
 
@@ -1706,6 +1725,13 @@ Etapa 'Manutenção e telemetria de fundo' {
             -Action (New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$standby`"") | Out-Null
         Passo "tarefa 'Standby list': a cada minuto, limpa a standby list quando a RAM livre cai (o que o ISLC faz)"
     } else { Falha "não achei $standby" }
+
+    if ($Dados -and (Test-Path -LiteralPath $PerfilNoD)) {
+        Passo 'última rodada do perfil em D: (o que as etapas de depois dos Programas criaram)'
+        Stop-Process -Name Discord, Spotify, steam, chrome, Code, obsidian, Update -Force -ErrorAction Ignore
+        Start-Sleep -Seconds 2
+        & $PerfilNoD
+    }
 }
 
 # --- Resumo -----------------------------------------------------------------------------------------

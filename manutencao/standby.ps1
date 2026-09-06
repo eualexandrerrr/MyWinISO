@@ -1,4 +1,4 @@
-# O que o Intelligent Standby List Cleaner faz: quando a RAM livre cai abaixo de um quarto do total e a
+﻿# O que o Intelligent Standby List Cleaner faz: quando a RAM livre cai abaixo de um quarto do total e a
 # standby list (cache de arquivos que o Windows segura "por via das dúvidas") passa de 1 GB, esvazia a
 # standby list. A chamada é a mesma do ISLC: NtSetSystemInformation(SystemMemoryListInformation,
 # MemoryPurgeStandbyList), que precisa do privilégio SeProfileSingleProcessPrivilege (administrador).
