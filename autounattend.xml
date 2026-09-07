@@ -250,6 +250,7 @@ Const MODELO = "MP700 ELITE"
 Const EDICAO = "Windows 11 Pro"   ' nome da imagem dentro do install.wim (dism /Get-WimInfo)
 Const WINDOWS_MB = 122880         ' 120 GB para o Windows e os programas (o C: e descartavel: formata a cada 3 meses); o resto vira "Dados"
 Const DADOS = "Files"             ' rotulo da particao que sobrevive a formatacao (jogos, perfil, Documentos...)
+Const APAGAR_TUDO = False         ' True so para recomecar um disco do zero DE PROPOSITO (veja o ramo de instalacao limpa)
 '   Mudou de "Alexandre" para "Files" em 06/09/2026. Este rotulo e a CHAVE DE PROTECAO: e por ele que o
 '   script reconhece a reinstalacao e preserva a particao. Trocar aqui sem trocar no volume (ou o
 '   contrario) faz o script cair no ramo de instalacao do zero e apagar o disco inteiro. O MyArchISO
@@ -461,20 +462,28 @@ If n <> 1 Then Falha "esperava 1 disco com serial '" & SERIAL & "' ou modelo '" 
 '    porque o WinPE da letra a todo volume basico que enxerga.
 Escreve "Alvo: disco " & alvo & "."
 Dim dadosPart, dadosOff, dadosLetra, dadosEmDisco, ld, pt, frenteMB, winMB, ultimoOff, wmiN, dpN, dpTxt, re, mt, k2, dpVeDados, aindaLa
-Dim nAtras, nFrente, nAtrasDepois, primeiroAtras
+Dim nAtras, nFrente, nAtrasDepois, primeiroAtras, dpNums, dpQtd
 dadosPart = -1: dadosOff = 0: dadosLetra = "": dadosEmDisco = -1: ultimoOff = 0: wmiN = 0
 nAtras = 0: nFrente = 0: nAtrasDepois = 0: primeiroAtras = 0
-For Each ld In wmi.ExecQuery("SELECT DeviceID, VolumeName, Size FROM Win32_LogicalDisk WHERE VolumeName='" & DADOS & "'")
-  For Each pt In wmi.ExecQuery("ASSOCIATORS OF {Win32_LogicalDisk.DeviceID='" & ld.DeviceID & "'} WHERE AssocClass=Win32_LogicalDiskToPartition")
-    dadosEmDisco = CInt(pt.DiskIndex)
-    If CInt(pt.DiskIndex) = CInt(alvo) Then
+' A busca comeca nas PARTICOES DO DISCO ALVO e vai para o volume, nunca o contrario. Buscar o
+' volume primeiro (Win32_LogicalDisk WHERE VolumeName=DADOS) e global: um pendrive, um HD antigo ou
+' um disco virtual com um volume de mesmo nome satisfaz a busca, o script conclui "existe, mas nao e
+' o alvo" e cai no ramo que da clean no disco alvo. Medido em 06/09/2026 com um disco virtual.
+For Each pt In wmi.ExecQuery("SELECT DeviceID, DiskIndex, StartingOffset, Size FROM Win32_DiskPartition WHERE DiskIndex=" & alvo)
+  For Each ld In wmi.ExecQuery("ASSOCIATORS OF {Win32_DiskPartition.DeviceID='" & pt.DeviceID & "'} WHERE AssocClass=Win32_LogicalDiskToPartition")
+    If UCase(Trim(ld.VolumeName & "")) = UCase(DADOS) Then
       dadosPart = 0        ' esta no alvo; o numero de verdade vem do diskpart, mais abaixo
       dadosOff = CDbl(pt.StartingOffset)
+      dadosEmDisco = CInt(alvo)
       dadosLetra = UCase(Left(ld.DeviceID, 1))
       Escreve "volume '" & DADOS & "' no disco " & alvo & ": " & Int(CDbl(ld.Size & "0") / 10 / 1073741824) & " GB em " & ld.DeviceID & ", offset " & Int(dadosOff / 1048576) & " MB"
-    Else
-      Escreve "volume '" & DADOS & "' existe no disco " & pt.DiskIndex & " (" & ld.DeviceID & "), que nao e o alvo; fica como esta"
     End If
+  Next
+Next
+' so para informar: o mesmo rotulo em outro disco nao conta para nada aqui
+For Each ld In wmi.ExecQuery("SELECT DeviceID, VolumeName FROM Win32_LogicalDisk WHERE VolumeName='" & DADOS & "'")
+  For Each pt In wmi.ExecQuery("ASSOCIATORS OF {Win32_LogicalDisk.DeviceID='" & ld.DeviceID & "'} WHERE AssocClass=Win32_LogicalDiskToPartition")
+    If CInt(pt.DiskIndex) <> CInt(alvo) Then Escreve "aviso: existe outro volume '" & DADOS & "' no disco " & pt.DiskIndex & " (" & ld.DeviceID & "); ele nao e considerado, o alvo e o disco " & alvo
   Next
 Next
 Escreve "Particoes do disco " & alvo & " pelo WMI (que nao mostra a MSR):"
@@ -500,10 +509,18 @@ Roda "diskpart.exe /s X:\mywiniso\lista.txt > X:\mywiniso\lista.out 2>&1", 0
 Set ts = fso.OpenTextFile("X:\mywiniso\lista.out", 1): dpTxt = ts.ReadAll: ts.Close
 Set re = New RegExp: re.Global = True: re.Multiline = True
 re.Pattern = "^\s*\*?\s*\S+\s+(\d+)\s+.+?\s+\d+\s+[KMGT]?B\s+\d+\s+[KMGT]?B\s*$"
-dpN = 0
+' Os numeros de particao do diskpart NAO sao contiguos: apagar uma particao deixa buraco na
+' numeracao, e o layout que o MyArchISO deixa tem exatamente isso (1 EFI, 2 ROOT, 3 HOME, 5 Files).
+' Por isso guarda-se a LISTA de numeros, na ordem em que o diskpart lista -- que e a ordem no disco --
+' e nao so o maior. Percorrer "de dpN ate 1" faria "select partition" num numero que nao existe, e no
+' diskpart um select que falha deixa a selecao anterior ativa: o delete seguinte cairia na particao
+' errada. Medido em 06/09/2026 com disco virtual.
+ReDim dpNums(255)
+dpQtd = 0
 For Each mt In re.Execute(dpTxt)
-  k2 = CInt(mt.SubMatches(0)): If k2 > dpN Then dpN = k2
+  If dpQtd <= 255 Then dpNums(dpQtd) = CInt(mt.SubMatches(0)) : dpQtd = dpQtd + 1
 Next
+dpN = dpQtd
 dpVeDados = (InStr(1, dpTxt, DADOS, vbTextCompare) > 0)
 Escreve "diskpart ve " & dpN & " particao(oes) no disco " & alvo & "; volume '" & DADOS & "' na lista de volumes: " & dpVeDados
 
@@ -516,19 +533,28 @@ If dadosPart = 0 Then
   If dadosOff <> primeiroAtras Then Falha "'" & DADOS & "' nao e a primeira particao atras da fronteira (ha algo entre a frente e ela); layout desconhecido, nada foi apagado."
   If dpN - nAtras < 1 Then Falha "todas as " & dpN & " particoes estao atras da fronteira; nao sobra frente para o Windows. Nada foi apagado."
   ' as nAtras ultimas da lista do diskpart sao as preservadas; DADOS e a primeira delas
-  dadosPart = dpN - nAtras + 1
+  dadosPart = dpNums(dpQtd - nAtras)
   ' o que cabe na frente e tudo antes de Dados; o Windows recebe o que sobra depois de EFI, MSR e Recovery,
   ' menos 2 MB de folga para o alinhamento de 1 MB do diskpart
   frenteMB = Int(dadosOff / 1048576)
   winMB = frenteMB - 300 - 16 - 1024 - 2
   If winMB < 61440 Then Falha "so " & winMB & " MB antes de '" & DADOS & "'; nao cabe um Windows ai. Nada foi apagado."
-  Escreve "reinstalacao: apaga as particoes " & (dpN - nAtras) & " ate 1, mantem " & nAtras & " (da " & dadosPart & " ate a " & dpN & ", comecando por '" & DADOS & "') e recria EFI, MSR, Windows (" & winMB & " MB) e Recovery na frente"
+  Dim listaApaga, listaFica
+  listaApaga = "" : listaFica = ""
+  For k2 = 0 To dpQtd - nAtras - 1
+    listaApaga = listaApaga & IIf2(listaApaga = "", "", ", ") & dpNums(k2)
+  Next
+  For k2 = dpQtd - nAtras To dpQtd - 1
+    listaFica = listaFica & IIf2(listaFica = "", "", ", ") & dpNums(k2)
+  Next
+  Escreve "reinstalacao: apaga a(s) particao(oes) " & listaApaga & "; mantem " & listaFica & " (a " & dadosPart & " e a '" & DADOS & "'); recria EFI, MSR, Windows (" & winMB & " MB) e Recovery na frente"
   script = "select disk " & alvo & vbCrLf
   ' o WinPE pode ter dado a Dados justamente a letra S ou W, que o resto desta fase usa; ai ela vai para T
   If dadosLetra = "S" Or dadosLetra = "W" Then script = script & "select partition " & dadosPart & vbCrLf & "remove letter=" & dadosLetra & vbCrLf & "assign letter=T" & vbCrLf
-  ' de tras para a frente: se o diskpart renumerar depois de um delete, os numeros menores continuam valendo
-  For k2 = dpN - nAtras To 1 Step -1
-    script = script & "select partition " & k2 & vbCrLf & "delete partition override" & vbCrLf
+  ' de tras para a frente, e pelos numeros que o diskpart realmente listou: se ele renumerar depois
+  ' de um delete, os numeros menores continuam valendo
+  For k2 = dpQtd - nAtras - 1 To 0 Step -1
+    script = script & "select partition " & dpNums(k2) & vbCrLf & "delete partition override" & vbCrLf
   Next
   script = script & _
     "create partition efi size=300" & vbCrLf & "format quick fs=fat32 label=""System""" & vbCrLf & "assign letter=S" & vbCrLf & _
@@ -542,6 +568,18 @@ ElseIf dpVeDados And dadosEmDisco = -1 Then
   Falha "o diskpart ve um volume '" & DADOS & "' mas o WMI nao conseguiu dizer de que disco ele e; por seguranca nada foi apagado."
 Else
   ' ---- instalacao do zero: nao ha Dados no disco alvo ----
+  ' Aqui esta a diferenca entre uma formatacao e uma perda de dados. Nao identificar a DADOS pode
+  ' significar "disco novo" -- ou significar que ela ESTA la e nao foi reconhecida (sem letra no
+  ' WinPE, NTFS sujo por hibernacao, rotulo trocado). Nos dois casos o script antigo dava clean.
+  ' Agora: disco com particao e sem DADOS reconhecida PARA. Apagar um disco que ja tem conteudo
+  ' passa a exigir um ato deliberado -- apagar as particoes a mao antes, ou APAGAR_TUDO = True.
+  If wmiN > 0 And Not APAGAR_TUDO Then
+    Falha "o disco " & alvo & " ja tem " & wmiN & " particao(oes) e nao reconheci a '" & DADOS & "' nele." & vbCrLf & _
+          "     Se a particao de dados existe, confira o rotulo (tem de ser exatamente '" & DADOS & "')." & vbCrLf & _
+          "     Se e para apagar este disco inteiro mesmo, apague as particoes a mao antes, ou ponha" & vbCrLf & _
+          "     APAGAR_TUDO = True no topo do instala.vbs. Nada foi apagado."
+  End If
+  If APAGAR_TUDO And wmiN > 0 Then Escreve "APAGAR_TUDO = True: o disco " & alvo & " tem " & wmiN & " particao(oes) e vai ser apagado inteiro"
   Escreve "sem volume '" & DADOS & "' no disco " & alvo & ": instalacao do zero, o disco inteiro sera apagado"
   script = "select disk " & alvo & vbCrLf & "clean" & vbCrLf & "convert gpt" & vbCrLf & _
     "create partition efi size=300" & vbCrLf & "format quick fs=fat32 label=""System""" & vbCrLf & "assign letter=S" & vbCrLf & _

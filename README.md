@@ -257,7 +257,41 @@ As garantias, na ordem em que o `instala.vbs` as aplica:
 Por que contar em vez de comparar offsets: o `list partition` mostra o offset **arredondado**
 (`120 GB`), então não dá para casar com o offset em bytes do WMI. Mas o `diskpart` numera por
 posição física e o WMI dá o offset exato — se há N partições com offset ≥ `Files`, elas são as N
-últimas da lista do `diskpart`.
+últimas da lista do `diskpart`. E o `delete` usa **os números que o `diskpart` listou**, não um
+intervalo `1..N`: apagar uma partição deixa buraco na numeração (o layout do Arch fica `1 EFI,
+2 ROOT, 3 HOME, 5 Files`), e um `select partition` num número que não existe deixa a seleção
+anterior ativa — o `delete` seguinte cairia na partição errada.
+
+### Disco com conteúdo e sem a `Files`
+
+Não reconhecer a `Files` pode significar "disco novo" — ou significar que ela **está lá e não foi
+reconhecida** (sem letra no WinPE, NTFS sujo por hibernação, rótulo trocado). Nos dois casos o
+script antigo dava `clean`. Agora, disco que já tem partição e sem `Files` reconhecida **para**:
+
+```
+o disco 0 ja tem 4 particao(oes) e nao reconheci a 'Files' nele.
+     Se a particao de dados existe, confira o rotulo (tem de ser exatamente 'Files').
+     Se e para apagar este disco inteiro mesmo, apague as particoes a mao antes, ou ponha
+     APAGAR_TUDO = True no topo do instala.vbs. Nada foi apagado.
+```
+
+Apagar um disco que já tem conteúdo passa a exigir um ato deliberado. `APAGAR_TUDO = True` fica no
+topo do `instala.vbs`, com `False` como padrão.
+
+### Como isso foi testado
+
+Sem WinPE: a lógica de decisão foi recortada do próprio `instala.vbs` para um arnês que **só lê** —
+o `diskpart` roda apenas `list partition` e `list volume`, e o script de particionamento que a
+lógica monta é **impresso, nunca executado**. Os layouts que ainda não existem foram montados em
+disco virtual (`.vhdx`), com a letra atribuída à `Files` como o WinPE faz:
+
+| Cenário | Resultado esperado | Resultado |
+|:--|:--|:--|
+| Disco real desta máquina (EFI, MSR, Win11, Recovery, Files) | apaga 1-4, mantém 5 | ✅ |
+| Layout do Arch (EFI, ROOT ext4, Files, HOME ext4) | apaga 2-3, mantém `Files` e `HOME` | ✅ |
+| Windows + Files + HOME | apaga 1-4, mantém `Files` e `HOME` | ✅ |
+| Disco com conteúdo e sem `Files` | recusa, nada apagado | ✅ |
+| `HOME` **antes** da `Files` (layout proibido) | `HOME` é apagada | ✅ — e é por isso que o MyArchISO se recusa a criá-la ali |
 
 ## O que está assumido
 
