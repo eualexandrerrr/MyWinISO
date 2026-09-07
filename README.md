@@ -137,6 +137,28 @@ o PowerShell 7; o VS Code abre o PowerShell 7; o que ainda abrir o Windows Power
 Mesmo desenho do dotfiles do Arch (`eualexandrerrr/dotfiles`): starship sem oh-my-zsh, Catppuccin Mocha,
 JetBrainsMono Nerd Font, eza, bat, zoxide, fzf, atalhos `c` e `x`.
 
+## A máquina
+
+O Windows aqui não roda mais no metal: o host é Arch, e este repositório instala a **VM de
+jogo** (ver "Perfil da VM de jogo"). O `autounattend.xml` continua servindo pros dois casos.
+
+| Peça | Modelo | Papel |
+|:--|:--|:--|
+| CPU | AMD Ryzen 7 5700X, 8c/16t, AM4 | 6 núcleos pinados na VM, 2 pro host |
+| Placa-mãe | ASUS TUF Gaming B550M-PLUS (mATX, B550) | x16 Gen4 pela CPU + x16 Gen3 (em x4) pelo chipset |
+| RAM | 32 GB DDR4 dual channel | a maior parte vai pra VM |
+| GPU da VM | Gainward RTX 3090 24GB | `vfio-pci` desde o boot; é ela que o Windows enxerga |
+| GPU do host | PCYes Radeon RX 550 4GB | `amdgpu`; mantém o Linux com tela |
+| SSD | Corsair MP700 ELITE 932 GB NVMe | a imagem da VM fica em `/home` |
+| Fonte | 850 W 80 Plus Gold | |
+| Gabinete | PCYes Forcefield Mini Black Vulcan | mini tower, GPU até 310 mm |
+| Monitores | ASUS XG27ACS 2560x1440@180Hz + LG UltraGear 2560x1440 | ficam no KDE; o jogo chega por Looking Glass |
+
+**Por que duas GPUs.** O client do RedM não passa pelo anticheat sob Wine, então o jogo roda
+num Windows de verdade. Uma GPU passada por `vfio` some do host — a RX 550 é o que impede o
+Linux de ficar sem tela. A 3090 tem cooler de 2,7 slots e tampa o slot de baixo, então a
+RX 550 sai por um riser PCIe 3.0 x16 de 20 cm com plugue de 90°.
+
 ## Perfil da VM de jogo
 
 A máquina passa a rodar Arch, e o Windows vive numa VM com passthrough — uma VM **só de jogo**:
