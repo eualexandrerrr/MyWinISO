@@ -26,8 +26,8 @@
 param([switch] $Quieto)
 
 $ErrorActionPreference = 'Stop'
-$vol = Get-Volume -FileSystemLabel 'Alexandre' -ErrorAction Ignore | Where-Object DriveType -eq 'Fixed' | Select-Object -First 1
-if (-not $vol -or -not $vol.DriveLetter) { if (-not $Quieto) { Write-Host '  sem volume Alexandre; perfil fica em C:' }; exit 0 }
+$vol = Get-Volume -FileSystemLabel 'Files' -ErrorAction Ignore | Where-Object DriveType -eq 'Fixed' | Select-Object -First 1
+if (-not $vol -or -not $vol.DriveLetter) { if (-not $Quieto) { Write-Host '  sem volume Files; perfil fica em C:' }; exit 0 }
 $perfil = "$($vol.DriveLetter):\Perfil"
 New-Item -ItemType Directory -Path $perfil -Force | Out-Null
 $log = Join-Path $perfil 'perfil.log'

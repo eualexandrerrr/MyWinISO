@@ -16,7 +16,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 ---
 
 > **Apaga o Windows, não os seus arquivos.** O alvo é o Corsair MP700 ELITE (serial `6479A7AABAC014A3`).
-> Na primeira instalação o disco inteiro é apagado e nasce a partição **Alexandre** (D:) no fim dele; em toda
+> Na primeira instalação o disco inteiro é apagado e nasce a partição **Files** (D:) no fim dele; em toda
 > reinstalação só as quatro partições do Windows (EFI, MSR, Windows, Recovery) são apagadas e recriadas no
 > mesmo espaço, e a partição Alexandre não é tocada. O C: se chama Win11. Veja "Disco" abaixo.
 > O script só particiona se achar exatamente esse disco; qualquer outro cenário aborta antes

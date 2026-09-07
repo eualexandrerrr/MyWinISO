@@ -117,14 +117,14 @@ try {
 } catch { $Pulso.Ligado = $false }
 
 $Repo = 'https://github.com/eualexandrerrr/MyWinISO'
-# Disco de dados. O instala.vbs cria uma partição "Alexandre" (rótulo) no fim do disco que sobrevive à formatação, e é
+# Disco de dados. O instala.vbs cria uma partição "Files" (rótulo) no fim do disco que sobrevive à formatação, e é
 # nela que mora o que é seu: os jogos e a pasta Downloads. Projetos não: essa
 # pasta o Alexandre monta na mão depois, e este clone continua em ~\Projetos no C:. Aqui só se garante a
 # letra D: (no primeiro boot o Windows pode ter dado D: ao pendrive Ventoy). Num Windows sem essa
 # partição, o setup roda em qualquer Windows 11, tudo fica nas pastas de sempre no C:.
 $Dados = $null
 try {
-    $volDados = @(Get-Volume -FileSystemLabel 'Alexandre' -ErrorAction Ignore | Where-Object DriveType -eq 'Fixed')[0]
+    $volDados = @(Get-Volume -FileSystemLabel 'Files' -ErrorAction Ignore | Where-Object DriveType -eq 'Fixed')[0]
     if ($volDados) {
         if ($volDados.DriveLetter -ne 'D') {
             if (Get-Volume -DriveLetter D -ErrorAction Ignore) {
@@ -136,7 +136,7 @@ try {
         }
         $Dados = 'D:\'
         Write-Host ("disco de dados: D: (rótulo Alexandre, {0:n0} GB)" -f ($volDados.Size / 1GB))
-    } else { Write-Host 'sem partição "Alexandre": pastas do usuário e jogos ficam no C:' }
+    } else { Write-Host 'sem partição "Files": pastas do usuário e jogos ficam no C:' }
 } catch { Write-Host "disco de dados: não consegui deixar em D: ($($_.Exception.Message)); seguindo sem" -ForegroundColor Yellow }
 $Dir  = Join-Path $env:USERPROFILE 'Projetos\MyWinISO'
 $Log  = Join-Path $env:USERPROFILE 'mywiniso-setup.log'

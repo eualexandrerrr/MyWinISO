@@ -243,7 +243,11 @@ Const SERIAL = "6479A7AABAC014A3"   ' Get-Disk | Select-Object FriendlyName, Ser
 Const MODELO = "MP700 ELITE"
 Const EDICAO = "Windows 11 Pro"   ' nome da imagem dentro do install.wim (dism /Get-WimInfo)
 Const WINDOWS_MB = 122880         ' 120 GB para o Windows e os programas (o C: e descartavel: formata a cada 3 meses); o resto vira "Dados"
-Const DADOS = "Alexandre"         ' rotulo da particao que sobrevive a formatacao (jogos, perfil, Documentos...)
+Const DADOS = "Files"             ' rotulo da particao que sobrevive a formatacao (jogos, perfil, Documentos...)
+'   Mudou de "Alexandre" para "Files" em 06/09/2026. Este rotulo e a CHAVE DE PROTECAO: e por ele que o
+'   script reconhece a reinstalacao e preserva a particao. Trocar aqui sem trocar no volume (ou o
+'   contrario) faz o script cair no ramo de instalacao do zero e apagar o disco inteiro. O MyArchISO
+'   protege o mesmo rotulo; os dois tem de andar juntos.
 Const ROTULO_WIN = "Win11"        ' rotulo do C:
 Const ARQLOG = "X:\mywiniso\instala.log"
 Dim fso, sh, wmi, d, dr, alvo, n, script, ts, rc, xml, img
