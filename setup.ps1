@@ -31,13 +31,21 @@
   14. Claude Code: MCPs, plugins e skills    28. manutenção: limpeza e telemetria
 
   -So 'nome da etapa'[,'outra']: roda só essas (as outras saem como puladas, com a numeração de sempre) e não
-  arma reinício. Para testar uma etapa sem esperar as 29.
+  arma reinício. Para testar uma etapa sem esperar as 28.
+
+  -Perfil vm-jogo: a VM de passthrough onde só rodam RedM, Steam e Red Dead 2. Mesmo Windows enxuto,
+  sem nada de trabalho: 13 das 28 etapas, e o apps-vm.json no lugar do apps.json. Ao contrário do -So,
+  é instalação de verdade -- reinicia e retoma como sempre.
 
   A etapa 8 termina esperando o Explorer gravar o TranscodedImageCache. Sem essa espera, o reinício do
   Explorer na etapa 10 desfaz a atribuição de wallpaper por monitor e o monitor em pé perde a imagem
   dele. Com ela, sobrevive. Medido, não suposto.
 #>
-param([string] $Senha = $env:MYWINISO_SENHA, [string[]] $So = $(if ($env:MYWINISO_SO) { $env:MYWINISO_SO -split ';' }))
+param(
+    [string] $Senha = $env:MYWINISO_SENHA,
+    [string[]] $So = $(if ($env:MYWINISO_SO) { $env:MYWINISO_SO -split ';' }),
+    [ValidateSet('completo', 'vm-jogo')] [string] $Perfil = $(if ($env:MYWINISO_PERFIL) { $env:MYWINISO_PERFIL } else { 'completo' })
+)
 
 # Este arquivo é UTF-8 sem BOM: com BOM, "irm | iex" no Windows PowerShell engasga no primeiro caractere. Só que
 # sem BOM o Windows PowerShell lê .ps1 pelo -File (ou por &) como ANSI e os acentos viram "Ã¡". Se o texto chegou
@@ -48,6 +56,7 @@ if ($PSCommandPath -and 'á'.Length -ne 1) {
     $env:MYWINISO_SENHA = $Senha
     $env:MYWINISO_RAIZ  = $PSScriptRoot
     $env:MYWINISO_SO    = ($So -join ';')   # a releitura não repassa parâmetros
+    $env:MYWINISO_PERFIL = $Perfil
     # dot-source, não &: com & o bloco roda em escopo filho e $script:Resultado/$script:Falhas das funções ficam nulos
     . ([scriptblock]::Create([System.IO.File]::ReadAllText($PSCommandPath, [System.Text.Encoding]::UTF8)))
     exit $LASTEXITCODE
@@ -147,6 +156,37 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
 $global:TotalEtapas = 28
+# -So e para depurar: roda só as etapas escolhidas e não mexe em reinício nem no contador de
+# retomadas. -Perfil escolhe um conjunto de etapas, mas é uma instalação de verdade -- reinicia e
+# retoma como sempre. Os dois usam a mesma engrenagem de "pular etapa"; só o efeito colateral muda.
+$global:Depurando   = [bool]$So
+
+# vm-jogo: a VM de passthrough onde só rodam RedM, Steam e Red Dead 2. Mesmo Windows enxuto de
+# sempre -- telemetria fora, energia sem suspender, Explorer arrumado --, mas sem nada de trabalho:
+# sai Office, VS Code, MariaDB, Claude Code, Chrome, Discord, Proton Pass, fontes de código, perfil
+# do PowerShell e Windows Terminal. Fica o que um PC de jogo precisa: driver de vídeo, monitores,
+# energia, Steam, RedM, barra de tarefas e a manutenção que mantém a VM leve.
+# Ponto de restauração sai porque a VM já tem instantâneo do hipervisor, que é melhor e mais rápido.
+$PERFIS = @{
+    'vm-jogo' = @(
+        'winget'
+        'Git e clone do repositório'
+        'Driver de vídeo (NVIDIA)'
+        'Monitores (resolução, Hz, posição)'
+        'Preferências do usuário'
+        'Energia'
+        'Programas (apps.json)'
+        'Jogos: RedM e biblioteca do Steam'
+        'Área de Trabalho Remota e contas'
+        'NVIDIA App'
+        'Barra de tarefas e tarefa de logon'
+        'Windows Update (drivers)'
+        'Manutenção e telemetria de fundo'
+    )
+}
+if ($Perfil -ne 'completo' -and -not $So) { $So = $PERFIS[$Perfil] }
+# O apps.json enxuto do perfil: só o que um jogo precisa (VCRedist, DirectX e Steam).
+$AppsArquivo = if ($Perfil -eq 'vm-jogo') { 'apps-vm.json' } else { 'apps.json' }
 $global:So          = $So
 $global:NumEtapa    = 0
 $global:Resultado   = New-Object System.Collections.Generic.List[object]
@@ -311,7 +351,7 @@ $eu = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
 if (-not $eu.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'Rode como administrador.'
 }
-Write-Host "mywiniso setup | $(Get-Date -Format 'dd/MM/yyyy HH:mm') | usuário $env:USERNAME | senha: $(if ($Senha) { 'sim' } else { 'não' }) | log: $Log"
+Write-Host "mywiniso setup | $(Get-Date -Format 'dd/MM/yyyy HH:mm') | usuário $env:USERNAME | senha: $(if ($Senha) { 'sim' } else { 'não' })$(if ($Perfil -ne 'completo') { " | perfil: $Perfil" }) | log: $Log"
 
 # --- 1. Ponto de restauração antes de mexer em qualquer coisa ----------------------------------------
 # O setup grava mais de cem valores de registro. Um ponto de restauração é a única forma barata de voltar
@@ -1275,7 +1315,8 @@ Etapa 'Energia' {
 # caso conhecido; se outro aparecer com esse código no resumo, é só acrescentar o id aqui.
 $SemElevacao = @('Spotify.Spotify')
 Etapa 'Programas (apps.json)' {
-    $lista = Get-Content -LiteralPath (Join-Path $aqui 'apps.json') -Raw | ConvertFrom-Json
+    if ($AppsArquivo -ne 'apps.json') { Passo "perfil $Perfil`: lendo $AppsArquivo em vez de apps.json" }
+    $lista = Get-Content -LiteralPath (Join-Path $aqui $AppsArquivo) -Raw | ConvertFrom-Json
     $pacotes = @()
     foreach ($src in $lista.Sources) {
         foreach ($p in $src.Packages) { $pacotes += [pscustomobject]@{ Id = $p.PackageIdentifier; Fonte = $src.SourceDetails.Name } }
@@ -2091,7 +2132,7 @@ if (-not (Test-Path -LiteralPath $ChaveMy)) { New-Item -Path $ChaveMy -Force | O
 $jaFoi = [int](Get-ItemProperty -LiteralPath $ChaveMy -Name Retomadas -ErrorAction Ignore).Retomadas
 $armou = $false
 
-if ($querReiniciar -and $jaFoi -lt 3 -and -not $So) {
+if ($querReiniciar -and $jaFoi -lt 3 -and -not $Depurando) {
     $retomarPs1 = Join-Path $aqui 'manutencao\retomar.ps1'
     if (-not (Test-Path -LiteralPath $retomarPs1)) {
         Write-Host "  não achei $retomarPs1; sem retomada automática." -ForegroundColor Yellow
@@ -2132,7 +2173,7 @@ if ($querReiniciar) {
     Write-Host '  Reinicie. Depois: abra o RedM.exe da área de trabalho.' -ForegroundColor Cyan
 }
 # nada mais pendente: a retomada não sobrevive ao fim da instalação (com -So não se mexe no estado)
-if (-not $So) {
+if (-not $Depurando) {
     Unregister-ScheduledTask -TaskName $Retomar -Confirm:$false -ErrorAction Ignore
     Set-ItemProperty -LiteralPath $ChaveMy -Name Retomadas -Value 0 -Type DWord -Force
 }

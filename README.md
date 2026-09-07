@@ -137,6 +137,31 @@ o PowerShell 7; o VS Code abre o PowerShell 7; o que ainda abrir o Windows Power
 Mesmo desenho do dotfiles do Arch (`eualexandrerrr/dotfiles`): starship sem oh-my-zsh, Catppuccin Mocha,
 JetBrainsMono Nerd Font, eza, bat, zoxide, fzf, atalhos `c` e `x`.
 
+## Perfil da VM de jogo
+
+A máquina passa a rodar Arch, e o Windows vive numa VM com passthrough — uma VM **só de jogo**:
+RedM, Steam e Red Dead 2, o driver de vídeo, e mais nada.
+
+```powershell
+.\setup.ps1 -Perfil vm-jogo
+```
+
+Roda **13 das 28 etapas** e lê o `apps-vm.json` (VCRedist x64/x86, DirectX e Steam) no lugar do
+`apps.json`. O Windows continua o mesmo de sempre — telemetria fora, energia sem suspender,
+Explorer arrumado, manutenção agendada —, só sem nada de trabalho.
+
+| Entra | Fica de fora |
+|:--|:--|
+| winget, clone do repositório | ponto de restauração (a VM tem instantâneo do hipervisor, melhor e mais rápido) |
+| **driver de vídeo da NVIDIA**, NVIDIA App, monitores | Claude Code e seus MCPs |
+| preferências do usuário, energia | Office, MariaDB, VS Code, git config |
+| **Steam, RedM**, barra de tarefas | Chrome, Discord, Vencord, Proton Pass, Lightshot |
+| Área de Trabalho Remota, Windows Update | wallpaper, foto do perfil, Windhawk, WinSetView |
+| manutenção e telemetria de fundo | fontes de código, perfil do PowerShell, Windows Terminal |
+
+Ao contrário do `-So` (que é ferramenta de depuração e não mexe em reinício), o `-Perfil` é
+**instalação de verdade**: reinicia e retoma pela tarefa `mywiniso-retomar` como sempre.
+
 ## Programas
 
 `apps.json` é o formato do `winget import`; gerar um novo com `winget export -o apps.json`.
