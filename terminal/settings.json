@@ -40,12 +40,6 @@
         "hidden": false
       },
       {
-        "guid": "{7e1f9a52-0d3b-4c2a-9f11-3a5e6b7c8d01}",
-        "name": "Debian (zsh)",
-        "commandline": "wsl.exe -d Debian --cd ~ -- zsh -l",
-        "hidden": false
-      },
-      {
         "guid": "{7e1f9a52-0d3b-4c2a-9f11-3a5e6b7c8d02}",
         "name": "Git Bash",
         "commandline": "%PROGRAMFILES%\\Git\\bin\\bash.exe -i -l",

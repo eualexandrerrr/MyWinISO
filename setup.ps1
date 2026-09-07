@@ -6,7 +6,7 @@
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
 
-  O console mostra cada etapa como [n/29], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
+  O console mostra cada etapa como [n/28], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
   listados) ou ERRO (a etapa parou; a mensagem aparece). Nenhuma etapa derruba as seguintes. No final sai um
   resumo de todas as etapas e dos programas que falharam. Tudo vai também para ~\mywiniso-setup.log.
 
@@ -15,21 +15,20 @@
   vê (driver, monitores, tema, wallpaper, barra), e só então vêm os programas, que sozinhos levam uns
   treze minutos. Em uns cinco minutos a máquina já está na cara certa e o resto instala por baixo.
 
-   1. ponto de restauração antes de mexer    16. Chrome (Proton Pass) e Discord (Vencord do fork)
-   2. garante que o winget funciona          17. Jogos: RedM e biblioteca do Steam em D:
-   3. Git e clone em ~\Projetos\MyWinISO     18. git config
-   4. Claude Code (CLI)                      19. Office
-   5. driver de vídeo, direto da NVIDIA      20. Área de Trabalho Remota e política de senha
-   6. monitores: resolução, Hz e posição     21. NVIDIA App (instalador silencioso)
-   7. preferências do usuário (tema escuro)  22. MariaDB: serviço e root
-   8. wallpaper, um por monitor              23. fontes, console e VS Code
-   9. foto do perfil                         24. um perfil só para todo PowerShell
-  10. Explorer em Detalhes (WinSetView)      25. barra de tarefas e tarefa de logon
-  11. Windhawk: tema Translucent             26. WSL com Debian e zsh (o mesmo prompt)
-  12. energia: tela apaga em 5 min           27. Windows Update (resto dos drivers)
-  13. programas do apps.json, um a um        28. Windows Terminal como terminal único
-  14. Claude Code: MCPs, plugins e skills    29. manutenção: limpeza e telemetria
-  15. Lightshot: só Shift+PrintScreen
+   1. ponto de restauração antes de mexer    15. Lightshot: só Shift+PrintScreen
+   2. garante que o winget funciona          16. Chrome (Proton Pass) e Discord (Vencord do fork)
+   3. Git e clone em ~\Projetos\MyWinISO     17. Jogos: RedM e biblioteca do Steam em D:
+   4. Claude Code (CLI)                      18. git config
+   5. driver de vídeo, direto da NVIDIA      19. Office
+   6. monitores: resolução, Hz e posição     20. Área de Trabalho Remota e política de senha
+   7. preferências do usuário (tema escuro)  21. NVIDIA App (instalador silencioso)
+   8. wallpaper, um por monitor              22. MariaDB: serviço e root
+   9. foto do perfil                         23. fontes, console e VS Code
+  10. Explorer em Detalhes (WinSetView)      24. um perfil só para todo PowerShell
+  11. Windhawk: tema Translucent             25. barra de tarefas e tarefa de logon
+  12. energia: tela apaga em 5 min           26. Windows Update (resto dos drivers)
+  13. programas do apps.json, um a um        27. Windows Terminal como terminal único
+  14. Claude Code: MCPs, plugins e skills    28. manutenção: limpeza e telemetria
 
   -So 'nome da etapa'[,'outra']: roda só essas (as outras saem como puladas, com a numeração de sempre) e não
   arma reinício. Para testar uma etapa sem esperar as 29.
@@ -61,13 +60,13 @@ try { $Host.UI.RawUI.WindowTitle = 'mywiniso: setup' } catch { }
 
 # ---------------------------------------------------------------------------------------------------
 # Pulso: nada aqui pode parecer travado. Enquanto uma operacao longa nao imprime nada (winget baixando,
-# driver instalando, Office, WSL), uma thread a parte escreve uma linha a cada 10 s de silencio dizendo
+# driver instalando, Office), uma thread a parte escreve uma linha a cada 10 s de silencio dizendo
 # em que etapa esta, ha quanto tempo e que horas sao. O Write-Host abaixo e um proxy do cmdlet real: ele
 # so marca a hora da ultima saida e repassa, entao qualquer linha impressa por qualquer parte do script
 # ja conta como sinal de vida sem precisar mudar nenhuma chamada.
 # ---------------------------------------------------------------------------------------------------
 # $global: e nao $script:. O proxy do Write-Host logo abaixo tambem e chamado de dentro dos .ps1 filhos
-# (& $mon na etapa 6, & $PerfilNoD nas 7/13/29, o WinSetView na 10), e ali $script: resolve o escopo
+# (& $mon na etapa 6, & $PerfilNoD nas 7/13/28, o WinSetView na 10), e ali $script: resolve o escopo
 # DAQUELE arquivo, onde Pulso nao existe: $script:Pulso virava $null e a atribuicao morria com "a
 # propriedade 'Ultimo' nao foi encontrada neste objeto", derrubando a etapa inteira em ERRO.
 $global:Pulso = [hashtable]::Synchronized(@{ Nome = 'iniciando'; Desde = Get-Date; Ultimo = Get-Date; Ligado = $true })
@@ -147,7 +146,7 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$global:TotalEtapas = 29
+$global:TotalEtapas = 28
 $global:So          = $So
 $global:NumEtapa    = 0
 $global:Resultado   = New-Object System.Collections.Generic.List[object]
@@ -398,7 +397,7 @@ Etapa 'winget' {
 $aqui = if ($PSScriptRoot) { $PSScriptRoot } elseif ($env:MYWINISO_RAIZ) { $env:MYWINISO_RAIZ } else { '' }
 # vazio quando o setup vem pelo irm, que nao tem PSScriptRoot: ai esta instancia so clona e passa o
 # bastao, e quem usa o caminho e a copia local. Join-Path com string vazia lanca.
-$PerfilNoD = if ($aqui) { Join-Path $aqui 'manutencao\perfil.ps1' } else { '' }   # regra que leva o perfil de todo programa para D: (etapas 7, 13 e 29)
+$PerfilNoD = if ($aqui) { Join-Path $aqui 'manutencao\perfil.ps1' } else { '' }   # regra que leva o perfil de todo programa para D: (etapas 7, 13 e 28)
 if (-not ($aqui -and (Test-Path -LiteralPath (Join-Path $aqui 'apps.json')))) {
     Etapa 'Git e clone do repositório' {
         if (-not (Get-Command git.exe -ErrorAction Ignore)) {
@@ -483,19 +482,19 @@ Etapa 'Claude Code (CLI)' {
 # --- 5. Driver de vídeo da NVIDIA, direto da NVIDIA --------------------------------------------------
 # Primeira coisa que o setup faz depois de ter o repositório na mão, e de propósito: sem o driver da placa
 # o Windows fica no adaptador básico da Microsoft, numa resolução baixa, e a etapa dos monitores não tem
-# como pedir 1440p a 180 Hz nem girar a LG. O Windows Update também traz o driver, mas só na etapa 27 e
+# como pedir 1440p a 180 Hz nem girar a LG. O Windows Update também traz o driver, mas só na etapa 26 e
 # sempre atrasado (o que ele entregou nesta máquina tinha oito meses). Aqui o driver vem da própria NVIDIA,
 # pela mesma API que a página de download usa, e é o mais novo que existe.
 #   psid = série da placa, pfid = modelo dentro da série. A NVIDIA não expõe mais o lookup desses dois
 #   (o endpoint lookupValueSearch responde 404), então ficam nesta tabela; placa que não estiver aqui cai
-#   no Windows Update da etapa 27, que é lento mas funciona sozinho.
+#   no Windows Update da etapa 26, que é lento mas funciona sozinho.
 $NvidiaProdutos = @{
     'RTX 3090' = @{ psid = 120; pfid = 934 }
 }
 Etapa 'Driver de vídeo (NVIDIA)' {
     $gpu = @(Get-CimInstance Win32_VideoController -ErrorAction Ignore | Where-Object { $_.Name -match 'NVIDIA' })[0]
     if (-not $gpu) {
-        Passo 'nenhuma placa NVIDIA à vista; o vídeo fica com o que o Windows Update trouxer na etapa 27'
+        Passo 'nenhuma placa NVIDIA à vista; o vídeo fica com o que o Windows Update trouxer na etapa 26'
         return
     }
     Passo "placa: $($gpu.Name)"
@@ -513,7 +512,7 @@ Etapa 'Driver de vídeo (NVIDIA)' {
 
     $chave = @($NvidiaProdutos.Keys | Where-Object { $gpu.Name -match [regex]::Escape($_) })[0]
     if (-not $chave) {
-        Falha "a placa '$($gpu.Name)' não está no NvidiaProdutos do setup.ps1; o driver fica para o Windows Update da etapa 27"
+        Falha "a placa '$($gpu.Name)' não está no NvidiaProdutos do setup.ps1; o driver fica para o Windows Update da etapa 26"
         return
     }
     $prod = $NvidiaProdutos[$chave]
@@ -528,11 +527,11 @@ Etapa 'Driver de vídeo (NVIDIA)' {
         $resposta = Invoke-RestMethod -UseBasicParsing -UserAgent 'Mozilla/5.0' -Uri $api -TimeoutSec 60
         $info = @($resposta.IDS)[0].downloadInfo
     } catch {
-        Falha "a API da NVIDIA não respondeu ($($_.Exception.Message)); o driver fica para o Windows Update da etapa 27"
+        Falha "a API da NVIDIA não respondeu ($($_.Exception.Message)); o driver fica para o Windows Update da etapa 26"
         return
     }
     if (-not $info.DownloadURL) {
-        Falha 'a API da NVIDIA respondeu sem DownloadURL; o driver fica para o Windows Update da etapa 27'
+        Falha 'a API da NVIDIA respondeu sem DownloadURL; o driver fica para o Windows Update da etapa 26'
         return
     }
     Passo "mais novo na NVIDIA: $($info.Version), de $($info.ReleaseDateTime)"
@@ -623,7 +622,7 @@ Etapa 'Preferências do usuário' {
             $hr = [Win32.KnownFolders]::SHSetKnownFolderPath([ref]$g, 0, [IntPtr]::Zero, $alvo)
             if ($hr -ne 0) { Falha ("pasta {0} -> {1}: SHSetKnownFolderPath devolveu 0x{2:X8}" -f $kf.pasta, $alvo, $hr) }
         }
-        New-Item -ItemType Directory -Path (Join-Path $Dados 'Jogos'), (Join-Path $Dados 'WSL') -Force | Out-Null   # Projetos em D: é o Alexandre quem cria
+        New-Item -ItemType Directory -Path (Join-Path $Dados 'Jogos') -Force | Out-Null   # Projetos em D: é o Alexandre quem cria
 
         Passo 'perfil dos programas em D:\Perfil: toda pasta de configuração de todo programa, por regra'
         # manutencao\perfil.ps1: cada pasta que há (ou houver) em Roaming, Local, LocalLow e nos .dotfolders do
@@ -1256,7 +1255,7 @@ Etapa 'Energia' {
     # Memória, pelo hardware. 32 GB de RAM: pagefile fixo de 16 GB no C: (início = máximo, então nunca cresce
     # nem fragmenta no meio de um jogo, e ainda cabe um dump de kernel) e compressão de memória desligada (ela
     # gasta CPU para poupar RAM, que sobra). O que o Intelligent Standby List Cleaner faz, a limpeza da
-    # standby list quando a RAM livre cai, é a tarefa 'Standby list' da etapa 29. Pagefile e compressão só
+    # standby list quando a RAM livre cai, é a tarefa 'Standby list' da etapa 28. Pagefile e compressão só
     # valem depois de reiniciar.
     $ramGB = [Math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
     $pfMB  = [Math]::Max(4096, [Math]::Min(16384, [int]($ramGB * 512)))    # metade da RAM, entre 4 e 16 GB
@@ -1917,82 +1916,7 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     Stop-Process -Name explorer -Force -ErrorAction Ignore
 }
 
-# --- 26. WSL com Debian (wsl\debian.sh configura por dentro) ----------------------------------------
-Etapa 'WSL com Debian e zsh' {
-    # Os dois componentes primeiro, e pelo DISM. O wsl.exe do System32 não liga mais nada sozinho: com os
-    # componentes desligados ele apenas escreve "o WSL não está instalado" e sai com 1 -- que esta etapa
-    # dava por normal ("o esperado antes do primeiro reinício") e seguia em frente. O efeito era um Windows
-    # que nunca ganhava WSL: medido nesta máquina, dois setups completos e os dois recursos continuavam
-    # Disabled, sem app do WSL instalado. Quem liga de verdade é o Enable-WindowsOptionalFeature.
-    $faltam = @('Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform' |
-        Where-Object { (Get-WindowsOptionalFeature -Online -FeatureName $_ -ErrorAction Ignore).State -ne 'Enabled' })
-    if ($faltam) {
-        Passo "ligando os componentes do WSL: $($faltam -join ', ')"
-        foreach ($f in $faltam) {
-            Enable-WindowsOptionalFeature -Online -FeatureName $f -All -NoRestart -WarningAction SilentlyContinue | Out-Null
-            Passo ("  $f -> " + (Get-WindowsOptionalFeature -Online -FeatureName $f -ErrorAction Ignore).State)
-        }
-    }
-    Silencioso { wsl.exe --status 2>&1 | Out-Null }
-    $wslPronto = ($LASTEXITCODE -eq 0)
-    if (-not $wslPronto) {
-        if ($faltam) {
-            Passo 'componentes ligados; o Debian entra depois do reinício'
-            $global:PedeReinicio = $true
-        } else {
-            # componentes já ligados e o wsl.exe ainda não responde: o que falta é o app do WSL
-            Passo 'componentes já ligados; instalando o app do WSL'
-            Silencioso { wsl.exe --install --no-distribution 2>&1 | Out-Host }
-            # Medido em 06/09/2026: com os componentes ligados, o app instala e o wsl.exe passa a responder na hora,
-            # e o Debian entra nesta mesma rodada. Adiar para o reinício seguinte, como era, gastava uma das três
-            # retomadas à toa. Só fica para depois se ele continuar mudo.
-            Silencioso { wsl.exe --status 2>&1 | Out-Null }
-            $wslPronto = ($LASTEXITCODE -eq 0)
-            if ($wslPronto) { Passo 'app do WSL instalado e respondendo; o Debian entra agora' }
-            else { Passo 'app do WSL instalado, mas o wsl.exe ainda não responde; o Debian entra depois do reinício'; $global:PedeReinicio = $true }
-        }
-    }
-    if ($wslPronto) {
-        $distros = ((wsl.exe --list --quiet 2>$null) -join "`n") -replace "`0", ''
-        # Com a partição Dados, o disco do Debian (ext4.vhdx) mora em D:\WSL\Debian e sobrevive à formatação.
-        # Na reinstalação ele está lá e volta inteiro com --import-in-place, sem copiar nada: pacotes, home,
-        # zsh e o /etc/wsl.conf (usuário padrão e systemd) já estão dentro dele, então o debian.sh nem roda.
-        $vhdx = if ($Dados) { Join-Path $Dados 'WSL\Debian\ext4.vhdx' } else { $null }
-        $voltou = $false
-        if ($distros -notmatch 'Debian') {
-            if ($vhdx -and (Test-Path -LiteralPath $vhdx)) {
-                Passo "Debian de antes da formatação achado em $vhdx; registrando no lugar"
-                wsl.exe --import-in-place Debian $vhdx
-                if ($LASTEXITCODE -ne 0) { throw "wsl --import-in-place saiu com código $LASTEXITCODE" }
-                $voltou = $true
-            } else {
-                Passo ('instalando a distro Debian' + $(if ($vhdx) { " em $(Split-Path $vhdx -Parent)" } else { '' }))
-                if ($vhdx) {
-                    New-Item -ItemType Directory -Path (Split-Path $vhdx -Parent) -Force | Out-Null
-                    wsl.exe --install --distribution Debian --no-launch --location (Split-Path $vhdx -Parent)
-                } else {
-                    wsl.exe --install --distribution Debian --no-launch
-                }
-                if ($LASTEXITCODE -ne 0) { throw "wsl --install -d Debian saiu com código $LASTEXITCODE" }
-            }
-        } else { Passo 'Debian já instalado' }
-        if ($voltou) { Passo 'Debian voltou de D: com usuário, pacotes e systemd; o debian.sh só atualiza e reaplica o zshrc' }
-        # sempre, mesmo quando voltou de D:: o wsl/zshrc é o único .zshrc, e é o debian.sh quem o põe no lugar
-        $aquiWsl = '/mnt/' + $aqui.Substring(0, 1).ToLower() + ($aqui.Substring(2) -replace '\\', '/')
-        Passo "rodando wsl/debian.sh como root dentro do Debian"
-        wsl.exe --distribution Debian --user root -- bash "$aquiWsl/wsl/debian.sh"
-        if ($LASTEXITCODE -ne 0) { throw "debian.sh saiu com código $LASTEXITCODE" }
-        if ($Senha -and -not $voltou) {
-            # a mesma senha da conta para o usuário do Debian (sudo continua sem senha); vem do pendrive, não do repo
-            wsl.exe --distribution Debian --user root -- bash -c "echo 'alexandre:$($Senha.Replace("'", "'\''"))' | chpasswd"
-            Passo 'usuário alexandre do Debian com a senha da conta'
-        }
-        wsl.exe --terminate Debian
-        Passo 'Debian configurado: usuário alexandre com zsh + starship (o mesmo prompt do PowerShell), sudo sem senha, systemd'
-    }
-}
-
-# --- 27. Resto dos drivers e as atualizações, pelo Windows Update -------------------------------------------------
+# --- 26. Resto dos drivers e as atualizações, pelo Windows Update -------------------------------------------------
 Etapa 'Windows Update (drivers)' {
     Silencioso { Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null }
     # O Set-PSRepository do PowerShellGet 5.1 reclama de 'PackageManagementProvider' e de 'SourceLocation'
@@ -2018,7 +1942,7 @@ Etapa 'Windows Update (drivers)' {
     else { Falha "Windows ainda não ativado (status $($lic.LicenseStatus)); a licença digital reativa sozinha com rede, confira em Configurações > Sistema > Ativação" }
 }
 
-# --- 28. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) ---------------
+# --- 27. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) ---------------
 # No Windows dá para abrir console de vários lugares (cmd, Windows PowerShell, PowerShell 7, Git Bash, WSL) e
 # cada um abria numa janela diferente. Aqui o Windows Terminal passa a ser o console padrão do sistema: tudo que
 # abrir console aparece nele, em abas, e os cinco shells ficam num menu só. O padrão é o PowerShell 7.
@@ -2042,7 +1966,7 @@ Etapa 'Windows Terminal como terminal único' {
     Passo 'qualquer console do Windows abre no Windows Terminal'
 }
 
-# --- 29. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo ---------------------
+# --- 28. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo ---------------------
 # Vem do Sophia Script (farag2), que trata isso melhor que qualquer outra ferramenta. Três tarefas agendadas
 # que rodam sozinhas, o armazenamento reservado liberado (~7 GB), o compartilhamento P2P de updates desligado
 # e as dez tarefas de telemetria que rodam em segundo plano. A pior delas, o Compatibility Appraiser, varre o

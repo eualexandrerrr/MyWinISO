@@ -251,6 +251,13 @@ Const EDICAO = "Windows 11 Pro"   ' nome da imagem dentro do install.wim (dism /
 Const WINDOWS_MB = 122880         ' 120 GB para o Windows e os programas (o C: e descartavel: formata a cada 3 meses); o resto vira "Dados"
 Const DADOS = "Files"             ' rotulo da particao que sobrevive a formatacao (jogos, perfil, Documentos...)
 Const APAGAR_TUDO = False         ' True so para recomecar um disco do zero DE PROPOSITO (veja o ramo de instalacao limpa)
+' Tipos GPT do Linux. A area de dados do MyArchISO nasce como "Linux filesystem"; a raiz dele nasce
+' como "Linux root x86-64" e E descartavel. Reconhecer os dois separadamente e o que permite preservar
+' os dados sem preservar o sistema -- e e a unica forma de achar a particao quando ela e ext4, porque
+' o Windows nao le ext4 e portanto ela nao tem VolumeName nenhum para procurar.
+Const GUID_LINUX_DADOS = "0fc63daf-8483-4772-8e79-3d69d8477de4"   ' Linux filesystem (a Files)
+Const GUID_LINUX_HOME  = "933ac7e1-2eb4-4f13-b844-0e14e2aef915"   ' Linux /home, aceito tambem
+Const GUID_LINUX_ROOT  = "4f68bce3-e8cd-4db1-96e7-fbcaf984b709"   ' Linux root: NAO e area de dados
 '   Mudou de "Alexandre" para "Files" em 06/09/2026. Este rotulo e a CHAVE DE PROTECAO: e por ele que o
 '   script reconhece a reinstalacao e preserva a particao. Trocar aqui sem trocar no volume (ou o
 '   contrario) faz o script cair no ramo de instalacao do zero e apagar o disco inteiro. O MyArchISO
@@ -462,7 +469,7 @@ If n <> 1 Then Falha "esperava 1 disco com serial '" & SERIAL & "' ou modelo '" 
 '    porque o WinPE da letra a todo volume basico que enxerga.
 Escreve "Alvo: disco " & alvo & "."
 Dim dadosPart, dadosOff, dadosLetra, dadosEmDisco, ld, pt, frenteMB, winMB, ultimoOff, wmiN, dpN, dpTxt, re, mt, k2, dpVeDados, aindaLa
-Dim nAtras, nFrente, nAtrasDepois, primeiroAtras, dpNums, dpQtd
+Dim nAtras, nFrente, nAtrasDepois, primeiroAtras, dpNums, dpQtd, dpDet, guidPart, achouExt4
 dadosPart = -1: dadosOff = 0: dadosLetra = "": dadosEmDisco = -1: ultimoOff = 0: wmiN = 0
 nAtras = 0: nFrente = 0: nAtrasDepois = 0: primeiroAtras = 0
 ' A busca comeca nas PARTICOES DO DISCO ALVO e vai para o volume, nunca o contrario. Buscar o
@@ -486,23 +493,6 @@ For Each ld In wmi.ExecQuery("SELECT DeviceID, VolumeName FROM Win32_LogicalDisk
     If CInt(pt.DiskIndex) <> CInt(alvo) Then Escreve "aviso: existe outro volume '" & DADOS & "' no disco " & pt.DiskIndex & " (" & ld.DeviceID & "); ele nao e considerado, o alvo e o disco " & alvo
   Next
 Next
-Escreve "Particoes do disco " & alvo & " pelo WMI (que nao mostra a MSR):"
-For Each pt In wmi.ExecQuery("SELECT Type, Size, StartingOffset FROM Win32_DiskPartition WHERE DiskIndex=" & alvo)
-  wmiN = wmiN + 1
-  Dim ehAtras: ehAtras = (dadosOff > 0 And CDbl(pt.StartingOffset) >= dadosOff)
-  If ehAtras Then
-    nAtras = nAtras + 1
-    If primeiroAtras = 0 Or CDbl(pt.StartingOffset) < primeiroAtras Then primeiroAtras = CDbl(pt.StartingOffset)
-  Else
-    nFrente = nFrente + 1
-  End If
-  Escreve "    " & pt.Type & " | " & Int(CDbl(pt.Size & "0") / 10 / 1048576) & " MB | offset " & _
-          Int(CDbl(pt.StartingOffset & "0") / 10 / 1048576) & " MB | " & _
-          IIf2(ehAtras, "PRESERVADA (atras da fronteira)", "frente (sera recriada)")
-  If CDbl(pt.StartingOffset) > ultimoOff Then ultimoOff = CDbl(pt.StartingOffset)
-Next
-If dadosOff > 0 Then Escreve "fronteira em " & Int(dadosOff / 1048576) & " MB: " & nFrente & " particao(oes) na frente, " & nAtras & " preservada(s) atras"
-
 ' o mesmo disco pelo diskpart, com a numeracao dele. Cada linha de particao termina em "<tamanho> <un> <offset> <un>".
 Set ts = fso.CreateTextFile("X:\mywiniso\lista.txt", True): ts.Write "select disk " & alvo & vbCrLf & "list partition" & vbCrLf & "list volume" & vbCrLf: ts.Close
 Roda "diskpart.exe /s X:\mywiniso\lista.txt > X:\mywiniso\lista.out 2>&1", 0
@@ -523,6 +513,83 @@ Next
 dpN = dpQtd
 dpVeDados = (InStr(1, dpTxt, DADOS, vbTextCompare) > 0)
 Escreve "diskpart ve " & dpN & " particao(oes) no disco " & alvo & "; volume '" & DADOS & "' na lista de volumes: " & dpVeDados
+
+' 3b. Se nenhum volume com o rotulo apareceu, a area de dados pode estar em ext4 -- e ai o Windows
+'     nao a enxerga como volume. Quem a identifica entao e o TIPO GPT da particao, que o diskpart
+'     mostra no "detail partition". Sem isto, um disco com o Arch instalado cairia no ramo de
+'     instalacao do zero, e o instalador do Windows apagaria a particao de dados do Linux.
+If dadosPart <> 0 And dpQtd > 0 Then
+  Dim k3, sc2, reG, reO, mG, mO, blocos, b3
+  sc2 = "select disk " & alvo & vbCrLf
+  For k3 = 0 To dpQtd - 1
+    sc2 = sc2 & "select partition " & dpNums(k3) & vbCrLf & "detail partition" & vbCrLf
+  Next
+  Set ts = fso.CreateTextFile("X:\mywiniso\detalhe.txt", True): ts.Write sc2: ts.Close
+  Roda "diskpart.exe /s  X:\mywiniso\detalhe.txt > X:\mywiniso\detalhe.out 2>&1", 0
+  Set ts = fso.OpenTextFile("X:\mywiniso\detalhe.out", 1): dpDet = ts.ReadAll: ts.Close
+  ' um GUID por particao, na mesma ordem dos selects acima
+  Set reG = New RegExp: reG.Global = True
+  reG.Pattern = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+  Set mG = reG.Execute(dpDet)
+  ' o offset em bytes e o unico numero longo de cada bloco de detalhe
+  Set reO = New RegExp: reO.Global = True: reO.Multiline = True
+  reO.Pattern = ":\s*(\d{7,})\s*$"
+  Set mO = reO.Execute(dpDet)
+  ' Cada bloco de detalhe tem DOIS numeros longos: o Atrib. (16 digitos, quase sempre zeros) e o
+  ' deslocamento em bytes, nessa ordem. Entao o offset da particao k e o segundo do par -- indice
+  ' 2k+1. Se algum dia o formato vier com um so, o codigo aceita isso tambem.
+  Dim passo
+  ' If de uma linha so nao aceita ElseIf no VBScript -- tem de ser bloco
+  passo = 0
+  If mO.Count = dpQtd * 2 Then
+    passo = 2
+  ElseIf mO.Count = dpQtd Then
+    passo = 1
+  End If
+  Escreve "detail partition: " & mG.Count & " tipo(s) e " & mO.Count & " numero(s) longo(s) para " & dpQtd & " particao(oes)"
+  If mG.Count = dpQtd Then
+    achouExt4 = False
+    For k3 = 0 To dpQtd - 1
+      guidPart = LCase(mG(k3).Value)
+      If guidPart = GUID_LINUX_DADOS Or guidPart = GUID_LINUX_HOME Then
+        If passo > 0 Then
+          dadosPart = 0
+          dadosOff = CDbl(mO(k3 * passo + passo - 1).SubMatches(0))
+          dadosEmDisco = CInt(alvo)
+          dadosLetra = ""
+          achouExt4 = True
+          Escreve "particao " & dpNums(k3) & " e area de dados do Linux (tipo " & guidPart & "), offset " & Int(dadosOff / 1048576) & " MB; sera preservada"
+        Else
+          Escreve "achei a area de dados do Linux na particao " & dpNums(k3) & ", mas nao consegui ler o offset; por seguranca nao vou tratar como reinstalacao"
+        End If
+        Exit For
+      ElseIf guidPart = GUID_LINUX_ROOT Then
+        Escreve "particao " & dpNums(k3) & " e raiz do Linux (descartavel); sera apagada"
+      End If
+    Next
+    If Not achouExt4 Then Escreve "nenhuma particao com tipo GPT de dados do Linux no disco " & alvo
+  Else
+    Escreve "nao consegui casar tipo com particao (" & mG.Count & " para " & dpQtd & "); sigo sem a deteccao por tipo GPT"
+  End If
+End If
+
+Escreve "Particoes do disco " & alvo & " pelo WMI (que nao mostra a MSR):"
+For Each pt In wmi.ExecQuery("SELECT Type, Size, StartingOffset FROM Win32_DiskPartition WHERE DiskIndex=" & alvo)
+  wmiN = wmiN + 1
+  Dim ehAtras: ehAtras = (dadosOff > 0 And CDbl(pt.StartingOffset) >= dadosOff)
+  If ehAtras Then
+    nAtras = nAtras + 1
+    If primeiroAtras = 0 Or CDbl(pt.StartingOffset) < primeiroAtras Then primeiroAtras = CDbl(pt.StartingOffset)
+  Else
+    nFrente = nFrente + 1
+  End If
+  Escreve "    " & pt.Type & " | " & Int(CDbl(pt.Size & "0") / 10 / 1048576) & " MB | offset " & _
+          Int(CDbl(pt.StartingOffset & "0") / 10 / 1048576) & " MB | " & _
+          IIf2(ehAtras, "PRESERVADA (atras da fronteira)", "frente (sera recriada)")
+  If CDbl(pt.StartingOffset) > ultimoOff Then ultimoOff = CDbl(pt.StartingOffset)
+Next
+If dadosOff > 0 Then Escreve "fronteira em " & Int(dadosOff / 1048576) & " MB: " & nFrente & " particao(oes) na frente, " & nAtras & " preservada(s) atras"
+
 
 If dadosPart = 0 Then
   ' ---- reinstalacao: da fronteira de DADOS para tras nada e tocado; a frente e recriada ----
