@@ -227,11 +227,43 @@ Windows), com um ícone por entrada (`menu_class`) e 10 s de timeout com o Windo
 `ventoy.json` inteiro é o que o `pendrive.ps1` preserva: ele só garante o `auto_install` e as três
 opções de `control` dele.
 
+## O que nunca é apagado
+
+O offset da partição **`Files`** divide o disco em duas partes. Na frente fica o sistema, que é
+descartável e é recriado inteiro a cada instalação. **Da `Files` em diante, nada é tocado** — nem
+ela, nem qualquer partição que exista depois dela.
+
+Isso importa porque este disco é compartilhado com o Arch: o
+[MyArchISO](https://github.com/eualexandrerrr/MyArchISO) cria uma partição `HOME` (ext4, o `/home`
+do Linux) no fim do disco. O Windows não lê ext4 e não enxerga rótulo de partição do Linux, então
+é **por posição** que ele sabe o que preservar — e o MyArchISO garante, do lado dele, nunca criar
+a `HOME` antes da `Files`, justamente para essa regra valer.
+
+Até 09/2026 a regra era *"`Files` tem de ser a última partição do disco"*, o que protegia por
+posição absoluta. Bastava existir qualquer coisa depois dela para o script parar com "layout
+desconhecido" (falha segura, mas impedia reinstalar), e um conserto ingênuo dessa checagem faria o
+pior possível: manter a última e apagar a `Files`.
+
+As garantias, na ordem em que o `instala.vbs` as aplica:
+
+| | Garantia |
+|:--|:--|
+| a | Havendo `Files` no disco alvo, o script do `diskpart` **nunca** leva `clean` — e isso é conferido no texto do script antes de executar |
+| b | Os números de partição vêm do `list partition` do próprio `diskpart`, não do WMI: o `Win32_DiskPartition` não lista a MSR, então "índice + 1" não bate |
+| c | O total do `diskpart` tem de bater com o do WMI, admitindo só a MSR de diferença, e a `Files` tem de ser a primeira partição atrás da fronteira; qualquer outra coisa é layout desconhecido e nada é apagado |
+| d | Se o `diskpart` vê um volume `Files` que o WMI não consegue mapear a disco nenhum, nada é apagado |
+| e | Depois do `diskpart`, a `Files` tem de continuar no mesmo offset **e** o número de partições atrás da fronteira tem de ser o mesmo de antes — senão para antes do DISM |
+
+Por que contar em vez de comparar offsets: o `list partition` mostra o offset **arredondado**
+(`120 GB`), então não dá para casar com o offset em bytes do WMI. Mas o `diskpart` numera por
+posição física e o WMI dá o offset exato — se há N partições com offset ≥ `Files`, elas são as N
+últimas da lista do `diskpart`.
+
 ## O que está assumido
 
 | | Valor | Onde mudar |
 |:--|:--|:--|
-| Disco | serial `6479A7AABAC014A3` ou modelo `MP700 ELITE`; Windows com 120 GB (`WINDOWS_MB`; o C: é descartável, a máquina é formatada a cada três meses) e o resto vira a partição `Dados` (`DADOS`), que nunca é apagada | `SERIAL` e `MODELO` no `instala.vbs`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
+| Disco | serial `6479A7AABAC014A3` ou modelo `MP700 ELITE`; Windows com 120 GB (`WINDOWS_MB`; o C: é descartável, a máquina é formatada a cada três meses) e o resto vira a partição `Files` (`DADOS`). **Da partição `Files` em diante nada é apagado** — nem ela, nem o que houver depois dela (veja "O que nunca é apagado") | `SERIAL` e `MODELO` no `instala.vbs`, dentro do XML. Descobrir: `Get-Disk \| Select-Object FriendlyName, SerialNumber` |
 | Edição | `Windows 11 Pro`, pelo nome da imagem dentro do `install.wim` | `EDICAO` no `instala.vbs`; `dism /Get-WimInfo` lista os nomes |
 | Ativação | licença digital gravada na placa-mãe | |
 | ISO | Windows 11 em Português (Brasil), da Microsoft | |

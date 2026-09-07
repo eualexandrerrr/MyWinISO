@@ -239,6 +239,12 @@ foreach ($file in $Document.GetElementsByTagName('File')) {
 ' copia este XML completo para C:\Windows\Panther e reinicia pelo disco. Se algo falhar, abre o log no Bloco
 ' de Notas e sai com erro: o Setup para, e antes do diskpart nada foi apagado. Pendrives nunca sao candidatos.
 Option Explicit
+
+' o VBScript nao tem IIf; so uma escolha entre dois textos, para as linhas de log ficarem legiveis
+Function IIf2(cond, a, b)
+  If cond Then IIf2 = a Else IIf2 = b
+End Function
+
 Const SERIAL = "6479A7AABAC014A3"   ' Get-Disk | Select-Object FriendlyName, SerialNumber; Limpo() tira os "_" e o "."
 Const MODELO = "MP700 ELITE"
 Const EDICAO = "Windows 11 Pro"   ' nome da imagem dentro do install.wim (dism /Get-WimInfo)
@@ -423,25 +429,41 @@ For Each d In wmi.ExecQuery("SELECT Index, Model, SerialNumber, Size, InterfaceT
 Next
 If n <> 1 Then Falha "esperava 1 disco com serial '" & SERIAL & "' ou modelo '" & MODELO & "', achei " & n & ". Nada foi apagado."
 
-' 3. particionar. Layout GPT, nesta ordem no disco:
-'      1 EFI 300 MB (S:)   2 MSR 16 MB   3 Windows WINDOWS_MB (W:)   4 Recovery 1 GB   5 Dados = o resto
-'    Dados fica no FIM de proposito: numa reinstalacao so as quatro da frente sao apagadas e recriadas no
-'    mesmo espaco, e Dados nao e tocada. E reinstalacao quando o disco alvo ja tem um volume com o rotulo
-'    DADOS.
-'    As garantias de que Dados nunca e apagada, nesta ordem:
+'  3. particionar. Layout GPT do Windows, na FRENTE do disco:
+'      EFI 300 MB (S:)   MSR 16 MB   Windows (W:)   Recovery 1 GB
+'    e, a partir do offset de DADOS, tudo o que houver e PRESERVADO -- nao so a propria DADOS.
+'
+'    Ate 09/2026 a regra era "DADOS tem de ser a ultima particao do disco", e ela protegia por POSICAO.
+'    Isso quebra assim que existe qualquer coisa depois dela: o MyArchISO cria uma particao HOME (ext4,
+'    /home do Arch) no fim do disco, e com ela o script parava com "layout desconhecido". Falha segura,
+'    mas impedia reinstalar o Windows. E se alguem "consertasse" a checagem sem pensar, o pior possivel:
+'    manter a ultima (HOME) e apagar DADOS.
+'    A regra agora e por FRONTEIRA: o offset de DADOS separa o disco em duas partes. Na frente fica o
+'    sistema, que e descartavel e e recriado; do offset em diante nada e tocado. E o mesmo contrato do
+'    MyArchISO, que protege por rotulo (KEEP_LABELS) em vez de por numero de particao.
+'
+'    Por que contar em vez de comparar offsets: o "list partition" do diskpart mostra o offset ARREDONDADO
+'    ("120 GB"), entao nao da para casar com o offset em bytes do WMI. Mas o diskpart numera por POSICAO
+'    FISICA, e o WMI da o offset exato: se ha N particoes com offset >= DADOS, elas sao as N ultimas da
+'    lista do diskpart. Apagar da "dpN - N" para tras e exato, sem depender de arredondamento.
+'
+'    As garantias de que nada atras da fronteira e apagado, nesta ordem:
 '      (a) com Dados no disco alvo, o script do diskpart nunca leva "clean" (e isso e conferido no texto);
 '      (b) os numeros de particao vem do proprio "list partition" do diskpart, nao do WMI: o
 '          Win32_DiskPartition nao lista a MSR, entao "Index + 1" NAO bate com o diskpart (testado);
-'      (c) Dados tem de ser a ultima particao (offset maior) e o diskpart tem de contar uma particao a
-'          mais que o WMI (a MSR); qualquer outra coisa e layout desconhecido, e nada e apagado;
+'      (c) o total do diskpart tem de bater com o do WMI, com a MSR como unica diferenca admitida, e ela
+'          so pode estar na frente; qualquer outra coisa e layout desconhecido, e nada e apagado;
 '      (d) se o diskpart ve um volume Dados que o WMI nao consegue mapear a disco nenhum, nada e apagado;
-'      (e) depois do diskpart, Dados tem de continuar no mesmo offset, senao para antes do DISM.
+'      (e) depois do diskpart, Dados tem de continuar no mesmo offset E o numero de particoes atras da
+'          fronteira tem de ser o mesmo de antes, senao para antes do DISM.
 '    A busca por Dados usa Win32_LogicalDisk + Win32_LogicalDiskToPartition, que estao no root\cimv2 de
 '    qualquer WinPE (o Storage WMI dos MSFT_Partition nao vem garantido no boot.wim da ISO), e funciona
 '    porque o WinPE da letra a todo volume basico que enxerga.
 Escreve "Alvo: disco " & alvo & "."
 Dim dadosPart, dadosOff, dadosLetra, dadosEmDisco, ld, pt, frenteMB, winMB, ultimoOff, wmiN, dpN, dpTxt, re, mt, k2, dpVeDados, aindaLa
+Dim nAtras, nFrente, nAtrasDepois, primeiroAtras
 dadosPart = -1: dadosOff = 0: dadosLetra = "": dadosEmDisco = -1: ultimoOff = 0: wmiN = 0
+nAtras = 0: nFrente = 0: nAtrasDepois = 0: primeiroAtras = 0
 For Each ld In wmi.ExecQuery("SELECT DeviceID, VolumeName, Size FROM Win32_LogicalDisk WHERE VolumeName='" & DADOS & "'")
   For Each pt In wmi.ExecQuery("ASSOCIATORS OF {Win32_LogicalDisk.DeviceID='" & ld.DeviceID & "'} WHERE AssocClass=Win32_LogicalDiskToPartition")
     dadosEmDisco = CInt(pt.DiskIndex)
@@ -458,9 +480,19 @@ Next
 Escreve "Particoes do disco " & alvo & " pelo WMI (que nao mostra a MSR):"
 For Each pt In wmi.ExecQuery("SELECT Type, Size, StartingOffset FROM Win32_DiskPartition WHERE DiskIndex=" & alvo)
   wmiN = wmiN + 1
-  Escreve "    " & pt.Type & " | " & Int(CDbl(pt.Size & "0") / 10 / 1048576) & " MB | offset " & Int(CDbl(pt.StartingOffset & "0") / 10 / 1048576) & " MB"
+  Dim ehAtras: ehAtras = (dadosOff > 0 And CDbl(pt.StartingOffset) >= dadosOff)
+  If ehAtras Then
+    nAtras = nAtras + 1
+    If primeiroAtras = 0 Or CDbl(pt.StartingOffset) < primeiroAtras Then primeiroAtras = CDbl(pt.StartingOffset)
+  Else
+    nFrente = nFrente + 1
+  End If
+  Escreve "    " & pt.Type & " | " & Int(CDbl(pt.Size & "0") / 10 / 1048576) & " MB | offset " & _
+          Int(CDbl(pt.StartingOffset & "0") / 10 / 1048576) & " MB | " & _
+          IIf2(ehAtras, "PRESERVADA (atras da fronteira)", "frente (sera recriada)")
   If CDbl(pt.StartingOffset) > ultimoOff Then ultimoOff = CDbl(pt.StartingOffset)
 Next
+If dadosOff > 0 Then Escreve "fronteira em " & Int(dadosOff / 1048576) & " MB: " & nFrente & " particao(oes) na frente, " & nAtras & " preservada(s) atras"
 
 ' o mesmo disco pelo diskpart, com a numeracao dele. Cada linha de particao termina em "<tamanho> <un> <offset> <un>".
 Set ts = fso.CreateTextFile("X:\mywiniso\lista.txt", True): ts.Write "select disk " & alvo & vbCrLf & "list partition" & vbCrLf & "list volume" & vbCrLf: ts.Close
@@ -476,22 +508,26 @@ dpVeDados = (InStr(1, dpTxt, DADOS, vbTextCompare) > 0)
 Escreve "diskpart ve " & dpN & " particao(oes) no disco " & alvo & "; volume '" & DADOS & "' na lista de volumes: " & dpVeDados
 
 If dadosPart = 0 Then
-  ' ---- reinstalacao: Dados fica, o resto e recriado na frente ----
-  If dadosOff < ultimoOff Then Falha "'" & DADOS & "' nao e a ultima particao do disco " & alvo & "; layout desconhecido, nada foi apagado."
-  If dpN <> wmiN + 1 Then Falha "o diskpart ve " & dpN & " particoes e o WMI " & wmiN & " (esperava WMI + 1, a MSR); layout desconhecido, nada foi apagado."
+  ' ---- reinstalacao: da fronteira de DADOS para tras nada e tocado; a frente e recriada ----
+  ' (c) o diskpart conta a MSR e o WMI nao. Fora ela, os dois tem de ver o mesmo numero de particoes.
+  If dpN <> wmiN And dpN <> wmiN + 1 Then Falha "o diskpart ve " & dpN & " particoes e o WMI " & wmiN & " (esperava igual, ou +1 pela MSR); layout desconhecido, nada foi apagado."
   If dpN < 2 Then Falha "so " & dpN & " particao no disco " & alvo & "; nada foi apagado."
-  dadosPart = dpN
+  If nAtras < 1 Then Falha "nao contei nenhuma particao a partir do offset de '" & DADOS & "'; layout desconhecido, nada foi apagado."
+  If dadosOff <> primeiroAtras Then Falha "'" & DADOS & "' nao e a primeira particao atras da fronteira (ha algo entre a frente e ela); layout desconhecido, nada foi apagado."
+  If dpN - nAtras < 1 Then Falha "todas as " & dpN & " particoes estao atras da fronteira; nao sobra frente para o Windows. Nada foi apagado."
+  ' as nAtras ultimas da lista do diskpart sao as preservadas; DADOS e a primeira delas
+  dadosPart = dpN - nAtras + 1
   ' o que cabe na frente e tudo antes de Dados; o Windows recebe o que sobra depois de EFI, MSR e Recovery,
   ' menos 2 MB de folga para o alinhamento de 1 MB do diskpart
   frenteMB = Int(dadosOff / 1048576)
   winMB = frenteMB - 300 - 16 - 1024 - 2
   If winMB < 61440 Then Falha "so " & winMB & " MB antes de '" & DADOS & "'; nao cabe um Windows ai. Nada foi apagado."
-  Escreve "reinstalacao: apaga as particoes " & (dpN - 1) & " ate 1, mantem a " & dpN & " (" & DADOS & ") e recria EFI, MSR, Windows (" & winMB & " MB) e Recovery na frente"
+  Escreve "reinstalacao: apaga as particoes " & (dpN - nAtras) & " ate 1, mantem " & nAtras & " (da " & dadosPart & " ate a " & dpN & ", comecando por '" & DADOS & "') e recria EFI, MSR, Windows (" & winMB & " MB) e Recovery na frente"
   script = "select disk " & alvo & vbCrLf
   ' o WinPE pode ter dado a Dados justamente a letra S ou W, que o resto desta fase usa; ai ela vai para T
-  If dadosLetra = "S" Or dadosLetra = "W" Then script = script & "select partition " & dpN & vbCrLf & "remove letter=" & dadosLetra & vbCrLf & "assign letter=T" & vbCrLf
+  If dadosLetra = "S" Or dadosLetra = "W" Then script = script & "select partition " & dadosPart & vbCrLf & "remove letter=" & dadosLetra & vbCrLf & "assign letter=T" & vbCrLf
   ' de tras para a frente: se o diskpart renumerar depois de um delete, os numeros menores continuam valendo
-  For k2 = dpN - 1 To 1 Step -1
+  For k2 = dpN - nAtras To 1 Step -1
     script = script & "select partition " & k2 & vbCrLf & "delete partition override" & vbCrLf
   Next
   script = script & _
@@ -528,7 +564,13 @@ If dadosPart > 0 Then
     Next
   Next
   If Not aindaLa Then Falha "ALERTA: o volume '" & DADOS & "' nao aparece mais no disco " & alvo & " depois do diskpart. Parando antes do DISM."
-  Escreve "volume '" & DADOS & "' continua no lugar (offset " & Int(dadosOff / 1048576) & " MB); segue a instalacao"
+  ' e nao basta DADOS estar la: tudo que estava atras da fronteira tem de continuar existindo. E isto que
+  ' protege a HOME do Arch, que o Windows nem consegue ler e portanto nao reconheceria pelo rotulo.
+  For Each pt In wmi.ExecQuery("SELECT StartingOffset FROM Win32_DiskPartition WHERE DiskIndex=" & alvo)
+    If CDbl(pt.StartingOffset) >= dadosOff Then nAtrasDepois = nAtrasDepois + 1
+  Next
+  If nAtrasDepois <> nAtras Then Falha "ALERTA: havia " & nAtras & " particao(oes) a partir do offset de '" & DADOS & "' e agora ha " & nAtrasDepois & ". Parando antes do DISM."
+  Escreve "volume '" & DADOS & "' continua no lugar (offset " & Int(dadosOff / 1048576) & " MB) e as " & nAtras & " particoes de tras estao inteiras; segue a instalacao"
 End If
 
 ' 4. aplicar a imagem (demora alguns minutos; o progresso aparece na janela)
