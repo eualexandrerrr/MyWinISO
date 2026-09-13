@@ -1217,7 +1217,10 @@ Etapa 'Windhawk: tema Translucent' {
         # do Explorer, e o translucent-windows põe o desfoque escuro por trás de toda janela (Win32 e WinUI,
         # Configurações incluída). O styler sozinho é o "cinza lavado" que apareceu na primeira tentativa:
         # WinUI transparente sobre o fundo chapado do Win32. O tint é o mesmo da barra, $TaskbarTint.
-        @{ id = 'translucent-windows';                   settings = [ordered]@{
+        # Include = * : este mod injeta em TODO processo, e quebra app de desenho proprio.
+        # O HeidiSQL morria em 0xC000041D (STATUS_FATAL_USER_CALLBACK_EXCEPTION) e o Radmin VPN
+        # desenhava a janela sem cor. Bissectado em 13/09/2026: so este mod reproduz.
+        @{ id = 'translucent-windows'; exclude = 'heidisql.exe|RvRvpnGui.exe|Radmin.exe'; settings = [ordered]@{
                 'RenderingMod.ThemeBackground'       = '1'
                 'RenderingMod.SysColors'             = '0'
                 'RenderingMod.AccentColorControls'   = '1'
@@ -1263,7 +1266,9 @@ Etapa 'Windhawk: tema Translucent' {
             # a fonte só vai para ModsSource depois que a DLL existe, senão a interface lista uma versão que não roda
             Move-Item -LiteralPath $tmpSrc -Destination $src -Force
             Set-Reg $k 'Include'      $inc  'String'
-            Set-Reg $k 'Exclude'      $exc  'String'
+            # exclude do repo vence o @exclude do .wh.cpp: alguns mods vem com Include = * e sem
+            # exclusao nenhuma, e ai derrubam programa de terceiro.
+            Set-Reg $k 'Exclude'      $(if ($m.exclude) { $m.exclude } else { $exc })  'String'
             Set-Reg $k 'Architecture' $arch 'String'
             Set-Reg $k 'Version'      $ver  'String'
             Set-Reg $k 'Disabled'     0
