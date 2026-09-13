@@ -6,7 +6,7 @@
   Senha: o primeiro-logon.ps1 recebe a senha da conta (injetada pelo pendrive.ps1 -Senha) e repassa em
   $env:MYWINISO_SENHA; aqui ela vira a senha do root do MariaDB. Sem senha, o root fica sem senha e só local.
 
-  O console mostra cada etapa como [n/28], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
+  O console mostra cada etapa como [n/30], o que ela está fazendo e, no fim dela, OK, AVISO (erros não fatais,
   listados) ou ERRO (a etapa parou; a mensagem aparece). Nenhuma etapa derruba as seguintes. No final sai um
   resumo de todas as etapas e dos programas que falharam. Tudo vai também para ~\mywiniso-setup.log.
 
@@ -15,20 +15,21 @@
   vê (driver, monitores, tema, wallpaper, barra), e só então vêm os programas, que sozinhos levam uns
   treze minutos. Em uns cinco minutos a máquina já está na cara certa e o resto instala por baixo.
 
-   1. ponto de restauração antes de mexer    15. Lightshot: só Shift+PrintScreen
-   2. garante que o winget funciona          16. Chrome (Proton Pass) e Discord (Vencord do fork)
-   3. Git e clone em ~\Projetos\MyWinISO     17. Jogos: RedM, FiveM e Steam em D:
-   4. Claude Code (CLI)                      18. git config
-   5. driver de vídeo, direto da NVIDIA      19. Office
-   6. monitores: resolução, Hz e posição     20. Área de Trabalho Remota e política de senha
-   7. preferências do usuário (tema escuro)  21. NVIDIA App (instalador silencioso)
-   8. wallpaper, um por monitor              22. MariaDB: serviço e root
-   9. foto do perfil                         23. fontes, console e VS Code
-  10. Explorer em Detalhes (WinSetView)      24. um perfil só para todo PowerShell
-  11. Windhawk: tema Translucent             25. barra de tarefas e tarefa de logon
-  12. energia: tela apaga em 5 min           26. Windows Update (resto dos drivers)
-  13. programas do apps.json, um a um        27. Windows Terminal como terminal único
-  14. Claude Code: MCPs, plugins e skills    28. manutenção: limpeza e telemetria
+   1. ponto de restauração antes de mexer      16. Lightshot: só Shift+PrintScreen
+   2. garante que o winget funciona            17. Chrome (Proton Pass) e Discord (Vencord)
+   3. Git e clone em ~\Projetos\MyWinISO       18. Jogos: RedM, FiveM e Steam em D:
+   4. Claude Code (CLI)                        19. git config
+   5. driver de vídeo, direto da NVIDIA        20. Office
+   6. monitores: resolução, Hz e posição       21. Área de Trabalho Remota e senha
+   7. preferências do usuário (tema escuro)    22. NVIDIA App (instalador silencioso)
+   8. wallpaper, um por monitor                23. MariaDB: serviço e root
+   9. foto do perfil                           24. fontes, console e VS Code
+  10. Explorer em Detalhes (WinSetView)        25. um perfil só para todo PowerShell
+  11. Windhawk: tema Translucent               26. barra de tarefas e tarefa de logon
+  12. energia: tela apaga em 5 min             27. Windows Update (resto dos drivers)
+  13. programas do apps.json, um a um          28. ativação do Windows (HWID)
+  14. Claude Code: MCPs, plugins e skills      29. Windows Terminal como terminal único
+  15. registro de volta de D: (Radmin, WinRAR) 30. manutenção: limpeza e telemetria
 
   -So 'nome da etapa'[,'outra']: roda só essas (as outras saem como puladas, com a numeração de sempre) e não
   arma reinício. Para testar uma etapa sem esperar as 28.
@@ -155,7 +156,7 @@ try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
 # Console: Etapa envolve cada bloco; Passo é uma linha do que está acontecendo; Falha registra item que
 # falhou sem parar a etapa. Erro terminante = ERRO; erro não terminante que sobrou em $Error = AVISO.
 # ---------------------------------------------------------------------------------------------------
-$global:TotalEtapas = 28
+$global:TotalEtapas = 30
 # -So e para depurar: roda só as etapas escolhidas e não mexe em reinício nem no contador de
 # retomadas. -Perfil escolhe um conjunto de etapas, mas é uma instalação de verdade -- reinicia e
 # retoma como sempre. Os dois usam a mesma engrenagem de "pular etapa"; só o efeito colateral muda.
