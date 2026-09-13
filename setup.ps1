@@ -1459,6 +1459,12 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
     [Environment]::SetEnvironmentVariable('MCP_TIMEOUT', '60000', 'User')
     $env:MCP_TIMEOUT = '60000'
     Passo 'MCP_TIMEOUT = 60000 (usuário): MCP lento na partida não cai por timeout'
+    # Instalado pelo winget, o Claude Code nao se autoatualiza: so avisa, a cada abertura, quando o npm ja tem
+    # versao que o manifesto do winget ainda nao tem (13/09/2026: npm 2.1.270, winget 2.1.268). Quem atualiza
+    # e o winget, na etapa 4 e na tarefa 'Startup OnLogon'; DISABLE_AUTOUPDATER desliga a checagem e o aviso.
+    [Environment]::SetEnvironmentVariable('DISABLE_AUTOUPDATER', '1', 'User')
+    $env:DISABLE_AUTOUPDATER = '1'
+    Passo 'DISABLE_AUTOUPDATER = 1 (usuário): sem aviso de atualização; o winget atualiza no logon'
     if (-not (Get-Command claude -ErrorAction Ignore)) { throw 'o claude não está no PATH (etapa 4)' }
     $npmCmd = Get-Command npm.cmd -ErrorAction Ignore
     if (-not $npmCmd) { throw 'npm.cmd não está no PATH (o Node.js vem do apps.json, etapa 13)' }
@@ -2069,7 +2075,11 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     foreach ($n in 'Favorites', 'FavoritesResolve', 'FavoritesChanges', 'FavoritesVersion') {
         Remove-ItemProperty -Path $taskband -Name $n -ErrorAction Ignore      # força o Explorer a reler o layout
     }
-    Passo 'pinos: Chrome, RedM, Discord, VS Code (aparecem quando o Explorer reiniciar)'
+    # Os atalhos dos pinos antigos saem junto. Sem isso o Explorer relê o layout por cima deles e cria
+    # "Google Chrome (2).lnk", "RedM (2).lnk"... a cada rodada (visto na retomada de 13/09/2026).
+    Get-ChildItem -LiteralPath (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar') -Filter '*.lnk' -Force -ErrorAction Ignore |
+        Remove-Item -Force -ErrorAction Ignore
+    Passo 'pinos: Explorador de Arquivos, Chrome, RedM, FiveM, Discord, VS Code (aparecem quando o Explorer reiniciar)'
     # o script fica no próprio clone: o git pull atualiza a tarefa, e não depende do Google Drive estar sincronizado
     $onlogon = Join-Path $aqui 'startup\startup-onlogon.ps1'
     $acao      = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$onlogon`""
