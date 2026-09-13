@@ -1591,11 +1591,11 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
 # --- 14b. Registro: o que so vive em chave, de volta de D: -------------------------------------------
 # O perfil.ps1 leva PASTA para D:. Radmin VPN, WinRAR e Lightshot nao guardam nada em pasta: a rede
 # criada do Radmin, as preferencias do WinRAR e os atalhos do Lightshot vivem so no registro, e sumiam
-# a cada formatacao. O manutencaoegistro.ps1 exporta para D:\Perfil\Registro e devolve aqui.
+# a cada formatacao. O manutencao\registro.ps1 exporta para D:\Perfil\Registro e devolve aqui.
 # Vem ANTES da etapa 15 de proposito: o que o repositorio tem opiniao (o Shift+PrintScreen do Lightshot)
 # e gravado depois e vence o backup. Backup so preenche o que o repo nao decide.
 Etapa 'Registro: Radmin, WinRAR e Lightshot de volta' {
-    $reg = Join-Path $aqui 'manutencaoegistro.ps1'
+    $reg = Join-Path $aqui 'manutencao\registro.ps1'
     if (-not (Test-Path -LiteralPath $reg)) { Falha "nao achei $reg"; return }
     & $reg -Importar
     # exporta a cada logon e de hora em hora, para a proxima formatacao achar tudo fresco
@@ -1926,6 +1926,18 @@ Etapa 'MariaDB' {
                 try { New-Item -ItemType SymbolicLink -Path $link -Target $alvo -ErrorAction Stop | Out-Null; Passo "HeidiSQL em modo portátil, sessões em $alvo" }
                 catch { Falha "HeidiSQL portable_settings.txt: $($_.Exception.Message)" }
             } else { Passo 'HeidiSQL já em modo portátil' }
+            # o modo portatil ainda deixa Backups, Snippets e tabs.ini ao lado do exe, em Local\Programs, que o
+            # perfil.ps1 exclui. Mesmo destino do portable_settings: D:\Perfil\HeidiSQL.
+            foreach ($item in 'Backups', 'Snippets', 'tabs.ini') {
+                $de = Join-Path $heidi.DirectoryName $item; $para = Join-Path (Split-Path $alvo -Parent) $item
+                $ehDir = $item -notlike '*.ini'
+                $it2 = Get-Item -LiteralPath $de -Force -ErrorAction Ignore
+                if ($it2 -and $it2.LinkType) { continue }
+                if ($it2) { if (Test-Path -LiteralPath $para) { Remove-Item -LiteralPath $de -Recurse -Force } else { Move-Item -LiteralPath $de -Destination $para -Force } }
+                elseif (-not (Test-Path -LiteralPath $para)) { if ($ehDir) { New-Item -ItemType Directory -Path $para -Force | Out-Null } else { New-Item -ItemType File -Path $para -Force | Out-Null } }
+                try { New-Item -ItemType $(if ($ehDir) { 'Junction' } else { 'SymbolicLink' }) -Path $de -Target $para -Force -ErrorAction Stop | Out-Null }
+                catch { Falha "HeidiSQL $item : $($_.Exception.Message)" }
+            }
         } else { Passo 'HeidiSQL não instalado; fica para a próxima rodada' }
     }
 }

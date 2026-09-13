@@ -45,6 +45,9 @@ $chaves = [ordered]@{
     'radmin-hklm'    = 'HKLM\SOFTWARE\WOW6432Node\Famatech'
     'winrar'         = 'HKCU\Software\WinRAR'
     'lightshot'      = 'HKCU\Software\Skillbrains'
+    '7zip'           = 'HKCU\Software\7-Zip'
+    'steam-hkcu'     = 'HKCU\Software\Valve\Steam'
+    'fivem'          = 'HKCU\Software\CitizenFX'
 }
 
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
