@@ -92,7 +92,7 @@ perde a imagem dele; com ela, sobrevive. Medido nesta máquina, não suposto.
 | 1 | ponto de restauração antes de mexer em qualquer coisa |
 | 2 | garante que o winget funciona e, se a ISO trouxe um velho (o 1.9 não fala mais com a msstore), instala o release atual do GitHub |
 | 3 | instala o Git e clona este repositório em `D:\Apps\desktop\MyWinISO`; sem Git, baixa o zip e segue |
-| 4 | **Claude Code (CLI)** pelo npm (`@anthropic-ai/claude-code`, que se atualiza sozinho), antes de tudo que é longo; o Node.js vem junto se ainda faltar |
+| 4 | **Claude Code (CLI)** pelo instalador nativo (`claude.ai/install.ps1`, em `~\.local\bin`, que mora em D: e se atualiza sozinho), antes de tudo que é longo; remove as cópias do winget e do npm, que ficavam atrás e mostravam "Update available" a cada abertura |
 | 5 | **driver de vídeo da NVIDIA**, o mais novo, baixado da própria NVIDIA pela API que a página de download usa; instalado em silêncio com `-s -clean -noreboot` |
 | 6 | **monitores**: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`); tenta três vezes, porque o driver acabou de assumir |
 | 7 | **preferências do usuário**: tema escuro, barra centralizada e só no monitor principal, **área de trabalho sem ícone nenhum**, **notificações desligadas**, **Downloads em D:** quando a partição Alexandre (D:) existe, Explorer, teclado, mouse, privacidade (tabela abaixo) |

@@ -542,26 +542,35 @@ Etapa 'Git e clone do repositório' {
 # Cedo de propósito: com o Claude na mão dá para consertar o que der errado nas etapas seguintes sem
 # esperar os treze minutos da instalação dos programas. Custa uns 30 s, então não atrasa o driver e os
 # monitores de forma sentida. Não está mais no apps.json, justamente para não instalar duas vezes.
-# Pelo npm (@anthropic-ai/claude-code), e nao pelo winget: o pacote do winget fica atras do npm e nao se
-# atualiza sozinho, entao o Claude avisava "Update available! Run: winget upgrade" a cada abertura
-# (13/09/2026: npm 2.1.270, winget 2.1.268). O Node.js vem aqui, antes da etapa 13, que o repete e sai
-# como ja instalado. O prefixo global do npm e %APPDATA%\npm, que a regra do perfil leva para D:.
+# Pelo instalador nativo (claude.ai/install.ps1), que se atualiza sozinho em segundo plano. O binario mora em
+# ~\.local\bin, que a regra do perfil leva para D:, entao numa reinstalacao ele ja existe e so se confere.
+# Winget e npm saem: o do winget fica atras e mostrava "Update available! Run: winget upgrade" a cada
+# abertura, e com dois claude no PATH o do WinGet\Links vencia o nativo (13/09/2026, 2.1.268 contra 2.1.270).
 Etapa 'Claude Code (CLI)' {
     $doWinget = Silencioso { winget.exe list --id Anthropic.ClaudeCode --exact --disable-interactivity 2>&1 | Out-String }
     if ($doWinget -match 'Anthropic\.ClaudeCode') {
-        Passo 'removendo o Claude Code do winget (a instalação passa a ser pelo npm)'
-        winget.exe uninstall --id Anthropic.ClaudeCode --exact --silent --disable-interactivity
+        Passo 'removendo o Claude Code do winget (fica só o nativo)'
+        Silencioso { winget.exe uninstall --id Anthropic.ClaudeCode --exact --silent --disable-interactivity 2>&1 | Out-Null }
     }
-    if (-not (Get-Command npm.cmd -ErrorAction Ignore)) {
-        Passo 'Node.js antes da etapa 13, para o npm instalar o Claude'
-        winget.exe install --id OpenJS.NodeJS --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+    Remove-Item -LiteralPath (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\claude.exe') -Force -ErrorAction Ignore
+    Remove-Item -LiteralPath (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages\Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe') -Recurse -Force -ErrorAction Ignore
+    if ((Get-Command npm.cmd -ErrorAction Ignore) -and (Test-Path -LiteralPath (Join-Path $env:APPDATA 'npm\node_modules\@anthropic-ai\claude-code'))) {
+        Passo 'removendo o Claude Code do npm (fica só o nativo)'
+        Silencioso { & npm.cmd uninstall -g @anthropic-ai/claude-code 2>&1 | Out-Null }
+    }
+    # ~\.local\bin na frente do Path do usuário: é onde o nativo mora, e nada de outro claude antes dele
+    $binClaude = Join-Path $env:USERPROFILE '.local\bin'
+    $pathUser  = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if (($pathUser -split ';') -notcontains $binClaude) { [Environment]::SetEnvironmentVariable('Path', ("$binClaude;$pathUser").Trim(';'), 'User') }
+    Refresh-Path
+    if (Test-Path -LiteralPath (Join-Path $binClaude 'claude.exe')) {
+        Passo "claude nativo já em $binClaude (veio de D:); ele se atualiza sozinho"
+    } else {
+        Passo 'instalador nativo: https://claude.ai/install.ps1'
+        try { & ([ScriptBlock]::Create((Invoke-RestMethod -Uri 'https://claude.ai/install.ps1' -UseBasicParsing -TimeoutSec 60))) }
+        catch { Falha "instalador nativo do Claude Code: $($_.Exception.Message)" }
         Refresh-Path
     }
-    if (-not (Get-Command npm.cmd -ErrorAction Ignore)) { throw 'npm.cmd não está no PATH depois de instalar o Node.js' }
-    Passo 'npm install -g @anthropic-ai/claude-code'
-    Silencioso { & npm.cmd install -g @anthropic-ai/claude-code --no-fund --no-audit --loglevel=error 2>&1 | ForEach-Object { "$_" } | Out-Host }
-    if ($LASTEXITCODE -ne 0) { throw "npm install -g @anthropic-ai/claude-code saiu com código $LASTEXITCODE" }
-    Refresh-Path
     $exe = Get-Command claude -ErrorAction Ignore
     if ($exe) { Passo "claude $(& $exe.Source --version) em $($exe.Source)" } else { Falha 'o claude não aparece no PATH; abra um terminal novo e rode "claude --version"' }
 }
@@ -1516,7 +1525,7 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
     [Environment]::SetEnvironmentVariable('CLAUDE_CODE_AUTO_CONNECT_IDE', 'false', 'User')
     $env:CLAUDE_CODE_AUTO_CONNECT_IDE = 'false'
     Passo 'CLAUDE_CODE_AUTO_CONNECT_IDE = false (usuário): Claude no terminal do VS Code sem seleção nem diff da IDE'
-    # o Claude agora vem do npm (etapa 4) e se atualiza sozinho; o DISABLE_AUTOUPDATER da fase winget travaria isso
+    # o Claude agora é o nativo (etapa 4) e se atualiza sozinho; o DISABLE_AUTOUPDATER da fase winget travaria isso
     [Environment]::SetEnvironmentVariable('DISABLE_AUTOUPDATER', $null, 'User')
     Remove-Item Env:\DISABLE_AUTOUPDATER -ErrorAction Ignore
     if (-not (Get-Command claude -ErrorAction Ignore)) { throw 'o claude não está no PATH (etapa 4)' }
