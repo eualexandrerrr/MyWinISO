@@ -1495,6 +1495,13 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
     [Environment]::SetEnvironmentVariable('MCP_TIMEOUT', '60000', 'User')
     $env:MCP_TIMEOUT = '60000'
     Passo 'MCP_TIMEOUT = 60000 (usuário): MCP lento na partida não cai por timeout'
+    # Sem integração com a IDE: no terminal do VS Code o Claude mostrava "N lines selected" a cada seleção no
+    # editor e mandava o trecho como contexto, e o Alexandre não quer isso. Não há chave só para a seleção, e o
+    # autoConnectIde do ~/.claude.json não basta: no terminal do VS Code o CLI conecta mesmo com ele falso. Só
+    # a variável em false corta (visto no código do 2.1.270: CLAUDE_CODE_AUTO_CONNECT_IDE===false retorna antes).
+    [Environment]::SetEnvironmentVariable('CLAUDE_CODE_AUTO_CONNECT_IDE', 'false', 'User')
+    $env:CLAUDE_CODE_AUTO_CONNECT_IDE = 'false'
+    Passo 'CLAUDE_CODE_AUTO_CONNECT_IDE = false (usuário): Claude no terminal do VS Code sem seleção nem diff da IDE'
     # o Claude agora vem do npm (etapa 4) e se atualiza sozinho; o DISABLE_AUTOUPDATER da fase winget travaria isso
     [Environment]::SetEnvironmentVariable('DISABLE_AUTOUPDATER', $null, 'User')
     Remove-Item Env:\DISABLE_AUTOUPDATER -ErrorAction Ignore
