@@ -5,8 +5,6 @@
       <taskbar:TaskbarPinList>
         <taskbar:DesktopApp DesktopApplicationID="Microsoft.Windows.Explorer"/>
         <taskbar:DesktopApp DesktopApplicationLinkPath="%ProgramData%\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"/>
-        <taskbar:DesktopApp DesktopApplicationLinkPath="%AppData%\Microsoft\Windows\Start Menu\Programs\RedM.lnk"/>
-        <taskbar:DesktopApp DesktopApplicationLinkPath="%AppData%\Microsoft\Windows\Start Menu\Programs\FiveM.lnk"/>
         <taskbar:DesktopApp DesktopApplicationLinkPath="%AppData%\Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk"/>
         <taskbar:DesktopApp DesktopApplicationLinkPath="%AppData%\Microsoft\Windows\Start Menu\Programs\Visual Studio Code\Visual Studio Code.lnk"/>
       </taskbar:TaskbarPinList>

@@ -155,6 +155,10 @@ try {
 "@
 } catch {}
 
+# icones da bandeja: Discord, Spotify, Steam e Radmin sempre visiveis e nessa ordem (taskbar\bandeja.ps1).
+# A chave de cada icone so existe depois que o programa abre, por isso roda a cada logon, e nao so no setup.
+& (Join-Path (Split-Path $PSScriptRoot -Parent) 'taskbar\bandeja.ps1')
+
 Start-Sleep -Seconds 3
 
 Write-Host "=== Maximizando Discord ==="

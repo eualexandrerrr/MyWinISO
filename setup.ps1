@@ -1260,18 +1260,20 @@ Etapa 'Windhawk: tema Translucent' {
     if (-not (Test-Path -LiteralPath (Join-Path $pd 'Engine\Mods\64\libc++.whl'))) {
         Falha 'não achei libc++.whl em Engine\Mods\64 (o Windhawk veio sem a pasta Compiler?); se a barra não ficar translúcida, abra o Windhawk uma vez, que ele copia essas bibliotecas'
     }
-    # O tema TranslucentTaskbar pinta o fundo da barra com <WindhawkBlur TintColor="#25323232">: alpha 0x25,
-    # uns 15%, que sobre wallpaper claro fica quase branco. Aqui o mesmo desfoque com um tint bem mais
-    # escuro: 0xCC é 80% de um cinza quase preto. Para clarear de novo, baixe o primeiro par de dígitos.
-    # Os dois alvos são os do próprio tema: o fundo da barra e o da bandeja que abre no hover.
+    # Fundo da barra totalmente transparente, sem desfoque: só os ícones e o relógio sobre o wallpaper, como o
+    # modo Clear do TranslucentTB (escolha do Alexandre em 13/09/2026; antes era o desfoque com tint #CC101010,
+    # 80% de preto, que parecia barra sólida). A bandeja que abre no hover segue com o desfoque escuro, senão
+    # os ícones dela ficam ilegíveis sobre qualquer janela. O $TaskbarTint continua valendo para as janelas
+    # (translucent-windows, abaixo). Os dois alvos são os do próprio tema TranslucentTaskbar.
     $TaskbarTint  = '#CC101010'
     $TaskbarFundo = "Fill:=<WindhawkBlur BlurAmount=`"18`" TintColor=`"$TaskbarTint`"/>"
+    $BarraFundo   = 'Fill:=Transparent'
     $mods = @(
         @{ id = 'windows-11-taskbar-styler';             settings = [ordered]@{
                 theme                        = 'TranslucentTaskbar'
                 xamlDiagnosticsHandling      = 'block'
                 'controlStyles[0].target'    = 'Taskbar.TaskbarFrame > Grid#RootGrid > Taskbar.TaskbarBackground > Grid > Rectangle#BackgroundFill'
-                'controlStyles[0].styles[0]' = $TaskbarFundo
+                'controlStyles[0].styles[0]' = $BarraFundo
                 'controlStyles[1].target'    = 'Taskbar.TaskbarBackground#HoverFlyoutBackgroundControl > Grid > Rectangle#BackgroundFill'
                 'controlStyles[1].styles[0]' = $TaskbarFundo
             } },
@@ -1832,7 +1834,7 @@ Etapa 'Jogos: RedM, FiveM e biblioteca do Steam' {
     $atalho.Description      = 'RedM'
     $atalho.Save()
     Passo "RedM em $exe"
-    Passo "atalho em $lnk (é por ele que a barra fixa o RedM)"
+    Passo "atalho em $lnk"
     # a versão anterior deixava o instalador na área de trabalho; sai, que agora não aparece mesmo
     Remove-Item -LiteralPath (Join-Path $desktop 'RedM.exe') -Force -ErrorAction Ignore
     Passo 'sem modo silencioso: o primeiro clique baixa o jogo numa janela própria'
@@ -2110,7 +2112,10 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     # "Google Chrome (2).lnk", "RedM (2).lnk"... a cada rodada (visto na retomada de 13/09/2026).
     Get-ChildItem -LiteralPath (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar') -Filter '*.lnk' -Force -ErrorAction Ignore |
         Remove-Item -Force -ErrorAction Ignore
-    Passo 'pinos: Explorador de Arquivos, Chrome, RedM, FiveM, Discord, VS Code (aparecem quando o Explorer reiniciar)'
+    Passo 'pinos: Explorador de Arquivos, Chrome, Discord, VS Code (aparecem quando o Explorer reiniciar)'
+    # bandeja: Discord, Spotify, Steam e Radmin sempre visiveis e nessa ordem; antes do reinicio do Explorer
+    # logo abaixo, que e quando ele le a ordem. A tarefa 'Startup OnLogon' repete a cada logon.
+    & (Join-Path $aqui 'taskbar\bandeja.ps1')
     # o script fica no próprio clone: o git pull atualiza a tarefa, e não depende do Google Drive estar sincronizado
     $onlogon = Join-Path $aqui 'startup\startup-onlogon.ps1'
     $acao      = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$onlogon`""
