@@ -1436,6 +1436,20 @@ Etapa 'Energia' {
         Add-MpPreference -ExclusionPath @($excl | Select-Object -Unique) -ExclusionProcess $exclProc -ErrorAction Stop
         Passo "Defender: sem varrer $(@($excl | Select-Object -Unique).Count) pastas de desenvolvimento e $($exclProc.Count) ferramentas (node, git, starship, claude...)"
     } catch { Falha "exclusões do Defender: $($_.Exception.Message)" }
+
+    # Sem notificações da Segurança do Windows (pedido do Alexandre em 13/09/2026). No boot o serviço do Defender
+    # leva segundos para subir e a central mostrava "A proteção antivírus está desativada" com ele ligado.
+    # A proteção continua a mesma; só some o aviso.
+    $notif = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Notifications'
+    New-Item -Path $notif -Force | Out-Null
+    Set-ItemProperty -Path $notif -Name DisableNotifications -Value 1 -Type DWord
+    Set-ItemProperty -Path $notif -Name DisableEnhancedNotifications -Value 1 -Type DWord
+    foreach ($app in 'Windows.SystemToast.SecurityAndMaintenance', 'Microsoft.Windows.SecHealthUI_cw5n1h2txyewy!SecHealthUI', 'Windows.Defender.SecurityCenter') {
+        $t = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\$app"
+        New-Item -Path $t -Force | Out-Null
+        Set-ItemProperty -Path $t -Name Enabled -Value 0 -Type DWord
+    }
+    Passo "Segurança do Windows sem notificações"
 }
 
 # --- 13. Programas, um a um, com resultado ----------------------------------------------------------
