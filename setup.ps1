@@ -1427,7 +1427,11 @@ Etapa 'Energia' {
                              "$env:USERPROFILE\.cache", "$env:LOCALAPPDATA\mywiniso-pwsh")) {
         if (Test-Path -LiteralPath $c) { $c; $it = Get-Item -LiteralPath $c -Force; if ($it.LinkType -and $it.Target) { @($it.Target)[0] } }
     }
-    $exclProc = 'node.exe', 'git.exe', 'starship.exe', 'claude.exe', 'java.exe', 'bun.exe', 'rg.exe', 'fd.exe'
+    # jogos: o FiveM levava ~145 s do clique ate entrar (13/09/2026), boa parte com o Defender varrendo os GB do
+    # GTA V/RDR2 em D:\Jogos e o cache do FiveM/RedM enquanto carregavam
+    $excl = @($excl) + @(foreach ($c in 'D:\Jogos', 'C:\Program Files\Rockstar Games', "$env:LOCALAPPDATA\Rockstar Games") { if (Test-Path -LiteralPath $c) { $c } })
+    $exclProc = 'node.exe', 'git.exe', 'starship.exe', 'claude.exe', 'java.exe', 'bun.exe', 'rg.exe', 'fd.exe',
+                'FiveM.exe', 'RedM.exe', 'GTA5.exe', 'GTA5_Enhanced.exe', 'RDR2.exe', 'PlayGTAV.exe', 'Launcher.exe', 'SocialClubHelper.exe', 'RockstarService.exe'
     try {
         Add-MpPreference -ExclusionPath @($excl | Select-Object -Unique) -ExclusionProcess $exclProc -ErrorAction Stop
         Passo "Defender: sem varrer $(@($excl | Select-Object -Unique).Count) pastas de desenvolvimento e $($exclProc.Count) ferramentas (node, git, starship, claude...)"
