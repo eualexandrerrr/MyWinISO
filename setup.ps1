@@ -17,7 +17,7 @@
 
    1. ponto de restauração antes de mexer      16. Lightshot: só Shift+PrintScreen
    2. garante que o winget funciona            17. Chrome (Proton Pass) e Discord (Vencord)
-   3. Git e clone em ~\Projetos\MyWinISO       18. Jogos: RedM, FiveM e Steam em D:
+   3. Git e clone em D:\Apps\desktop       18. Jogos: RedM, FiveM e Steam em D:
    4. Claude Code (CLI)                        19. git config
    5. driver de vídeo, direto da NVIDIA        20. Office
    6. monitores: resolução, Hz e posição       21. Área de Trabalho Remota e senha
@@ -127,8 +127,8 @@ try {
 
 $Repo = 'https://github.com/eualexandrerrr/MyWinISO'
 # Disco de dados. O instala.vbs cria uma partição "Files" (rótulo) no fim do disco que sobrevive à formatação, e é
-# nela que mora o que é seu: os jogos e a pasta Downloads. Projetos não: essa
-# pasta o Alexandre monta na mão depois, e este clone continua em ~\Projetos no C:. Aqui só se garante a
+# nela que mora o que é seu: os jogos, a pasta Downloads e os projetos em D:\Apps\desktop, este clone
+# incluso (o MyArchISO, o Vencord e o resto moram lá). Aqui só se garante a
 # letra D: (no primeiro boot o Windows pode ter dado D: ao pendrive Ventoy). Num Windows sem essa
 # partição, o setup roda em qualquer Windows 11, tudo fica nas pastas de sempre no C:.
 $Dados = $null
@@ -147,7 +147,7 @@ try {
         Write-Host ("disco de dados: D: (rótulo Alexandre, {0:n0} GB)" -f ($volDados.Size / 1GB))
     } else { Write-Host 'sem partição "Files": pastas do usuário e jogos ficam no C:' }
 } catch { Write-Host "disco de dados: não consegui deixar em D: ($($_.Exception.Message)); seguindo sem" -ForegroundColor Yellow }
-$Dir  = Join-Path $env:USERPROFILE 'Projetos\MyWinISO'
+$Dir  = if ($Dados) { Join-Path $Dados 'Apps\desktop\MyWinISO' } else { Join-Path $env:USERPROFILE 'Projetos\MyWinISO' }
 $Log  = Join-Path $env:USERPROFILE 'mywiniso-setup.log'
 $desktop = [Environment]::GetFolderPath('Desktop')     # usado pela etapa de preferências (ícone do Edge) e pela do RedM
 try { Start-Transcript -Path $Log -Append | Out-Null } catch { }
@@ -1683,7 +1683,7 @@ Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
     # goLiveBypass e o que mais ele puser em src/userplugins. Por isso não serve o instalador oficial: ele
     # injetaria o Vencord de fábrica. O caminho é o dos desenvolvedores: clonar, buildar e injetar o dist
     # local, que é o que "pnpm inject" faz (o installer roda com VENCORD_DEV_INSTALL=1 apontando para o
-    # dist). O clone fica em ~\Projetos\Vencord e é refeito a cada formatação (uns 2 minutos); as
+    # dist). O clone fica em D:\Apps\desktop\Vencord e é refeito a cada formatação (uns 2 minutos); as
     # configurações (settings.json, quickCss, temas) ficam em %APPDATA%\Vencord, que a etapa 7 já pôs em D:.
     Passo 'Discord com o Vencord do fork eualexandrerrr/Vencord (plugins próprios inclusos)'
     Refresh-Path
@@ -1692,7 +1692,7 @@ Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
     } elseif (-not (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'Discord'))) {
         Falha 'Vencord: o Discord não está instalado (apps.json); rode o setup de novo'
     } else {
-        $vsrc = Join-Path $env:USERPROFILE 'Projetos\Vencord'
+        $vsrc = if ($Dados) { Join-Path $Dados 'Apps\desktop\Vencord' } else { Join-Path $env:USERPROFILE 'Projetos\Vencord' }
         try {
             if (Test-Path -LiteralPath (Join-Path $vsrc '.git')) { Passo 'git pull no fork'; git.exe -C $vsrc pull --ff-only }
             else { Passo "git clone do fork em $vsrc"; git.exe clone --progress https://github.com/eualexandrerrr/Vencord $vsrc }
