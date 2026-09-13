@@ -30,6 +30,7 @@
   13. programas do apps.json, um a um          28. ativação do Windows (HWID)
   14. Claude Code: MCPs, plugins e skills      29. Windows Terminal como terminal único
   15. registro de volta de D: (Radmin, WinRAR) 30. manutenção: limpeza e telemetria
+  (a 28 ativa o Windows pelo HWID e o Office pelo Ohook, só o que ainda não estiver ativado)
 
   -So 'nome da etapa'[,'outra']: roda só essas (as outras saem como puladas, com a numeração de sempre) e não
   arma reinício. Para testar uma etapa sem esperar as 28.
@@ -761,6 +762,23 @@ Etapa 'Preferências do usuário' {
         # do Claude são clones git dentro de ~\.claude. Uma passada do icacls resolve (52 mil arquivos, 5 s).
         Silencioso { icacls.exe (Join-Path $Dados 'Perfil') /setowner "$env:USERDOMAIN\$env:USERNAME" /T /C /Q 2>&1 | Out-Null }
         Passo 'D:\Perfil com dono na conta atual (senão o git recusa os repositórios de lá)'
+        # O OpenSSH do Windows recusa chave e config que outro usuario possa ler ou mudar ("Bad owner or
+        # permissions on ~/.ssh/config"), e o .ssh volta de D: com o SID da conta velha e "Usuarios
+        # autenticados: Modificar" em cada arquivo (13/09/2026). A pasta em si nega tudo a quem nao e a conta
+        # velha, administrador incluso: o icacls /T de D:\Perfil acima passa por ela calado, e ate o icacls
+        # elevado da "Acesso negado". So o takeown /A (sem /R) abre: da a pasta aos Administradores, que
+        # entao ganham controle total. Depois heranca zerada nos arquivos (/reset), a pasta so com a conta,
+        # SYSTEM e Administradores, que os arquivos herdam, e o dono de tudo na conta.
+        $sshD = Join-Path $Dados 'Perfil\Home\.ssh'
+        if (Test-Path -LiteralPath $sshD) {
+            $eu = "$env:USERDOMAIN\$env:USERNAME"
+            Silencioso { takeown.exe /F $sshD /A 2>&1 | Out-Null }
+            Silencioso { icacls.exe $sshD /grant '*S-1-5-32-544:(OI)(CI)F' /C /Q 2>&1 | Out-Null }
+            Silencioso { icacls.exe $sshD /reset /T /C /Q 2>&1 | Out-Null }
+            Silencioso { icacls.exe $sshD /inheritance:r /grant:r "${eu}:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /C /Q 2>&1 | Out-Null }
+            Silencioso { icacls.exe $sshD /setowner $eu /T /C /Q 2>&1 | Out-Null }
+            Passo '.ssh só da conta atual (o OpenSSH do Windows recusa config e chave com permissão aberta)'
+        }
         # Android SDK, emuladores e o .android em D:, para não baixar de novo a cada formatação. O Android
         # Studio lê ANDROID_HOME no assistente inicial e propõe esse caminho para o SDK; o AVD e o .android
         # seguem as variáveis próprias. Variáveis de máquina, então valem para qualquer conta e terminal.
@@ -2071,7 +2089,7 @@ Etapa 'Um perfil só para todo PowerShell' {
         $cfg = Join-Path $Dados 'Perfil\Home\.config'
         New-Item -ItemType Directory -Path $cfg -Force | Out-Null
         Copy-Item -LiteralPath (Join-Path $aqui 'terminal\starship.toml') -Destination (Join-Path $cfg 'starship.toml') -Force
-        Passo "$cfg\starship.toml: o prompt do PowerShell 5.1, do 7 e do zsh do Debian"
+        Passo "$cfg\starship.toml: o prompt do PowerShell 5.1 e do 7"
         Passo "histórico: $(Join-Path $Dados 'Perfil\Home\.ps_history'), um só para todos os hosts"
     } else { Passo 'sem a partição Dados: starship com o prompt padrão dele e histórico por host' }
     if (-not (Get-Command starship -ErrorAction Ignore)) { Falha 'starship não está no PATH (vem do apps.json, etapa 13); o perfil cai no prompt simples' }
@@ -2144,10 +2162,33 @@ Etapa 'Windows Update (drivers)' {
 # nada. Quando nao reativa, roda o Microsoft Activation Scripts (get.activated.win), que e o que o
 # Alexandre usa na mao. E script de terceiro baixado e executado: fica DEPOIS do Windows Update, para
 # nao competir com ele, e so roda se o Windows ainda estiver sem licenca.
-Etapa 'Ativacao do Windows' {
+Etapa 'Ativacao do Windows e do Office' {
     $lic = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL AND Name LIKE 'Windows%'" -ErrorAction Ignore | Select-Object -First 1
-    if ($lic -and $lic.LicenseStatus -eq 1) { Passo 'Windows ja ativado; nada a fazer'; return }
-    Passo "status $(if ($lic) { $lic.LicenseStatus } else { 'desconhecido' }); rodando get.activated.win"
+    $winOk = [bool]($lic -and $lic.LicenseStatus -eq 1)
+    # Office LTSC 2024 entra com a GVLK de volume do Configuracao.xml, que so ativa contra KMS de organizacao:
+    # sem isto ficava 30 dias em carencia (13/09/2026). O Ohook do MAS ativa sem chave pondo um sppc.dll no vfs
+    # do Office; o OSPP /dstatus continua dizendo OOB_GRACE, por desenho (o hook engana o Office, nao o servico
+    # de licenca). Por isso a prova e o arquivo, e no Word, Arquivo > Conta.
+    $ohook     = 'C:\Program Files\Microsoft Office\root\vfs\System\sppc.dll'
+    $temOffice = Test-Path -LiteralPath 'C:\Program Files\Microsoft Office\root'
+    $officeOk  = (-not $temOffice) -or (Test-Path -LiteralPath $ohook)
+    if ($winOk) { Passo 'Windows ja ativado' }
+    if ($temOffice -and $officeOk) { Passo 'Office ja ativado pelo Ohook' }
+    $mas = @()
+    if (-not $winOk)    { $mas += '/HWID' }
+    if (-not $officeOk) { $mas += '/Ohook' }
+    if (-not $mas) { return }
+    Passo "rodando get.activated.win $($mas -join ' ')"
+    try {
+        $script = Invoke-RestMethod -Uri 'https://get.activated.win' -UseBasicParsing -TimeoutSec 60
+        & ([ScriptBlock]::Create($script)) @mas
+    } catch { Falha "get.activated.win: $($_.Exception.Message)"; return }
+    Start-Sleep -Seconds 5
+    if (-not $officeOk) {
+        if (Test-Path -LiteralPath $ohook) { Passo 'Office ativado (Ohook)' }
+        else { Falha 'Office: o Ohook nao instalou o sppc.dll; rode get.activated.win /Ohook na mao' }
+    }
+    if ($winOk) { return }
     try {
         $script = Invoke-RestMethod -Uri 'https://get.activated.win' -UseBasicParsing -TimeoutSec 60
         # /HWID: licenca digital presa ao hardware, que e o que sobrevive a proxima formatacao.
@@ -2176,7 +2217,7 @@ Etapa 'Windows Terminal como terminal único' {
     $estado = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState'
     New-Item -ItemType Directory -Path $estado -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $aqui 'terminal\settings.json') -Destination (Join-Path $estado 'settings.json') -Force
-    Passo "perfis: PowerShell 7 (padrão), Windows PowerShell, Prompt de Comando, Debian com zsh e Git Bash"
+    Passo "perfis: PowerShell 7 (padrão), Windows PowerShell, Prompt de Comando e Git Bash"
 
     # console padrão do Windows: os dois CLSIDs são do Windows Terminal
     $inicio = 'HKCU:\Console\%%Startup'

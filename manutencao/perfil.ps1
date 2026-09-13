@@ -47,7 +47,7 @@ $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 
 $raizes = @(
     @{ de = $env:APPDATA;                           para = 'Roaming';  so = '*';  menos = @('Microsoft') },
-    @{ de = $env:LOCALAPPDATA;                      para = 'Local';    so = '*';  menos = @('Microsoft', 'Packages', 'Temp', 'Programs', 'Comms', 'ConnectedDevicesPlatform', 'D3DSCache', 'PlaceholderTileLogoFolder', 'Publishers', 'PeerDistRepub', 'TileDataLayer', 'CrashDumps', 'ElevatedDiagnostics', 'Package Cache', 'PackageManagement', 'SquirrelTemp', 'IsolatedStorage') },
+    @{ de = $env:LOCALAPPDATA;                      para = 'Local';    so = '*';  menos = @('Microsoft', 'NVIDIA', 'Packages', 'Temp', 'Programs', 'Comms', 'ConnectedDevicesPlatform', 'D3DSCache', 'PlaceholderTileLogoFolder', 'Publishers', 'PeerDistRepub', 'TileDataLayer', 'CrashDumps', 'ElevatedDiagnostics', 'Package Cache', 'PackageManagement', 'SquirrelTemp', 'IsolatedStorage') },
     @{ de = "$env:USERPROFILE\AppData\LocalLow";    para = 'LocalLow'; so = '*';  menos = @('Microsoft') },
     @{ de = $env:USERPROFILE;                       para = 'Home';     so = '.*'; menos = @() }
 )

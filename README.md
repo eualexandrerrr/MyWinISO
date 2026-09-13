@@ -32,7 +32,7 @@ configura tudo. Nada de ISO modificada: é a ISO oficial da Microsoft mais um ar
 | 4 | `especializar.ps1` | nome `RRR`, fuso de São Paulo, remove bloatware, OneDrive, Copilot e telemetria, UAC sem perguntar, SmartScreen off, Iniciar vazio, perfil padrão já escuro, tweaks de jogo, identidade em Sistema > Sobre |
 | 5 | OOBE | conta local `Alexandre` administradora, login automático permanente, sem conta Microsoft, teclado ABNT2 |
 | 6 | `primeiro-logon.ps1` | baixa o `setup.ps1` deste repositório e roda; deixa `mywiniso-setup.cmd` na área de trabalho |
-| 7 | `setup.ps1` | as 29 etapas abaixo |
+| 7 | `setup.ps1` | as 30 etapas abaixo |
 
 Os três scripts dos passos 2, 4 e 6 vivem **dentro** do `autounattend.xml`, na seção `<Extensions>`
 no fim do arquivo. Assim o pendrive precisa de um único arquivo, e o Setup ignora a seção. No WinPE,
@@ -66,7 +66,7 @@ travou de verdade.
   blob) e a data de modificação, mais o tamanho e as linhas do arquivo gravado — prova de que veio de lá agora.
 - **downloads em geral**: cada um diz de que host vem, o código HTTP, o tamanho anunciado e o progresso a cada 10%
   com a velocidade. Os `git clone` vão com `--progress` e, no fim, o commit em que o clone ficou.
-- **setup.ps1**: cada etapa como `[n/29] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
+- **setup.ps1**: cada etapa como `[n/30] nome`, linhas `- o que está fazendo`, cada programa do winget com `OK`,
   `já instalado` ou `FALHOU (código)`, e no fim de cada etapa `OK`, `AVISO` (erros não fatais, listados) ou
   `ERRO` (a etapa parou, a mensagem aparece). Uma etapa com erro não derruba as seguintes. No final, um resumo
   de todas as etapas com tempo, a lista de programas que falharam e o caminho do log.
@@ -92,7 +92,7 @@ perde a imagem dele; com ela, sobrevive. Medido nesta máquina, não suposto.
 | 1 | ponto de restauração antes de mexer em qualquer coisa |
 | 2 | garante que o winget funciona e, se a ISO trouxe um velho (o 1.9 não fala mais com a msstore), instala o release atual do GitHub |
 | 3 | instala o Git e clona este repositório em `D:\Apps\desktop\MyWinISO`; sem Git, baixa o zip e segue |
-| 4 | **Claude Code (CLI)** pelo winget, antes de tudo que é longo |
+| 4 | **Claude Code (CLI)** pelo npm (`@anthropic-ai/claude-code`, que se atualiza sozinho), antes de tudo que é longo; o Node.js vem junto se ainda faltar |
 | 5 | **driver de vídeo da NVIDIA**, o mais novo, baixado da própria NVIDIA pela API que a página de download usa; instalado em silêncio com `-s -clean -noreboot` |
 | 6 | **monitores**: resolução, frequência, orientação e posição de cada um (`monitores/monitores.json`); tenta três vezes, porque o driver acabou de assumir |
 | 7 | **preferências do usuário**: tema escuro, barra centralizada e só no monitor principal, **área de trabalho sem ícone nenhum**, **notificações desligadas**, **Downloads em D:** quando a partição Alexandre (D:) existe, Explorer, teclado, mouse, privacidade (tabela abaixo) |
@@ -103,34 +103,34 @@ perde a imagem dele; com ela, sobrevive. Medido nesta máquina, não suposto.
 | 12 | **energia e memória**: plano Desempenho Máximo, nunca suspende nem hiberna, tela apaga em 5 minutos; pagefile fixo pelo tamanho da RAM (metade, entre 4 e 16 GB) no C: e compressão de memória desligada |
 | 13 | programas do `apps.json`, um a um, com resultado na tela: 44 do winget, e WhatsApp e Bloco de Notas da Loja. Instalador que recusa administrador (o do Spotify) vai por tarefa agendada sem elevação |
 | 14 | **Claude Code: MCPs, plugins e skills** (`claude/mcps.json`): os 8 MCPs de escopo user (chrome-devtools, playwright, firecrawl, obsidian, whatsapp, n8n, shadcn, maestro), cada um com o pacote npm instalado global e registrado pelo `claude mcp add-json` — entrypoint pelo `node`, nunca `npx @latest`, que estoura o timeout de 30 s. A chave do firecrawl vem de `D:\Claude\.secrets\firecrawl.env`, nunca do repo. Engram (binário do release) em `~\.local\bin` e maestro (CLI) em `~\.maestro`, que a regra do perfil leva para D:; os 4 marketplaces (caveman, engram, firebase, expo) reconectados e os plugins ligados; as skills conferidas em `~\.claude\skills`. Fecha com `claude mcp list`, o resultado de cada um na tela |
-| 15 | **Lightshot**: um atalho só, `Shift+PrintScreen`, os outros dois desligados |
-| 16 | **Chrome e Discord**: gerenciador de senhas do Chrome desligado (fica só o Proton Pass), Proton Pass e Enhancer for YouTube instalados por política; e o Discord recebe o **Vencord do fork `eualexandrerrr/Vencord`** (plugin `goLiveBypass` e o que mais estiver em `src/userplugins`), clonado em `~\Projetos\Vencord`, buildado com pnpm e injetado com `pnpm inject`. As configurações do Vencord (`%APPDATA%\Vencord`) moram em D: pela etapa 7 |
-| 17 | **Jogos**: RedM em `D:\Jogos\RedM` (ou `%LOCALAPPDATA%\RedM` sem a partição Dados) com atalho no menu Iniciar, que é o que a barra fixa; e a biblioteca do Steam semeada em `D:\Jogos\Steam`, que depois de uma formatação volta inteira sem baixar nada. O bootstrapper não tem modo silencioso (só entende `-ctracpkm`), então o primeiro clique ainda baixa o jogo numa janela própria |
-| 18 | `git config` com nome e e-mail |
-| 19 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`) |
-| 20 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
-| 21 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
-| 22 | MariaDB como serviço com os bancos em `D:\Perfil\MariaDB\data` (sobrevivem à formatação; na reinstalação o serviço é registrado em cima deles), root com a senha da conta e acesso remoto; HeidiSQL em modo portátil com as sessões em `D:\Perfil\HeidiSQL` |
-| 23 | fontes: Cascadia Mono no console; JetBrainsMono Nerd Font (do `apps.json`) no Windows Terminal e no VS Code, que passa a abrir o PowerShell 7 com o mesmo perfil de todo mundo (`vscode/settings.json`) |
-| 24 | **um perfil só para todo PowerShell** (`powershell/profile.ps1`): o 5.1 e o 7, em qualquer host (Windows Terminal, VS Code, console solto, elevado ou não) carregam o mesmo arquivo — starship com o `terminal/starship.toml` copiado para `D:\Perfil\Home\.config`, histórico único em `D:\Perfil\Home\.ps_history` para todos os hosts, eza, zoxide, atalhos `c` e `x`. O do Windows PowerShell aponta para ele pelo `$PSScriptRoot` (Documentos está em D:) |
-| 25 | barra de tarefas, nesta ordem: **Explorer, Chrome, RedM, Discord, VS Code**; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar. Depois dos programas, porque os pinos precisam dos atalhos existindo (o do VS Code fica em `%AppData%`, porque o winget o instala por usuário) |
-| 26 | WSL com Debian: usuário `alexandre` com zsh, sudo sem senha, systemd (`wsl/debian.sh`) e **o mesmo padrão do PowerShell**: `wsl/zshrc` é o único `.zshrc` (reaplicado a cada rodada), starship lendo o mesmo `starship.toml` de D: por `/mnt/d`, zsh-autosuggestions, zsh-syntax-highlighting, fzf, eza, bat, zoxide. Com a partição Dados o disco do Debian fica em `D:\WSL\Debian` e, na reinstalação, volta como estava. Se o app do WSL acabou de ser instalado e já responde, o Debian entra na mesma rodada, sem gastar um reinício |
-| 27 | resto dos drivers e as atualizações, pelo Windows Update (o de vídeo já veio na etapa 5); e a **ativação** pela licença digital gravada no hardware (`slmgr /ato` e o estado no resumo) — sem chave e sem ativador, porque esta máquina já tem a licença do Pro vinculada |
-| 28 | Windows Terminal instalado, atualizado e como console padrão do sistema: PowerShell 7 como padrão, Catppuccin Mocha, JetBrainsMono Nerd Font, fundo opaco e os atalhos do ghostty do dotfiles (`terminal/settings.json`); cinco shells em abas |
-| 29 | manutenção: três tarefas de limpeza que rodam sozinhas, a tarefa **Standby list** (o que o Intelligent Standby List Cleaner faz: a cada minuto, se a RAM livre caiu abaixo de um quarto e a standby list passou de 1 GB, esvazia a standby list pela mesma chamada do ISLC, `manutencao/standby.ps1`), a tarefa **Perfil no D** (`manutencao/perfil.ps1`, veja "Perfil dos programas"), armazenamento reservado liberado, sem compartilhar updates com a internet, backup do registro e as tarefas de telemetria de fundo desligadas |
+| 15 | **registro de volta de D:**: Radmin VPN, WinRAR, Lightshot, 7-Zip e Steam guardam o que importa só no registro; o `manutencao/registro.ps1` devolve de `D:\Perfil\Registro`, e a tarefa **Registro no D** exporta a cada logon e de hora em hora |
+| 16 | **Lightshot**: um atalho só, `Shift+PrintScreen`, os outros dois desligados |
+| 17 | **Chrome e Discord**: gerenciador de senhas do Chrome desligado (fica só o Proton Pass), Proton Pass e Enhancer for YouTube instalados por política; e o Discord recebe o **Vencord do fork `eualexandrerrr/Vencord`** (plugin `goLiveBypass` e o que mais estiver em `src/userplugins`), clonado em `D:\Apps\desktop\Vencord`, buildado com pnpm e injetado com `pnpm inject`. As configurações do Vencord (`%APPDATA%\Vencord`) moram em D: pela etapa 7 |
+| 18 | **Jogos**: RedM e FiveM em `D:\Jogos\RedM` e `D:\Jogos\FiveM` (ou em `%LOCALAPPDATA%` sem a partição Dados), com atalho no menu Iniciar, que é o que a barra fixa; e a biblioteca do Steam semeada em `D:\Jogos\Steam`, que depois de uma formatação volta inteira sem baixar nada. Os bootstrappers não têm modo silencioso (só entendem `-ctracpkm`), então o primeiro clique ainda baixa o jogo numa janela própria |
+| 19 | `git config` com nome e e-mail |
+| 20 | Office LTSC Professional Plus 2024 pt-BR pelo Office Deployment Tool (`office/Configuracao.xml`); a ativação vem na etapa 28 |
+| 21 | Área de Trabalho Remota ligada, senha sem validade, sem bloqueio de conta, scripts liberados |
+| 22 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
+| 23 | MariaDB como serviço com os bancos em `D:\Perfil\MariaDB\data` (sobrevivem à formatação; na reinstalação o serviço é registrado em cima deles), root com a senha da conta e acesso remoto; HeidiSQL em modo portátil com as sessões em `D:\Perfil\HeidiSQL` |
+| 24 | fontes: Cascadia Mono no console; JetBrainsMono Nerd Font (do `apps.json`) no Windows Terminal e no VS Code, que passa a abrir o PowerShell 7 com o mesmo perfil de todo mundo (`vscode/settings.json`) |
+| 25 | **um perfil só para todo PowerShell** (`powershell/profile.ps1`): o 5.1 e o 7, em qualquer host (Windows Terminal, VS Code, console solto, elevado ou não) carregam o mesmo arquivo — starship com o `terminal/starship.toml` copiado para `D:\Perfil\Home\.config`, histórico único em `D:\Perfil\Home\.ps_history` para todos os hosts, eza, zoxide, atalhos `c` e `x`. O do Windows PowerShell aponta para ele pelo `$PSScriptRoot` (Documentos está em D:) |
+| 26 | barra de tarefas, nesta ordem: **Explorer, Chrome, RedM, FiveM, Discord, VS Code**; tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar. Depois dos programas, porque os pinos precisam dos atalhos existindo (o do VS Code fica em `%AppData%`, porque o winget o instala por usuário) |
+| 27 | resto dos drivers e as atualizações, pelo Windows Update (o de vídeo já veio na etapa 5), com uma linha por atualização a cada fase; e o `slmgr /ato` pela licença digital gravada no hardware |
+| 28 | **ativação**, só do que ainda não estiver ativado: o Windows pelo `get.activated.win /HWID` quando a licença digital não voltou sozinha, e o **Office pelo `/Ohook`** do mesmo script, porque a GVLK de volume do `Configuracao.xml` só ativa contra KMS de organização (sem isso ficava 30 dias em carência) |
+| 29 | Windows Terminal instalado, atualizado e como console padrão do sistema: PowerShell 7 como padrão, Catppuccin Mocha, JetBrainsMono Nerd Font, fundo opaco e os atalhos do ghostty do dotfiles (`terminal/settings.json`); quatro shells em abas |
+| 30 | manutenção: três tarefas de limpeza que rodam sozinhas, a tarefa **Standby list** (o que o Intelligent Standby List Cleaner faz: a cada minuto, se a RAM livre caiu abaixo de um quarto e a standby list passou de 1 GB, esvazia a standby list pela mesma chamada do ISLC, `manutencao/standby.ps1`), a tarefa **Perfil no D** (`manutencao/perfil.ps1`, veja "Perfil dos programas"), armazenamento reservado liberado, sem compartilhar updates com a internet, backup do registro e as tarefas de telemetria de fundo desligadas |
 
 ## Terminal: o mesmo em todo lugar
 
-Qualquer terminal que se abra cai no mesmo padrão. O Windows Terminal é o console do sistema (etapa 28) e abre
+Qualquer terminal que se abra cai no mesmo padrão. O Windows Terminal é o console do sistema (etapa 29) e abre
 o PowerShell 7; o VS Code abre o PowerShell 7; o que ainda abrir o Windows PowerShell 5.1 (instalador, tarefa,
-`Win+X`) carrega **o mesmo perfil** (etapa 24). E o Debian do WSL segue o mesmo desenho (etapa 26).
+`Win+X`) carrega **o mesmo perfil** (etapa 25).
 
 | Peça | Onde mora | Vale para |
 |:--|:--|:--|
 | `powershell/profile.ps1` | `Documentos\PowerShell\profile.ps1` (Documentos está em D:); o de `WindowsPowerShell` só aponta para ele | PowerShell 5.1 e 7, qualquer host |
-| `terminal/starship.toml` | `D:\Perfil\Home\.config\starship.toml` | prompt do 5.1, do 7 e do zsh do Debian (por `/mnt/d`) |
-| histórico | `D:\Perfil\Home\.ps_history` (PSReadLine, todos os hosts) e `~/.zsh_history` dentro do Debian (disco em `D:\WSL`) | sobrevive à formatação |
-| `wsl/zshrc` | `~/.zshrc` do Debian, reaplicado pelo `debian.sh` a cada rodada | zsh |
+| `terminal/starship.toml` | `D:\Perfil\Home\.config\starship.toml` | prompt do 5.1 e do 7 |
+| histórico | `D:\Perfil\Home\.ps_history` (PSReadLine, todos os hosts) | sobrevive à formatação |
 | `terminal/settings.json` | Windows Terminal | fonte, cores, atalhos |
 | `vscode/settings.json` | VS Code | terminal integrado com o PowerShell 7 e a mesma fonte |
 
@@ -216,11 +216,10 @@ Insync e Maestro não existem no winget; Google Drive oficial entra no lugar do 
 | `explorer/WinSetView/` | WinSetView (Les Ferch, MIT) com o modo de exibição do Explorer em `AppData/Win10.ini`; ver o README da pasta |
 | `manutencao/` | os três scripts que as tarefas de limpeza rodam: limpeza de disco, cache do Update e temporários |
 | `monitores/` | `monitores.json` com resolução, Hz, orientação e posição de cada monitor, e o `monitores.ps1` que aplica |
-| `terminal/settings.json` | perfis do Windows Terminal: PowerShell 7 (padrão), Windows PowerShell, Prompt de Comando, Debian com zsh e Git Bash |
+| `terminal/settings.json` | perfis do Windows Terminal: PowerShell 7 (padrão), Windows PowerShell, Prompt de Comando e Git Bash |
 | `perfil/avatar.png` | foto da conta, redimensionada pelo setup para os tamanhos que o Windows usa |
 | `startup/startup-onlogon.ps1` | tarefa de logon: maximiza o Discord, posiciona duas janelas do Chrome no monitor vertical, backup do histórico do terminal |
 | `vscode/settings.json` | o que o `setup.ps1` mescla no `settings.json` do VS Code |
-| `wsl/debian.sh`, `wsl/wsl.conf` | configuração do Debian no WSL |
 
 ## Fazer o pendrive
 
@@ -383,12 +382,12 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 | Explorer | extensões visíveis, abre em Este Computador, menu de contexto moderno (o do Windows 11); Detalhes em todas as pastas com Nome, Caminho, Data de modificação, Tipo e Tamanho (WinSetView) |
 | Barra e Iniciar | ícones centralizados e só no monitor principal (a LG de pé fica sem barra), sem busca, Visão de Tarefas, widgets e Copilot; Iniciar com mais fixados e sem recomendações; "Finalizar tarefa" no botão direito; pinos fixos |
 | Tema | escuro desde o primeiro boot, cor de destaque fixa `#6B69D6` (o "Roxo-sombreado-escuro" da paleta do Windows; a automática tirava um roxo sujo do wallpaper); barra, Iniciar, central de notificações, Explorer e Configurações translúcidos e escuros pelo Windhawk (TranslucentTaskbar, TranslucentStartMenu, TranslucentShell, Translucent Explorer11 e o mod Translucent Windows com `acrylicblur` no tint `#CC101010`, o mesmo da barra), menus escuros, janelas sem borda. A barra leva um `controlStyles` por cima do tema com `TintColor #CC101010`, senão ela fica clara demais sobre wallpaper claro |
-| Disco | duas partições que importam: `C:` com o Windows e os programas (120 GB; formatado a cada três meses, então não precisa de mais) e `D:` **Dados** com o resto. Em D: mora tudo que não se quer refazer a cada formatação: os jogos (`D:\Jogos`: biblioteca do Steam e RedM), o Debian do WSL (`D:\WSL\Debian\ext4.vhdx`, que volta inteiro por `wsl --import-in-place`), o Android SDK e os emuladores (`D:\Android`, por `ANDROID_HOME`/`ANDROID_AVD_HOME`) e a pasta Downloads, redirecionada pelo caminho oficial (`SHSetKnownFolderPath`) -- Documentos, Imagens, Vídeos e Músicas ficam no C: mesmo. Projetos em D: é o Alexandre quem cria; este clone segue em `~\Projetos`. A instalação nunca toca em D:: o `instala.vbs` só apaga as partições do Windows, confere a numeração pelo próprio diskpart (o WMI não lista a MSR), recusa qualquer layout que não reconheça e para antes do DISM se Dados sumir |
+| Disco | duas partições que importam: `C:` com o Windows e os programas (120 GB; formatado a cada três meses, então não precisa de mais) e `D:` **Dados** com o resto. Em D: mora tudo que não se quer refazer a cada formatação: os jogos (`D:\Jogos`: biblioteca do Steam, RedM e FiveM), os projetos (`D:\Apps\desktop`, este clone incluso), o Android SDK e os emuladores (`D:\Android`, por `ANDROID_HOME`/`ANDROID_AVD_HOME`) e a pasta Downloads, redirecionada pelo caminho oficial (`SHSetKnownFolderPath`) -- Documentos, Imagens, Vídeos e Músicas ficam no C: mesmo. A instalação nunca toca em D:: o `instala.vbs` só apaga as partições do Windows, confere a numeração pelo próprio diskpart (o WMI não lista a MSR), recusa qualquer layout que não reconheça e para antes do DISM se Dados sumir |
 | Perfil dos programas | `D:\Perfil`, por **regra e não por lista** (`manutencao/perfil.ps1`): toda pasta que qualquer programa cria em `%APPDATA%`, `%LOCALAPPDATA%`, `LocalLow` e nos `~\.dotfolders` vai para `D:\Perfil\Roaming`, `Local`, `LocalLow` e `Home`, e no lugar fica uma junção; arquivo solto do perfil (`~\.claude.json`, `~\.gitconfig`) vai por symlink. Fica em C: só o que é do Windows: `Microsoft`, `Packages` (apps da Loja), `Temp`, `Programs`. Roda na etapa 7 (antes de instalar qualquer programa, para a junção já existir quando o instalador gravar), no fim dos Programas, no fim do setup, e pela tarefa **Perfil no D** a cada logon e de hora em hora, para programa instalado depois: pasta em uso (programa aberto) fica para a próxima rodada, porque o NTFS recusa renomear pasta com arquivo aberto, e o rename é o teste. Quando os dois lados existem, o arquivo mais novo vence. Fora do AppData: `Steam\config` + `Steam\userdata` em `D:\Jogos\Steam\_perfil`, os bancos do MariaDB em `D:\Perfil\MariaDB\data` (na reinstalação o serviço é registrado em cima deles) e as sessões do HeidiSQL em `D:\Perfil\HeidiSQL` (modo portátil por symlink). Mover `C:\Users` inteiro (`ProfilesDirectory`) ou o `AppData\Local` inteiro não: quebra apps da Loja, Start e barra, e a Microsoft só admite em teste. O que a DPAPI da conta cifra não volta, por desenho do Windows: cookies e sessões do Chrome, token do Discord e do Spotify, credencial do git pedem login de novo (as senhas estão no Proton Pass) |
 | Explorer, nomes | pastas com o nome real (`Program Files`, `Users`, `Public`), tirando o `LocalizedResourceName` do `desktop.ini` de cada uma; caminho completo na barra de título. A barra de endereço do Windows 11 só mostra a trilha (clicar nela mostra o caminho literal); não há ajuste para deixá-la literal |
 | Menus e MMC | menu de contexto **moderno** do Windows 11, que é WinUI e já vem com o acrílico e os cantos arredondados do Iniciar. O clássico saiu: é Win32 puro, fica chapado e de borda clara, e não existe forma mantida de dar a ele o mesmo visual (o `TranslucentFlyouts` está arquivado desde 2024; o `dark-menus` só força o escuro, e é o que segue cuidando dos menus Win32 que sobram, como os de dentro dos programas). Entrada de terceiro (Git Bash, NVIDIA App, 7-Zip) vai para "Mostrar mais opções", ou Shift+F10 abre o clássico direto. O Agendador de Tarefas, o Visualizador de Eventos e o resto do `mmc.exe` ficam no tema claro original: o Windows não tem tema escuro para MMC, e o Translucent Windows os deixava meio brancos; a regra de processo os tira do mod |
-| Memória | pagefile fixo (início = máximo) de metade da RAM no C:, entre 4 e 16 GB; compressão de memória desligada; tarefa `Standby list` a cada minuto (veja a etapa 29) |
-| Área de trabalho | **sem ícone nenhum** (`HideIcons`). Os arquivos continuam lá, o `RedM.exe` inclusive; para chegar neles, Win+E e ir na pasta Área de Trabalho |
+| Memória | pagefile fixo (início = máximo) de metade da RAM no C:, entre 4 e 16 GB; compressão de memória desligada; tarefa `Standby list` a cada minuto (veja a etapa 30) |
+| Área de trabalho | **sem ícone nenhum** (`HideIcons`). Os arquivos continuam lá; para chegar neles, Win+E e ir na pasta Área de Trabalho. RedM e FiveM ficam no menu Iniciar e na barra |
 | Notificações | os avisos que aparecem no canto ficam **desligados**. A central de notificações em si continua de pé, de propósito: no Windows 11 o calendário mora dentro dela, e clicar no relógio abre esse painel. A política `DisableNotificationCenter` levaria o calendário junto, então ela fica de fora |
 | Print Screen | `Shift+PrintScreen` chama o Lightshot para selecionar área, e é o único atalho dele ligado; os de "salvar tela toda" e "enviar tela toda" ficam desligados |
 | Senhas | o gerenciador do Chrome é desligado por política (`PasswordManagerEnabled=0`): não salva, não preenche e não sugere senha. Fica só o Proton Pass, no Windows e como extensão |
@@ -404,8 +403,7 @@ Aplicadas pelo `setup.ps1`, então valem em qualquer Windows onde ele rodar.
 | Do Sophia Script | o que faltava do preset do farag2, cruzado função por função: relatório de erros e feedback off, AutoPlay off, Acesso Rápido sem recentes/frequentes, diálogo de cópia detalhado, conflitos de merge visíveis, Edge sem criar atalho, sem animação do primeiro logon, atalhos sem o sufixo "- Atalho", sites sem ler a lista de idiomas, BSoD com os parâmetros, F1 sem abrir o Edge, Painel de Controle em ícones grandes, Iniciar sem "mais usados"/"adicionados recentemente"/avisos de conta, sem "procurar na Loja", sem destaques da busca, sem impressora padrão automática, sem anúncio do OneDrive, placa de rede sem economia de energia, Microsoft Update junto do Windows Update. Fora de propósito: DNS over HTTPS (troca o DNS do roteador) e os itens de segurança (sandbox do Defender, PUA, proteção de rede) |
 | Energia | Desempenho Máximo, nunca suspende nem hiberna; a tela apaga depois de 5 minutos parada |
 | RDP | ligado como host com autenticação de rede; precisa da senha da conta |
-| WSL | Debian com usuário `alexandre` usando zsh, sudo sem senha, systemd; precisa de um reinício na primeira vez |
-| Terminal | Windows Terminal é o console padrão do sistema; tudo abre nele em abas. PowerShell 7 é o padrão, e o menu tem Windows PowerShell, Prompt de Comando, Debian com zsh e Git Bash |
+| Terminal | Windows Terminal é o console padrão do sistema; tudo abre nele em abas. PowerShell 7 é o padrão, e o menu tem Windows PowerShell, Prompt de Comando e Git Bash |
 | Monitores | ASUS XG27ACS em 2560x1440 a 180 Hz como principal; LG UltraGear em 1920x1080 a 144 Hz, de pé, à esquerda e 262 px acima. Casados pelo nome do EDID, então trocar de porta não embaralha |
 | Conta | foto do perfil do `perfil/avatar.png` no Iniciar e na tela de login |
 
@@ -420,11 +418,11 @@ irm https://raw.githubusercontent.com/eualexandrerrr/MyWinISO/main/setup.ps1 | i
 
 ## Depois de instalado
 
-- **RedM.exe** fica na área de trabalho; abra uma vez para instalar.
-- **WSL**: na primeira execução o Windows precisa reiniciar; rode `mywiniso-setup.cmd` de novo e o Debian entra.
+- **RedM** e **FiveM** ficam no menu Iniciar e na barra; abra cada um uma vez para baixar o jogo.
 - **MariaDB**: root com a senha da conta, acesso local e remoto. Sem senha, root sem senha e só local.
 - **Office**: a chave do `Configuracao.xml` é a GVLK pública da Microsoft para volume, que só ativa contra um
-  servidor KMS de organização. Com licença pessoal, troque o produto por `ProPlus2024Retail` ou `O365ProPlusRetail`.
+  servidor KMS de organização; a etapa 28 ativa pelo `/Ohook` do `get.activated.win`. O `ospp.vbs /dstatus`
+  continua dizendo `OOB_GRACE` por desenho do Ohook: confira no Word, em Arquivo > Conta.
 - **Tela de bloqueio**: o wallpaper entra pela `PersonalizationCSP`, que trava a opção em Configurações. Para
   liberar, apague a chave `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP`.
 - **Senha depois**: `net user Alexandre *` troca; o login automático continua (o Windows guarda a senha do autologon).
