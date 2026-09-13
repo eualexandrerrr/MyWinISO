@@ -1281,23 +1281,10 @@ Etapa 'Windhawk: tema Translucent' {
             } },
         @{ id = 'windows-11-start-menu-styler';          settings = @{ theme = 'TranslucentStartMenu' } },
         @{ id = 'windows-11-notification-center-styler'; settings = @{ theme = 'TranslucentShell' } },
-        # Explorer e Configurações no mesmo Translucent escuro da barra. São dois mods que só funcionam
-        # juntos, e o FAQ do próprio autor diz isso: o file-explorer-styler deixa transparente a parte WinUI
-        # do Explorer, e o translucent-windows põe o desfoque escuro por trás de toda janela (Win32 e WinUI,
-        # Configurações incluída). O styler sozinho é o "cinza lavado" que apareceu na primeira tentativa:
-        # WinUI transparente sobre o fundo chapado do Win32. O tint é o mesmo da barra, $TaskbarTint.
-        # Include = * : este mod injeta em TODO processo, e quebra app de desenho proprio.
-        # O HeidiSQL morria em 0xC000041D (STATUS_FATAL_USER_CALLBACK_EXCEPTION) e o Radmin VPN
-        # desenhava a janela sem cor. Bissectado em 13/09/2026: so este mod reproduz.
-        @{ id = 'translucent-windows'; exclude = 'heidisql.exe|RvRvpnGui.exe|Radmin.exe'; settings = [ordered]@{
-                'RenderingMod.ThemeBackground'       = '1'
-                'RenderingMod.SysColors'             = '0'
-                'RenderingMod.AccentColorControls'   = '1'
-                'BackgroundEffects.type'             = 'acrylicblur'
-                'BackgroundEffects.AccentBlurBehind' = $TaskbarTint.TrimStart('#')
-                'FlyoutsEffects'                     = '1'
-            } },
-        @{ id = 'windows-11-file-explorer-styler';       settings = @{ theme = 'Translucent Explorer11' } },
+        # Explorer e Configurações ficam no escuro nativo, sem Translucent: o par translucent-windows +
+        # file-explorer-styler saiu em 13/09/2026, por desempenho. O translucent-windows tem Include = * e
+        # injetava em TODO processo (já tinha derrubado o HeidiSQL com 0xC000041D e tirado a cor do Radmin);
+        # o styler sozinho é o "cinza lavado", então sai junto. Os dois são desligados logo abaixo do laço.
         @{ id = 'taskbar-thumbnail-reorder';             settings = @{} },   # arrastar a miniatura da barra com o botão esquerdo
         # Explorer abre em D: (Win+E e o pino da barra). O Windows só oferece Início, Este Computador e Downloads
         # (LaunchTo); pasta arbitrária só por este mod. Sem a partição Alexandre, abre em Este Computador.
@@ -1350,6 +1337,15 @@ Etapa 'Windhawk: tema Translucent' {
             if ($dll) { Remove-Item -Path (Join-Path $pd "Engine\Mods\*\$dll") -Force -ErrorAction Ignore }
             Falha ("{0}: {1}" -f $id, $_.Exception.Message)
             continue
+        }
+    }
+    # mods que saíram da lista: numa máquina que já os tinha (reinstalação por cima), ficam desligados
+    foreach ($id in 'translucent-windows', 'windows-11-file-explorer-styler') {
+        $k = "HKLM:\SOFTWARE\Windhawk\Engine\Mods\$id"
+        if (Test-Path -LiteralPath $k) {
+            Set-Reg $k 'Disabled' 1
+            Set-Reg $k 'SettingsChangeTime' ([int]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -band 0x7fffffff))
+            Passo "$id desligado (injetava em todo processo; Explorer fica no escuro nativo)"
         }
     }
     # serviço e ícone da bandeja; o instalador silencioso pode não subir os dois na hora
@@ -1411,6 +1407,22 @@ Etapa 'Energia' {
     elseif ($pf) { $pf | Set-CimInstance -Property @{ InitialSize = $pfMB; MaximumSize = $pfMB } }
     else { New-CimInstance -ClassName Win32_PageFileSetting -Property @{ Name = 'C:\pagefile.sys'; InitialSize = $pfMB; MaximumSize = $pfMB } | Out-Null }
     Silencioso { Disable-MMAgent -MemoryCompression }
+
+    # Defender sem varrer em tempo real o que é desenvolvimento: pastas de projeto, caches de pacote e as
+    # ferramentas que abrem milhares de arquivos por comando (node, git, starship, claude, java...). É o maior
+    # custo do terminal, do git status e de build no Windows. Troca aceita pelo Alexandre em 13/09/2026 por
+    # desempenho. pwsh e powershell ficam de fora de propósito: é por eles que malware costuma entrar.
+    # Junção entra pelos dois caminhos (o do C: e o alvo em D:).
+    $excl = foreach ($c in @('D:\Apps', 'D:\MichiganRoleplay', 'D:\Android', "$env:APPDATA\npm", "$env:LOCALAPPDATA\npm-cache",
+                             "$env:LOCALAPPDATA\pnpm", "$env:LOCALAPPDATA\pnpm-cache", "$env:USERPROFILE\.gradle",
+                             "$env:USERPROFILE\.cache", "$env:LOCALAPPDATA\mywiniso-pwsh")) {
+        if (Test-Path -LiteralPath $c) { $c; $it = Get-Item -LiteralPath $c -Force; if ($it.LinkType -and $it.Target) { @($it.Target)[0] } }
+    }
+    $exclProc = 'node.exe', 'git.exe', 'starship.exe', 'claude.exe', 'java.exe', 'bun.exe', 'rg.exe', 'fd.exe'
+    try {
+        Add-MpPreference -ExclusionPath @($excl | Select-Object -Unique) -ExclusionProcess $exclProc -ErrorAction Stop
+        Passo "Defender: sem varrer $(@($excl | Select-Object -Unique).Count) pastas de desenvolvimento e $($exclProc.Count) ferramentas (node, git, starship, claude...)"
+    } catch { Falha "exclusões do Defender: $($_.Exception.Message)" }
 }
 
 # --- 13. Programas, um a um, com resultado ----------------------------------------------------------
@@ -1903,6 +1915,9 @@ Etapa 'git config' {
     git.exe config --global user.name  'Alexandre Rangel'
     git.exe config --global user.email 'mamutal91@gmail.com'
     git.exe config --global init.defaultBranch main
+    # desempenho: cache de sistema de arquivos, index em paralelo, cache de não rastreados e o fsmonitor
+    # nativo (um daemon por repositório). Deixam o git status e o prompt do starship rápidos em repo grande.
+    foreach ($c in 'core.fscache', 'core.preloadindex', 'core.untrackedcache', 'core.fsmonitor') { git.exe config --global $c true }
     Passo "user.name=$(git.exe config --global user.name) user.email=$(git.exe config --global user.email)"
 }
 
@@ -2371,14 +2386,10 @@ Etapa 'Manutenção e telemetria de fundo' {
     # abaixo de um quarto e a standby list passou de 1 GB, manutencao\standby.ps1 esvazia a standby list
     # pela mesma chamada que o ISLC usa (NtSetSystemInformation, MemoryPurgeStandbyList). Evita a engasgada
     # em jogo quando o Windows fica segurando cache velho em vez de entregar a memória.
-    $standby = Join-Path $tarefasDir 'standby.ps1'
-    if (Test-Path -LiteralPath $standby) {
-        $gatilho = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
-        $cfg = New-ScheduledTaskSettingsSet -Compatibility Win8 -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 2) -Hidden
-        Register-ScheduledTask -TaskName 'Standby list' -TaskPath '\mywiniso' -Force -Settings $cfg -Principal $principal -Trigger $gatilho `
-            -Action (New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$standby`"") | Out-Null
-        Passo "tarefa 'Standby list': a cada minuto, limpa a standby list quando a RAM livre cai (o que o ISLC faz)"
-    } else { Falha "não achei $standby" }
+    # Sem a tarefa 'Standby list' (desligada em 13/09/2026, por desempenho): com 64 GB de RAM a standby list
+    # quase nunca aperta, e cada rodada subia um powershell (~0,8 s de CPU) a cada minuto. O standby.ps1 fica
+    # no repo para máquina com pouca RAM; aqui só se remove a tarefa de instalações anteriores.
+    Unregister-ScheduledTask -TaskName 'Standby list' -TaskPath '\mywiniso\' -Confirm:$false -ErrorAction Ignore
 
     if ($Dados -and (Test-Path -LiteralPath $PerfilNoD)) {
         Passo 'última rodada do perfil em D: (o que as etapas de depois dos Programas criaram)'

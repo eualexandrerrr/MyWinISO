@@ -39,11 +39,37 @@ if (Get-Command eza -ErrorAction Ignore) {
     Remove-Item Alias:ls -Force -ErrorAction Ignore
     function ls { eza --icons --group-directories-first @args }
 }
-if (Get-Command zoxide -ErrorAction Ignore) { Invoke-Expression (& { (zoxide init powershell | Out-String) }) }
+# --- init do zoxide e do starship, de cache ------------------------------------------------------------------
+# Rodar "starship init" e passar a saída pelo Invoke-Expression custava ~310 ms a cada terminal aberto
+# (medido em 13/09/2026: 35 ms do processo, 275 ms do Invoke-Expression analisando 10 KB de script), e o
+# zoxide mais 60 ms. A saída dos dois é sempre a mesma para o mesmo exe (a chave de sessão do starship é
+# sorteada dentro do script, não na geração), então vai para um .ps1 em %LOCALAPPDATA% que o PowerShell
+# carrega por dot-source, com a análise em cache. O arquivo se refaz sozinho quando o exe muda (caminho,
+# data e tamanho no cabeçalho). Dot-source aqui no topo do perfil, e não dentro de função, senão as
+# definições ficam no escopo da função. UTF-8 com BOM: o init do starship tem caractere fora do ASCII,
+# e sem BOM o 5.1 lê como ANSI. Um arquivo por edição (5.1 e 7).
+function Get-InitCache([string] $Nome, [string] $Exe, [string[]] $Argumentos) {
+    $bin = (Get-Command $Exe -CommandType Application -ErrorAction Ignore | Select-Object -First 1).Source
+    if (-not $bin) { return $null }
+    $it   = Get-Item -LiteralPath $bin
+    $selo = "# $bin|$($it.LastWriteTimeUtc.Ticks)|$($it.Length)"
+    $arq  = Join-Path $env:LOCALAPPDATA "mywiniso-pwsh\$Nome-$($PSVersionTable.PSEdition).ps1"
+    $atual = if (Test-Path -LiteralPath $arq) { [IO.File]::ReadLines($arq) | Select-Object -First 1 } else { '' }
+    if ($atual -ne $selo) {
+        $corpo = (& $bin @Argumentos | Out-String)
+        if (-not $corpo) { return $null }
+        New-Item -ItemType Directory -Path (Split-Path $arq) -Force | Out-Null
+        [IO.File]::WriteAllText($arq, "$selo`r`n$corpo", (New-Object Text.UTF8Encoding $true))
+    }
+    return $arq
+}
+$zoxideInit = Get-InitCache 'zoxide' 'zoxide' @('init', 'powershell')
+if ($zoxideInit) { . $zoxideInit }
 
 # --- prompt: starship, com o starship.toml de D: (o mesmo do zsh) -----------------------------------------
-if (Get-Command starship -ErrorAction Ignore) {
-    Invoke-Expression (& starship init powershell)
+$starshipInit = Get-InitCache 'starship' 'starship' @('init', 'powershell', '--print-full-init')
+if ($starshipInit) {
+    . $starshipInit
     # O add_newline do starship.toml põe uma linha vazia antes de todo prompt, inclusive do primeiro, e todo
     # terminal novo abria com a primeira linha em branco. Aqui só o primeiro perde esse newline; entre um
     # comando e outro o espaço continua. É um embrulho como o do shell integration do VS Code: o starship lê
