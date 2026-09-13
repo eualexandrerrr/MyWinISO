@@ -11,7 +11,7 @@
         "defaults": {
             "font": {
                 "face": "JetBrainsMono Nerd Font",
-                "size": 12
+                "size": 10
             },
             "colorScheme": "Catppuccin Mocha",
             "useAcrylic": false,
