@@ -37,6 +37,10 @@ function L([string] $m, [string] $cor = 'Gray') {
     if (-not $Quieto) { Write-Host "  $m" -ForegroundColor $cor }
 }
 function Reparse($item) { $item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) }
+# MoveFileW devolve falso quando a pasta esta em uso, sem excecao. Rename-Item -ErrorAction Stop dentro de try
+# tambem funcionava, mas o transcript do setup grava todo erro terminante, mesmo apanhado: cada pasta em uso
+# (a da NVIDIA, logo depois do driver) deixava um "PS>TerminatingError(Rename-Item) ... acesso negado" no log.
+Add-Type -Namespace MyWinIso -Name Arquivo -MemberDefinition '[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern bool MoveFile(string de, string para);'
 # junção qualquer um cria; symlink de arquivo só administrador (ou Modo de Desenvolvedor). Sem isso, arquivo não se mexe.
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) -or
          (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -ErrorAction Ignore).AllowDevelopmentWithoutDevLicense -eq 1
@@ -66,14 +70,10 @@ foreach ($r in $raizes) {
             if ($itC) {
                 # o rename é o teste de "em uso": o NTFS recusa renomear pasta com arquivo aberto dentro
                 $tmp = "$de.mudando"
-                try { Rename-Item -LiteralPath $de -NewName "$nome.mudando" -Force -ErrorAction Stop }
-                # o $Error.RemoveAt tira daqui o registro que o catch acabou de apanhar: pasta em uso e
-                # o caminho previsto (a NVIDIA e a de sempre), ja contado em $emUso e dito na linha acima.
-                # Sem isso ele fica em $Error, e como este script roda dentro da Etapa do setup, as etapas
-                # 7, 13 e 28 fechavam em AVISO com "o acesso ao caminho ... foi negado" -- barulho, nao erro.
-                catch {
+                # pasta em uso e o caminho previsto (a NVIDIA e a de sempre): conta, diz e segue, sem nada em $Error
+                # (este script roda dentro da Etapa do setup, e erro ali fechava as etapas 7, 13 e 28 em AVISO)
+                if (-not [MyWinIso.Arquivo]::MoveFile($de, $tmp)) {
                     $emUso++; L "$($r.para)\$nome em uso; fica para a próxima rodada" 'DarkGray'
-                    if ($Error.Count) { $Error.RemoveAt(0) }
                     continue
                 }
                 if ($ehPasta) {

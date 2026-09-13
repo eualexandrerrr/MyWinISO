@@ -67,6 +67,24 @@ $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 try { $Host.UI.RawUI.WindowTitle = 'mywiniso: setup' } catch { }
+# Sem QuickEdit no console. Com ele ligado, um clique na janela abre uma selecao ("Selecionar" no titulo) e
+# o Windows congela toda escrita no console ate alguem apertar Esc: o Write-Host seguinte fica parado e o
+# setup inteiro junto. Na formatacao de 13/09/2026 isso segurou a etapa 5 por 12 minutos, com o driver da
+# NVIDIA ja instalado. O modo e do console, nao do processo: vale para o primeiro-logon.ps1, o
+# mywiniso-setup.cmd e o retomar.ps1, que rodam este arquivo na janela deles.
+try {
+    Add-Type -Namespace MyWinIso -Name Console -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int nStdHandle);
+[DllImport("kernel32.dll")] public static extern bool GetConsoleMode(IntPtr hConsoleInput, out uint lpMode);
+[DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr hConsoleInput, uint dwMode);
+'@
+    $entrada = [MyWinIso.Console]::GetStdHandle(-10)   # STD_INPUT_HANDLE
+    $modo = [uint32]0
+    if ([MyWinIso.Console]::GetConsoleMode($entrada, [ref] $modo)) {
+        # tira ENABLE_QUICK_EDIT_MODE (0x40); ENABLE_EXTENDED_FLAGS (0x80) e o que faz o Windows aceitar a troca
+        [void][MyWinIso.Console]::SetConsoleMode($entrada, ($modo -band (-bnot [uint32]0x40)) -bor [uint32]0x80)
+    }
+} catch { }
 
 # ---------------------------------------------------------------------------------------------------
 # Pulso: nada aqui pode parecer travado. Enquanto uma operacao longa nao imprime nada (winget baixando,
@@ -439,6 +457,17 @@ $aqui = if ($PSScriptRoot) { $PSScriptRoot } elseif ($env:MYWINISO_RAIZ) { $env:
 # vazio quando o setup vem pelo irm, que nao tem PSScriptRoot: ai esta instancia so clona e passa o
 # bastao, e quem usa o caminho e a copia local. Join-Path com string vazia lanca.
 $PerfilNoD = if ($aqui) { Join-Path $aqui 'manutencao\perfil.ps1' } else { '' }   # regra que leva o perfil de todo programa para D: (etapas 7, 13 e 28)
+# Os projetos em D:\Apps\desktop vem de antes da formatacao com dono no SID da conta velha, e o git recusa
+# qualquer comando neles com "detected dubious ownership" (codigo 128). Na formatacao de 13/09/2026 isso
+# derrubou o git pull deste clone (etapa 3) e o do fork do Vencord (etapa 16). O git so confere o dono da
+# pasta do repositorio e da .git dela, nao dos arquivos: por isso sem /T, que em node_modules levaria minutos.
+if ($Dados) {
+    foreach ($repo in Get-ChildItem -LiteralPath (Join-Path $Dados 'Apps\desktop') -Directory -ErrorAction Ignore) {
+        foreach ($pasta in $repo.FullName, (Join-Path $repo.FullName '.git')) {
+            if (Test-Path -LiteralPath $pasta) { Silencioso { icacls.exe $pasta /setowner "$env:USERDOMAIN\$env:USERNAME" /C /Q 2>&1 | Out-Null } }
+        }
+    }
+}
 if (-not ($aqui -and (Test-Path -LiteralPath (Join-Path $aqui 'apps.json')))) {
     Etapa 'Git e clone do repositório' {
         if (-not (Get-Command git.exe -ErrorAction Ignore)) {
@@ -829,8 +858,9 @@ Etapa 'Preferências do usuário' {
         $idiomas = New-WinUserLanguageList -Language pt-BR
         $idiomas[0].InputMethodTips.Clear()
         $idiomas[0].InputMethodTips.Add('0416:00010416')   # ABNT2
-        Set-WinUserLanguageList -LanguageList $idiomas -Force
-        Set-WinUILanguageOverride -Language pt-BR
+        # -WarningAction: o "If the Windows Display Language has changed..." saia como AVISO: no log a cada formatacao
+        Set-WinUserLanguageList -LanguageList $idiomas -Force -WarningAction SilentlyContinue
+        Set-WinUILanguageOverride -Language pt-BR -WarningAction SilentlyContinue
         Set-WinSystemLocale -SystemLocale pt-BR
         Set-Culture -CultureInfo pt-BR
     } catch { Falha "teclado: $($_.Exception.Message)" }
@@ -1423,6 +1453,12 @@ Etapa 'Programas (apps.json)' {
 # ~\.claude\skills e sobrevivem em D:. Fecha com claude mcp list, que tenta conectar em cada um.
 Etapa 'Claude Code: MCPs, plugins e skills' {
     Refresh-Path
+    # 60 s para cada MCP subir, em vez dos 30 s padrao do Claude Code. Logo depois de formatar o node ainda esta
+    # frio e o Defender varre cada node_modules: na retomada de 13/09/2026 so o "firebase.js --version" levou
+    # 18 s, e o MCP do plugin firebase passou dos 30 s e entrou como "nao conectou" no claude mcp list abaixo.
+    [Environment]::SetEnvironmentVariable('MCP_TIMEOUT', '60000', 'User')
+    $env:MCP_TIMEOUT = '60000'
+    Passo 'MCP_TIMEOUT = 60000 (usuário): MCP lento na partida não cai por timeout'
     if (-not (Get-Command claude -ErrorAction Ignore)) { throw 'o claude não está no PATH (etapa 4)' }
     $npmCmd = Get-Command npm.cmd -ErrorAction Ignore
     if (-not $npmCmd) { throw 'npm.cmd não está no PATH (o Node.js vem do apps.json, etapa 13)' }
@@ -1449,7 +1485,7 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
         $pasta = Join-Path $npmRaiz ($m.npm -replace '@[\d^~.]+$', '')
         if (Test-Path -LiteralPath $pasta) { Passo "$($m.npm): já instalado"; continue }
         Passo "npm install -g $($m.npm)"
-        Silencioso { & $npmCmd.Source install -g $m.npm --no-fund --no-audit --loglevel=error 2>&1 | Out-Host }
+        Silencioso { & $npmCmd.Source install -g $m.npm --no-fund --no-audit --loglevel=error 2>&1 | ForEach-Object { "$_" } | Out-Host }
         if (-not (Test-Path -LiteralPath $pasta)) { Falha "npm não instalou $($m.npm)" }
     }
 
@@ -1586,6 +1622,8 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
             else { Falha "$nome`: não conectou" }
         }
     }
+    # o claude troca o titulo do console para "claude" e nao devolve; sem isto a janela segue assim ate o fim
+    try { $Host.UI.RawUI.WindowTitle = 'mywiniso: setup' } catch { }
 }
 
 # --- 14b. Registro: o que so vive em chave, de volta de D: -------------------------------------------
@@ -1675,7 +1713,8 @@ Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
     # Chrome (chrome.storage) e não tem política de managed storage, então não há como injetar de fora.
     # O backup fica com o Alexandre; a importação é na mão, em Opções > Importar configurações.
 
-    $pp = Get-ChildItem 'C:\Program Files\Proton\Proton Pass', "$env:LOCALAPPDATA\Programs\Proton Pass" -ErrorAction Ignore | Select-Object -First 1
+    # o winget hoje entrega o Proton Pass como MSIX (fica em WindowsApps, pacote ProtonPass); as pastas sao do instalador antigo
+    $pp = @(Get-AppxPackage -Name ProtonPass -ErrorAction Ignore) + @(Get-ChildItem 'C:\Program Files\Proton\Proton Pass', "$env:LOCALAPPDATA\Programs\Proton Pass" -ErrorAction Ignore) | Select-Object -First 1
     if ($pp) { Passo 'Proton Pass para Windows instalado (veio do apps.json)' }
     else { Passo 'Proton Pass para Windows ainda não aparece; ele vem do apps.json na etapa 13' }
 
@@ -1719,16 +1758,16 @@ Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
                 # como se fosse defeito. Quem diz se deu certo é o código de saída, conferido logo abaixo,
                 # e ele atravessa o Silencioso intacto.
                 Passo 'pnpm install'
-                Silencioso { & corepack pnpm install --frozen-lockfile 2>&1 | Out-Host }
+                Silencioso { & corepack pnpm install --frozen-lockfile 2>&1 | ForEach-Object { "$_" } | Out-Host }
                 if ($LASTEXITCODE -ne 0) { throw "pnpm install saiu com código $LASTEXITCODE" }
                 Passo 'pnpm build'
-                Silencioso { & corepack pnpm build 2>&1 | Out-Host }
+                Silencioso { & corepack pnpm build 2>&1 | ForEach-Object { "$_" } | Out-Host }
                 if ($LASTEXITCODE -ne 0) { throw "pnpm build saiu com código $LASTEXITCODE" }
                 # CI=true: numa segunda passada o pnpm quer purgar node_modules e, sem TTY, aborta com
                 # ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY; a variavel e a saida que o proprio pnpm indica.
                 $env:CI = 'true'
                 Passo 'pnpm inject (injeta o dist local no Discord stable, sem perguntar)'
-                Silencioso { & corepack pnpm inject --branch stable 2>&1 | Out-Host }
+                Silencioso { & corepack pnpm inject --branch stable 2>&1 | ForEach-Object { "$_" } | Out-Host }
                 if ($LASTEXITCODE -ne 0) { throw "pnpm inject saiu com código $LASTEXITCODE" }
             } finally { Pop-Location }
             Passo 'Vencord injetado; o Discord abre já com ele'
@@ -1841,12 +1880,10 @@ Etapa 'Área de Trabalho Remota e contas' {
     Passo 'senha sem validade, sem bloqueio de conta, scripts .ps1 liberados (RemoteSigned)'
     net.exe accounts /maxpwage:unlimited | Out-Null
     net.exe accounts /lockoutthreshold:0 | Out-Null
-    try { Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop }
-    catch {
-        if ($Error.Count) { $Error.RemoveAt(0) }
-        Passo "Set-ExecutionPolicy recusou ($($_.Exception.Message.Trim())); gravando no registro"
-        Set-Reg 'HKLM:\SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell' 'ExecutionPolicy' 'RemoteSigned' 'String'
-    }
+    # Direto no registro, que e onde o Set-ExecutionPolicy -Scope LocalMachine grava. O cmdlet grava e mesmo assim
+    # lanca "substituida por uma politica definida em um escopo mais especifico", porque o setup roda com
+    # -ExecutionPolicy Bypass: o transcript registrava PS>TerminatingError a cada rodada, sem nada de errado.
+    Set-Reg 'HKLM:\SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell' 'ExecutionPolicy' 'RemoteSigned' 'String'
 }
 
 # --- 21. NVIDIA App (não está no winget; instalador silencioso com /s) ------------------------------
@@ -1905,7 +1942,8 @@ Etapa 'MariaDB' {
         # e o 2>$null esconde a linha da tela mas o Windows PowerShell 5.1 guarda o stderr do programa
         # nativo em $Error do mesmo jeito. A etapa então fechava em AVISO com o "ERROR 1045 Access denied"
         # logo depois de ter escrito que o root ficou com senha, que é justamente o contrário do ocorrido.
-        Silencioso { & (Join-Path $bin 'mysql.exe') -u root -e $sql 2>$null }            # root ainda sem senha
+        # 2>&1 | Out-Null e nao 2>$null: com o transcript ligado, o 2>$null do 5.1 ainda grava o ERROR 1045 no log
+        Silencioso { & (Join-Path $bin 'mysql.exe') -u root -e $sql 2>&1 | Out-Null }    # root ainda sem senha
         if ($LASTEXITCODE -ne 0) { & (Join-Path $bin 'mysql.exe') -u root "-p$Senha" -e $sql }   # já configurado antes
         if ($LASTEXITCODE -ne 0) { throw 'não consegui definir a senha do root' }
         Passo 'root com senha, acesso local e remoto'
@@ -2058,7 +2096,14 @@ Etapa 'Windows Update (drivers)' {
     # UpdateMicrosoftProducts (Sophia): o Microsoft Update traz também Office, .NET e o resto, não só o Windows
     Silencioso { Add-WUServiceManager -MicrosoftUpdate -Confirm:$false | Out-Null }
     Passo 'procurando e instalando o resto das atualizações e drivers (o de vídeo já veio na etapa 5)'
-    Get-WindowsUpdate -MicrosoftUpdate -AcceptAll -Install -IgnoreReboot | Out-Host
+    # Uma linha por atualização a cada fase (Accepted, Downloaded, Installed, Failed), na hora em que acontece.
+    # Com | Out-Host a tabela só chegava ao log no fim: na formatação de 13/09/2026 foram minutos com a última
+    # linha em "procurando...", 4,7 GB baixando e nada visível, sem ter como diferenciar de travado.
+    Get-WindowsUpdate -MicrosoftUpdate -AcceptAll -Install -IgnoreReboot | ForEach-Object {
+        $fase = if ($_.Result) { $_.Result } else { $_.Status }   # Result no modo -Install; Status na listagem
+        Passo ("  {0,-10} {1,-10} {2,8}  {3}" -f $fase, $_.KB, $_.Size, $_.Title)
+        if ($fase -eq 'Failed') { Falha "Windows Update: $($_.KB) $($_.Title) falhou" }
+    }
 
     # Ativação. Esta máquina tem licença digital do Windows 11 Pro gravada no hardware (canal Retail,
     # "ativada permanentemente"): reinstalando a mesma edição no mesmo PC, a Microsoft reativa sozinha
@@ -2135,8 +2180,17 @@ Etapa 'Manutenção e telemetria de fundo' {
     Passo "$paradas tarefas desabilitadas"
 
     Passo 'armazenamento reservado liberado (uns 7 GB)'
-    try { Set-WindowsReservedStorageState -State Disabled -ErrorAction Stop }
-    catch { Falha "armazenamento reservado em uso; rode de novo depois de um reinício: $($_.Exception.Message)" }
+    try { Set-WindowsReservedStorageState -State Disabled -ErrorAction Stop | Out-Null }
+    catch {
+        # Com update esperando reinicio o Windows recusa ("em uso"), e na primeira rodada de uma formatacao isso
+        # e o normal: a etapa 27 acabou de instalar. A retomada pos-reinicio roda esta etapa de novo e ai passa,
+        # entao so e falha quando nao ha reinicio pendente para resolver.
+        if ($Error.Count) { $Error.RemoveAt(0) }
+        $pend = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or
+                (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired')
+        if ($pend) { Passo 'armazenamento reservado: o Windows recusa com reinício pendente; fica para a retomada depois do reinício' }
+        else { Falha "armazenamento reservado em uso: $($_.Exception.Message)" }
+    }
 
     Passo 'sem compartilhar updates com a internet (o Windows para de servir bytes para desconhecidos)'
     Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' 'DODownloadMode' 0
@@ -2216,7 +2270,7 @@ foreach ($r in $Resultado) {
 }
 if ($Falhas.Count -gt 0) {
     Write-Host ''
-    Write-Host "  Programas que falharam ($($Falhas.Count)):" -ForegroundColor Red
+    Write-Host "  Falhas ($($Falhas.Count)):" -ForegroundColor Red
     $Falhas | ForEach-Object { Write-Host "    - $_" -ForegroundColor Red }
 }
 $erros  = @($Resultado | Where-Object Estado -eq 'ERRO').Count
@@ -2280,7 +2334,7 @@ if ($querReiniciar) {
     }
     Write-Host '  Reinicie e rode mywiniso-setup.cmd de novo se algo tiver ficado para trás.' -ForegroundColor Yellow
 } else {
-    Write-Host '  Reinicie. Depois: abra o RedM.exe da área de trabalho.' -ForegroundColor Cyan
+    Write-Host '  Reinicie. Depois: abra o RedM pelo menu Iniciar (o primeiro clique baixa o jogo).' -ForegroundColor Cyan
 }
 # nada mais pendente: a retomada não sobrevive ao fim da instalação (com -So não se mexe no estado)
 if (-not $Depurando) {
