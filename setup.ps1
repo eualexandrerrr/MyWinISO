@@ -541,12 +541,28 @@ Etapa 'Git e clone do repositório' {
 # Cedo de propósito: com o Claude na mão dá para consertar o que der errado nas etapas seguintes sem
 # esperar os treze minutos da instalação dos programas. Custa uns 30 s, então não atrasa o driver e os
 # monitores de forma sentida. Não está mais no apps.json, justamente para não instalar duas vezes.
+# Pelo npm (@anthropic-ai/claude-code), e nao pelo winget: o pacote do winget fica atras do npm e nao se
+# atualiza sozinho, entao o Claude avisava "Update available! Run: winget upgrade" a cada abertura
+# (13/09/2026: npm 2.1.270, winget 2.1.268). O Node.js vem aqui, antes da etapa 13, que o repete e sai
+# como ja instalado. O prefixo global do npm e %APPDATA%\npm, que a regra do perfil leva para D:.
 Etapa 'Claude Code (CLI)' {
-    winget.exe install --id Anthropic.ClaudeCode --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189) { throw "winget não instalou o Claude Code (código $LASTEXITCODE)" }
+    $doWinget = Silencioso { winget.exe list --id Anthropic.ClaudeCode --exact --disable-interactivity 2>&1 | Out-String }
+    if ($doWinget -match 'Anthropic\.ClaudeCode') {
+        Passo 'removendo o Claude Code do winget (a instalação passa a ser pelo npm)'
+        winget.exe uninstall --id Anthropic.ClaudeCode --exact --silent --disable-interactivity
+    }
+    if (-not (Get-Command npm.cmd -ErrorAction Ignore)) {
+        Passo 'Node.js antes da etapa 13, para o npm instalar o Claude'
+        winget.exe install --id OpenJS.NodeJS --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+        Refresh-Path
+    }
+    if (-not (Get-Command npm.cmd -ErrorAction Ignore)) { throw 'npm.cmd não está no PATH depois de instalar o Node.js' }
+    Passo 'npm install -g @anthropic-ai/claude-code'
+    Silencioso { & npm.cmd install -g @anthropic-ai/claude-code --no-fund --no-audit --loglevel=error 2>&1 | ForEach-Object { "$_" } | Out-Host }
+    if ($LASTEXITCODE -ne 0) { throw "npm install -g @anthropic-ai/claude-code saiu com código $LASTEXITCODE" }
     Refresh-Path
     $exe = Get-Command claude -ErrorAction Ignore
-    if ($exe) { Passo "claude em $($exe.Source)" } else { Falha 'o claude não aparece no PATH; abra um terminal novo e rode "claude --version"' }
+    if ($exe) { Passo "claude $(& $exe.Source --version) em $($exe.Source)" } else { Falha 'o claude não aparece no PATH; abra um terminal novo e rode "claude --version"' }
 }
 
 # --- 5. Driver de vídeo da NVIDIA, direto da NVIDIA --------------------------------------------------
@@ -1459,12 +1475,9 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
     [Environment]::SetEnvironmentVariable('MCP_TIMEOUT', '60000', 'User')
     $env:MCP_TIMEOUT = '60000'
     Passo 'MCP_TIMEOUT = 60000 (usuário): MCP lento na partida não cai por timeout'
-    # Instalado pelo winget, o Claude Code nao se autoatualiza: so avisa, a cada abertura, quando o npm ja tem
-    # versao que o manifesto do winget ainda nao tem (13/09/2026: npm 2.1.270, winget 2.1.268). Quem atualiza
-    # e o winget, na etapa 4 e na tarefa 'Startup OnLogon'; DISABLE_AUTOUPDATER desliga a checagem e o aviso.
-    [Environment]::SetEnvironmentVariable('DISABLE_AUTOUPDATER', '1', 'User')
-    $env:DISABLE_AUTOUPDATER = '1'
-    Passo 'DISABLE_AUTOUPDATER = 1 (usuário): sem aviso de atualização; o winget atualiza no logon'
+    # o Claude agora vem do npm (etapa 4) e se atualiza sozinho; o DISABLE_AUTOUPDATER da fase winget travaria isso
+    [Environment]::SetEnvironmentVariable('DISABLE_AUTOUPDATER', $null, 'User')
+    Remove-Item Env:\DISABLE_AUTOUPDATER -ErrorAction Ignore
     if (-not (Get-Command claude -ErrorAction Ignore)) { throw 'o claude não está no PATH (etapa 4)' }
     $npmCmd = Get-Command npm.cmd -ErrorAction Ignore
     if (-not $npmCmd) { throw 'npm.cmd não está no PATH (o Node.js vem do apps.json, etapa 13)' }

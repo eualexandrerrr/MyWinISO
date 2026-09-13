@@ -155,11 +155,6 @@ try {
 "@
 } catch {}
 
-# Claude Code pelo winget, em segundo plano: o autoupdater dele esta desligado (DISABLE_AUTOUPDATER, etapa 14
-# do setup), entao a atualizacao vem daqui. Antes do Chrome de proposito, porque o script sai no meio quando
-# nao acha duas janelas dele.
-Start-Process -FilePath 'winget.exe' -WindowStyle Hidden -ArgumentList 'upgrade --id Anthropic.ClaudeCode --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity'
-
 Start-Sleep -Seconds 3
 
 Write-Host "=== Maximizando Discord ==="
