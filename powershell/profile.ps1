@@ -34,6 +34,13 @@ if (Test-Path -LiteralPath 'D:\Utils\git.sh') {
     function c { & 'C:\Program Files\Git\bin\bash.exe' 'D:\Utils\git.sh' @args }
 } else { function c { Clear-Host } }
 function x { claude --dangerously-skip-permissions --model opus @args }
+# deploy do Michigan Roleplay (DeployFiles\deploy.mjs), o mesmo do perfil antigo (repo powershell-profile)
+if (Test-Path -LiteralPath 'D:\MichiganRoleplay\DeployFiles\deploy.mjs') {
+    function deploy {
+        Push-Location 'D:\MichiganRoleplay\DeployFiles'
+        try { & node deploy.mjs @args } finally { Pop-Location }
+    }
+}
 # ls pelo eza, com ícones e pastas primeiro. Só o ls: cat continua Get-Content, que scripts usam em pipeline.
 if (Get-Command eza -ErrorAction Ignore) {
     Remove-Item Alias:ls -Force -ErrorAction Ignore

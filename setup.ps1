@@ -2208,6 +2208,21 @@ Etapa 'Barra de tarefas e tarefa de logon' {
         Passo "tarefa 'RicePanel': $riceIniciar (página Mirante), 45 s depois de entrar, como usuário normal"
     } else { Falha "RicePanel: não achei $riceIniciar; a tarefa de logon fica de fora" }
 
+    # RGB apagado (pedido do Alexandre em 13/09/2026): OpenRGB (apps.json) desliga a placa-mãe ASUS TUF GAMING
+    # B550M-PLUS (Aura por USB) e a Gainward RTX 3090 Phoenix (I2C pelo NvAPI), sem driver PawnIO e sem
+    # administrador. Não fica residente: a tarefa roda a linha de comando no logon e sai. Os índices 0 e 1 são
+    # a ordem em que o OpenRGB detecta (GPU primeiro, placa depois), conferida no log dele.
+    $openrgb = Join-Path $env:ProgramFiles 'OpenRGB\OpenRGB.exe'
+    if (Test-Path -LiteralPath $openrgb) {
+        $acaoRgb = New-ScheduledTaskAction -Execute $openrgb -Argument '--noautoconnect -d 0 -m off -d 1 -m off'
+        $gatilhoRgb = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+        $gatilhoRgb.Delay = 'PT15S'
+        $configRgb = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+        Register-ScheduledTask -TaskName 'RGB desligado' -TaskPath '\mywiniso' -Action $acaoRgb -Trigger $gatilhoRgb -Settings $configRgb -Principal $principal -Force | Out-Null
+        Get-Process OpenRGB -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Passo "tarefa 'RGB desligado': OpenRGB apaga placa-mãe e placa de vídeo no logon"
+    } else { Falha "OpenRGB: não achei $openrgb; RGB fica aceso" }
+
     # LibreHardwareMonitor (apps.json): servidor web em 127.0.0.1:8085, de onde o RicePanel lê a temperatura de
     # CPU e de SSD (no Windows sensor não é arquivo). O config vai ao lado do exe de verdade, em WinGet\Packages:
     # ele procura <exe>.config pelo caminho do próprio executável, e o alias de WinGet\Links apontaria para

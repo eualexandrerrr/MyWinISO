@@ -34,6 +34,7 @@
         { "PackageIdentifier": "Gyan.FFmpeg" },
         { "PackageIdentifier": "Rclone.Rclone" },
         { "PackageIdentifier": "LibreHardwareMonitor.LibreHardwareMonitor" },
+        { "PackageIdentifier": "OpenRGB.OpenRGB" },
 
         { "PackageIdentifier": "Git.Git" },
         { "PackageIdentifier": "GitHub.cli" },
