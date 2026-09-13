@@ -2066,9 +2066,10 @@ Etapa 'Ativacao do Windows' {
     Passo "status $(if ($lic) { $lic.LicenseStatus } else { 'desconhecido' }); rodando get.activated.win"
     try {
         $script = Invoke-RestMethod -Uri 'https://get.activated.win' -UseBasicParsing -TimeoutSec 60
-        # /HWID: licenca digital presa ao hardware, que e o que sobrevive a proxima formatacao
-        $env:MAS_MODE = 'HWID'
-        Invoke-Expression $script
+        # /HWID: licenca digital presa ao hardware, que e o que sobrevive a proxima formatacao.
+        # Sem o /HWID o MAS abre um MENU e fica esperando tecla: numa instalacao sem ninguem na frente
+        # isso trava o setup inteiro. O bootstrap repassa \$args ao .cmd, entao o switch vai como argumento.
+        & ([ScriptBlock]::Create($script)) /HWID
     } catch { Falha "get.activated.win: $($_.Exception.Message)"; return }
     Start-Sleep -Seconds 5
     $lic2 = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL AND Name LIKE 'Windows%'" -ErrorAction Ignore | Select-Object -First 1

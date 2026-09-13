@@ -2,3 +2,4 @@
 *.log
 explorer/WinSetView/AppData/Backup/
 explorer/WinSetView/AppData/*.reg
+*.bak-tema-*
