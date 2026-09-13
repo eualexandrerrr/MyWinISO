@@ -44,6 +44,17 @@ if (Get-Command zoxide -ErrorAction Ignore) { Invoke-Expression (& { (zoxide ini
 # --- prompt: starship, com o starship.toml de D: (o mesmo do zsh) -----------------------------------------
 if (Get-Command starship -ErrorAction Ignore) {
     Invoke-Expression (& starship init powershell)
+    # O add_newline do starship.toml põe uma linha vazia antes de todo prompt, inclusive do primeiro, e todo
+    # terminal novo abria com a primeira linha em branco. Aqui só o primeiro perde esse newline; entre um
+    # comando e outro o espaço continua. É um embrulho como o do shell integration do VS Code: o starship lê
+    # o $global:?, que a chamada aninhada não muda, então o símbolo vermelho de erro segue certo.
+    $global:StarshipPrompt  = $function:prompt
+    $global:PrimeiroPrompt  = $true
+    function global:prompt {
+        $p = & $global:StarshipPrompt
+        if ($global:PrimeiroPrompt) { $global:PrimeiroPrompt = $false; $p = $p -replace '^\r?\n', '' }
+        $p
+    }
 } else {
     function prompt {
         $leaf = Split-Path -Leaf $PWD

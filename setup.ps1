@@ -1260,14 +1260,14 @@ Etapa 'Windhawk: tema Translucent' {
     if (-not (Test-Path -LiteralPath (Join-Path $pd 'Engine\Mods\64\libc++.whl'))) {
         Falha 'não achei libc++.whl em Engine\Mods\64 (o Windhawk veio sem a pasta Compiler?); se a barra não ficar translúcida, abra o Windhawk uma vez, que ele copia essas bibliotecas'
     }
-    # Fundo da barra totalmente transparente, sem desfoque: só os ícones e o relógio sobre o wallpaper, como o
-    # modo Clear do TranslucentTB (escolha do Alexandre em 13/09/2026; antes era o desfoque com tint #CC101010,
-    # 80% de preto, que parecia barra sólida). A bandeja que abre no hover segue com o desfoque escuro, senão
-    # os ícones dela ficam ilegíveis sobre qualquer janela. O $TaskbarTint continua valendo para as janelas
-    # (translucent-windows, abaixo). Os dois alvos são os do próprio tema TranslucentTaskbar.
+    # Fundo da barra com desfoque e sem cor por cima: o wallpaper aparece borrado, sem escurecer (escolha do
+    # Alexandre em 13/09/2026; antes era o tint #CC101010, 80% de preto, que parecia barra sólida, e o
+    # Fill:=Transparent sem desfoque ficou cru demais). TintColor com alpha 00 é desfoque puro. A bandeja
+    # que abre no hover segue com o desfoque escuro, senão os ícones dela ficam ilegíveis sobre qualquer
+    # janela. O $TaskbarTint continua valendo para as janelas (translucent-windows, abaixo).
     $TaskbarTint  = '#CC101010'
     $TaskbarFundo = "Fill:=<WindhawkBlur BlurAmount=`"18`" TintColor=`"$TaskbarTint`"/>"
-    $BarraFundo   = 'Fill:=Transparent'
+    $BarraFundo   = 'Fill:=<WindhawkBlur BlurAmount="8" TintColor="#00000000"/>'   # 8 e nao 18: blur mais leve, pedido do Alexandre
     $mods = @(
         @{ id = 'windows-11-taskbar-styler';             settings = [ordered]@{
                 theme                        = 'TranslucentTaskbar'
