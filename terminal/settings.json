@@ -57,7 +57,7 @@
             "keys": "ctrl+c"
         },
         {
-            "command": "unbound",
+            "command": "paste",
             "keys": "ctrl+v"
         },
         {

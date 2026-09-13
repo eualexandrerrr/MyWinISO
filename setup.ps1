@@ -2318,6 +2318,11 @@ Etapa 'Windows Terminal como terminal único' {
     Set-Reg $inicio 'DelegationConsole'  '{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}' 'String'
     Set-Reg $inicio 'DelegationTerminal' '{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}' 'String'
     Passo 'qualquer console do Windows abre no Windows Terminal'
+
+    # Ctrl+V: texto pela colagem do terminal (instantanea) e imagem pelo ColarImagem, que so quando a area de
+    # transferencia tem imagem e nao tem texto troca o Ctrl+V por Alt+V, o colar imagem do Claude Code. Ligar o
+    # Ctrl+V direto ao chat:imagePaste abria dois powershell por colagem, ~2 s cada Ctrl+V (13/09/2026).
+    try { & (Join-Path $aqui 'teclado\compilar.ps1') } catch { Falha "ColarImagem: $($_.Exception.Message)" }
 }
 
 # --- 28. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo ---------------------
