@@ -1724,6 +1724,9 @@ Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
                 Passo 'pnpm build'
                 Silencioso { & corepack pnpm build 2>&1 | Out-Host }
                 if ($LASTEXITCODE -ne 0) { throw "pnpm build saiu com código $LASTEXITCODE" }
+                # CI=true: numa segunda passada o pnpm quer purgar node_modules e, sem TTY, aborta com
+                # ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY; a variavel e a saida que o proprio pnpm indica.
+                $env:CI = 'true'
                 Passo 'pnpm inject (injeta o dist local no Discord stable, sem perguntar)'
                 Silencioso { & corepack pnpm inject --branch stable 2>&1 | Out-Host }
                 if ($LASTEXITCODE -ne 0) { throw "pnpm inject saiu com código $LASTEXITCODE" }
