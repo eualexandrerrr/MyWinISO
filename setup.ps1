@@ -2125,6 +2125,55 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
     Register-ScheduledTask -TaskName 'Startup OnLogon' -Action $acao -Trigger $gatilho -Settings $config -Principal $principal -Force | Out-Null
     Passo "tarefa 'Startup OnLogon': $onlogon, 30 s depois de entrar"
+
+    # RicePanel (github.com/eualexandrerrr/RicePanel): o painel Electron do monitor LG em pé, página Mirante,
+    # no logon. Mora em D:\Apps\desktop e sobrevive à formatação; se faltar, clona. Nada de npm install: o
+    # node_modules do repo é o Electron do Linux (D: é compartilhado com o Arch), e o iniciar.ps1 baixa o
+    # Electron do Windows em %LOCALAPPDATA%\RicePanel na primeira vez (a regra do perfil leva para D:).
+    # Como o usuário normal, nunca elevado: ele usa a sessão e a DPAPI da conta. conhost --headless é o que
+    # não pisca janela de console no logon (o -WindowStyle Hidden chega tarde). Sem monitor em pé a janela
+    # fica escondida até aparecer um, então não depende da ordem das etapas.
+    $rice = if ($Dados) { Join-Path $Dados 'Apps\desktop\RicePanel' } else { Join-Path $env:USERPROFILE 'Projetos\RicePanel' }
+    if (-not (Test-Path -LiteralPath (Join-Path $rice '.git'))) {
+        Passo "git clone do RicePanel em $rice"
+        git.exe clone --progress https://github.com/eualexandrerrr/RicePanel $rice
+    }
+    $riceIniciar = Join-Path $rice 'iniciar.ps1'
+    if (Test-Path -LiteralPath $riceIniciar) {
+        $acaoRice = New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot 'System32\conhost.exe') `
+            -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$riceIniciar`"" -WorkingDirectory $rice
+        $gatilhoRice = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+        $gatilhoRice.Delay = 'PT45S'
+        $configRice = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
+            -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+        Register-ScheduledTask -TaskName 'RicePanel' -TaskPath '\mywiniso' -Action $acaoRice -Trigger $gatilhoRice -Settings $configRice -Principal $principal -Force | Out-Null
+        Passo "tarefa 'RicePanel': $riceIniciar (página Mirante), 45 s depois de entrar, como usuário normal"
+    } else { Falha "RicePanel: não achei $riceIniciar; a tarefa de logon fica de fora" }
+
+    # LibreHardwareMonitor (apps.json): servidor web em 127.0.0.1:8085, de onde o RicePanel lê a temperatura de
+    # CPU e de SSD (no Windows sensor não é arquivo). O config vai ao lado do exe de verdade, em WinGet\Packages:
+    # ele procura <exe>.config pelo caminho do próprio executável, e o alias de WinGet\Links apontaria para
+    # outro lugar. Chaves lidas do binário 0.9.6. Precisa de administrador para ler sensor, então a tarefa de
+    # logon é RunLevel Highest, e começa minimizado na bandeja. Validado em 13/09/2026: data.json em ~8 s.
+    $lhmDir = Get-ChildItem -LiteralPath (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages') -Directory -Filter 'LibreHardwareMonitor.LibreHardwareMonitor_*' -ErrorAction Ignore | Select-Object -First 1
+    $lhmExe = if ($lhmDir) { Join-Path $lhmDir.FullName 'LibreHardwareMonitor.exe' } else { '' }
+    if ($lhmExe -and (Test-Path -LiteralPath $lhmExe)) {
+        $lhmCfg = @(
+            '<?xml version="1.0" encoding="utf-8"?>', '<configuration>', '  <appSettings>',
+            '    <add key="startMinMenuItem" value="true" />', '    <add key="minTrayMenuItem" value="true" />',
+            '    <add key="minCloseMenuItem" value="true" />', '    <add key="runWebServerMenuItem" value="true" />',
+            '    <add key="listenerIp" value="127.0.0.1" />', '    <add key="listenerPort" value="8085" />',
+            '  </appSettings>', '</configuration>') -join "`r`n"
+        [IO.File]::WriteAllText((Join-Path $lhmDir.FullName 'LibreHardwareMonitor.config'), $lhmCfg, (New-Object Text.UTF8Encoding $false))
+        $gatilhoLhm = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+        $gatilhoLhm.Delay = 'PT20S'
+        Register-ScheduledTask -TaskName 'LibreHardwareMonitor' -TaskPath '\mywiniso' -Force `
+            -Action (New-ScheduledTaskAction -Execute $lhmExe -WorkingDirectory $lhmDir.FullName) -Trigger $gatilhoLhm `
+            -Principal (New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Highest) `
+            -Settings (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero)) | Out-Null
+        Passo "tarefa 'LibreHardwareMonitor': elevada no logon, servidor web em 127.0.0.1:8085 (temperaturas do RicePanel)"
+    } else { Falha 'LibreHardwareMonitor não está em WinGet\Packages (apps.json); o RicePanel fica sem temperatura de CPU e SSD' }
+
     Passo 'reiniciando o Explorer para aplicar tema, barra e wallpaper'
     Stop-Process -Name explorer -Force -ErrorAction Ignore
 }

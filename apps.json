@@ -33,6 +33,7 @@
         { "PackageIdentifier": "jqlang.jq" },
         { "PackageIdentifier": "Gyan.FFmpeg" },
         { "PackageIdentifier": "Rclone.Rclone" },
+        { "PackageIdentifier": "LibreHardwareMonitor.LibreHardwareMonitor" },
 
         { "PackageIdentifier": "Git.Git" },
         { "PackageIdentifier": "GitHub.cli" },
