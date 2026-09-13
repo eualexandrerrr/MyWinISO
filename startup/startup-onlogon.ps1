@@ -155,6 +155,27 @@ try {
 "@
 } catch {}
 
+# Programas do logon em escada, e nao todos no mesmo segundo. Com Discord, Spotify, Steam e Lightshot no Run,
+# junto com o Chrome e o VS Code que o Windows reabre e o Defender varrendo cada um, o pos-boot chegou a 61 s
+# (13/09/2026). O setup desliga essas entradas do Run (StartupApproved, o mesmo de Gerenciador de Tarefas >
+# Inicializar) e quem abre e esta tarefa, que ja comeca 30 s depois de entrar.
+function Abrir([string] $Nome, [string] $Exe, [string] $Argumentos, [int] $EsperaJanela = 0) {
+    if (Get-Process -Name $Nome -ErrorAction Ignore) { return }
+    if (-not (Test-Path -LiteralPath $Exe)) { Write-Host "$Nome nao instalado ($Exe)"; return }
+    if ($Argumentos) { Start-Process -FilePath $Exe -ArgumentList $Argumentos } else { Start-Process -FilePath $Exe }
+    for ($i = 0; $i -lt $EsperaJanela; $i++) {
+        if ([WinAPI]::FindWindowByProcess($Nome) -ne [IntPtr]::Zero) { break }
+        Start-Sleep -Seconds 1
+    }
+}
+Abrir 'Lightshot' "${env:ProgramFiles(x86)}\Skillbrains\lightshot\Lightshot.exe" ''
+Start-Sleep -Seconds 30
+Abrir 'Discord' "$env:LOCALAPPDATA\Discord\Update.exe" '--processStart Discord.exe' 45
+Start-Sleep -Seconds 10
+Abrir 'Spotify' "$env:APPDATA\Spotify\Spotify.exe" '--autostart --minimized' 30
+Start-Sleep -Seconds 15
+Abrir 'steam' "${env:ProgramFiles(x86)}\Steam\steam.exe" '-silent'
+
 # icones da bandeja: Discord, Spotify, Steam e Radmin sempre visiveis e nessa ordem (taskbar\bandeja.ps1).
 # A chave de cada icone so existe depois que o programa abre, por isso roda a cada logon, e nao so no setup.
 & (Join-Path (Split-Path $PSScriptRoot -Parent) 'taskbar\bandeja.ps1')

@@ -2174,6 +2174,17 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     # bandeja: Discord, Spotify, Steam e Radmin sempre visiveis e nessa ordem; antes do reinicio do Explorer
     # logo abaixo, que e quando ele le a ordem. A tarefa 'Startup OnLogon' repete a cada logon.
     & (Join-Path $aqui 'taskbar\bandeja.ps1')
+    # Logon em escada: Discord, Spotify, Steam e Lightshot saem do Run e a tarefa 'Startup OnLogon' os abre
+    # um a um (pós-boot de 61 s em 13/09/2026 com tudo junto). StartupApproved com 03 é o "Desabilitado" do
+    # Gerenciador de Tarefas: vale mesmo quando o programa regrava a entrada dele no Run ao atualizar. O Run32
+    # do Discord (SquirrelMachineInstalls --checkInstall) só confere instalação por máquina e sai junto.
+    $desligado = [byte[]](@(3, 0, 0, 0) + [BitConverter]::GetBytes([DateTime]::Now.ToFileTime()))
+    foreach ($par in @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run', 'Discord', 'Spotify', 'Steam'),
+                       @('HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32', 'Discord', 'Lightshot'))) {
+        New-Item -Path $par[0] -Force | Out-Null
+        foreach ($nome in $par[1..($par.Count - 1)]) { Set-ItemProperty -Path $par[0] -Name $nome -Value $desligado -Type Binary }
+    }
+    Passo 'logon em escada: Lightshot aos 30 s, Discord aos 60 s, Spotify e Steam em seguida (fora do Run)'
     # o script fica no próprio clone: o git pull atualiza a tarefa, e não depende do Google Drive estar sincronizado
     $onlogon = Join-Path $aqui 'startup\startup-onlogon.ps1'
     $acao      = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$onlogon`""
