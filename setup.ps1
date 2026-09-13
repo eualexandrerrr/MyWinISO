@@ -1587,6 +1587,27 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
     }
 }
 
+# --- 14b. Registro: o que so vive em chave, de volta de D: -------------------------------------------
+# O perfil.ps1 leva PASTA para D:. Radmin VPN, WinRAR e Lightshot nao guardam nada em pasta: a rede
+# criada do Radmin, as preferencias do WinRAR e os atalhos do Lightshot vivem so no registro, e sumiam
+# a cada formatacao. O manutencaoegistro.ps1 exporta para D:\Perfil\Registro e devolve aqui.
+# Vem ANTES da etapa 15 de proposito: o que o repositorio tem opiniao (o Shift+PrintScreen do Lightshot)
+# e gravado depois e vence o backup. Backup so preenche o que o repo nao decide.
+Etapa 'Registro: Radmin, WinRAR e Lightshot de volta' {
+    $reg = Join-Path $aqui 'manutencaoegistro.ps1'
+    if (-not (Test-Path -LiteralPath $reg)) { Falha "nao achei $reg"; return }
+    & $reg -Importar
+    # exporta a cada logon e de hora em hora, para a proxima formatacao achar tudo fresco
+    $sid       = ([Security.Principal.NTAccount]"$env:USERDOMAIN\$env:USERNAME").Translate([Security.Principal.SecurityIdentifier]).Value
+    $principal = New-ScheduledTaskPrincipal -UserId $sid -RunLevel Highest
+    $cfg       = New-ScheduledTaskSettingsSet -Compatibility Win8 -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -Hidden
+    $gatilhos  = @((New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"),
+                   (New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Hours 1) -RepetitionDuration (New-TimeSpan -Days 3650)))
+    Register-ScheduledTask -TaskName 'Registro no D' -TaskPath '\mywiniso' -Force -Settings $cfg -Principal $principal -Trigger $gatilhos `
+        -Action (New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$reg`" -Quieto") | Out-Null
+    Passo "tarefa 'Registro no D': exporta a cada logon e de hora em hora"
+}
+
 # --- 15. Lightshot: um atalho só, Shift+PrintScreen -----------------------------------------------
 # O Lightshot guarda tudo em HKCU\Software\Skillbrains\lightshot, e lê esses valores quando inicia.
 # Tem três atalhos: o principal (selecionar área), salvar a tela toda e enviar a tela toda para o site.
@@ -2032,6 +2053,27 @@ Etapa 'Windows Update (drivers)' {
     $lic = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL AND ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f'" -ErrorAction Ignore | Select-Object -First 1
     if ($lic -and $lic.LicenseStatus -eq 1) { Passo "Windows ativado ($($lic.ProductKeyChannel), chave ...$($lic.PartialProductKey))" }
     else { Falha "Windows ainda não ativado (status $($lic.LicenseStatus)); a licença digital reativa sozinha com rede, confira em Configurações > Sistema > Ativação" }
+}
+
+# --- 26b. Ativacao do Windows -----------------------------------------------------------------------
+# A licenca digital desta maquina costuma reativar sozinha com rede, e quando reativa esta etapa nao faz
+# nada. Quando nao reativa, roda o Microsoft Activation Scripts (get.activated.win), que e o que o
+# Alexandre usa na mao. E script de terceiro baixado e executado: fica DEPOIS do Windows Update, para
+# nao competir com ele, e so roda se o Windows ainda estiver sem licenca.
+Etapa 'Ativacao do Windows' {
+    $lic = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL AND Name LIKE 'Windows%'" -ErrorAction Ignore | Select-Object -First 1
+    if ($lic -and $lic.LicenseStatus -eq 1) { Passo 'Windows ja ativado; nada a fazer'; return }
+    Passo "status $(if ($lic) { $lic.LicenseStatus } else { 'desconhecido' }); rodando get.activated.win"
+    try {
+        $script = Invoke-RestMethod -Uri 'https://get.activated.win' -UseBasicParsing -TimeoutSec 60
+        # /HWID: licenca digital presa ao hardware, que e o que sobrevive a proxima formatacao
+        $env:MAS_MODE = 'HWID'
+        Invoke-Expression $script
+    } catch { Falha "get.activated.win: $($_.Exception.Message)"; return }
+    Start-Sleep -Seconds 5
+    $lic2 = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL AND Name LIKE 'Windows%'" -ErrorAction Ignore | Select-Object -First 1
+    if ($lic2 -and $lic2.LicenseStatus -eq 1) { Passo 'Windows ativado' }
+    else { Falha "ainda sem ativacao (status $(if ($lic2) { $lic2.LicenseStatus } else { '?' })); confira em Configuracoes > Sistema > Ativacao" }
 }
 
 # --- 27. Windows Terminal: um terminal só, sempre atualizado (terminal\settings.json) ---------------
