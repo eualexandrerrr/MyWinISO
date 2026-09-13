@@ -1267,7 +1267,9 @@ Etapa 'Windhawk: tema Translucent' {
     # janela. O $TaskbarTint continua valendo para as janelas (translucent-windows, abaixo).
     $TaskbarTint  = '#CC101010'
     $TaskbarFundo = "Fill:=<WindhawkBlur BlurAmount=`"18`" TintColor=`"$TaskbarTint`"/>"
-    $BarraFundo   = 'Fill:=<WindhawkBlur BlurAmount="8" TintColor="#00000000"/>'   # 8 e nao 18: blur mais leve, pedido do Alexandre
+    # 8 e nao 18: blur mais leve; tint 0x66 (40% de preto) e nao 00: sem cor nenhuma ficou claro demais, e o
+    # 0xCC antigo parecia barra solida. Os dois ajustes a pedido do Alexandre em 13/09/2026.
+    $BarraFundo   = 'Fill:=<WindhawkBlur BlurAmount="8" TintColor="#66101010"/>'
     $mods = @(
         @{ id = 'windows-11-taskbar-styler';             settings = [ordered]@{
                 theme                        = 'TranslucentTaskbar'
