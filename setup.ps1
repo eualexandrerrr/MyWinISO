@@ -2132,6 +2132,13 @@ Etapa 'Um perfil só para todo PowerShell' {
 
 # --- 25. Barra de tarefas (taskbar\LayoutModification.xml) e tarefa "Startup OnLogon" ---------------
 Etapa 'Barra de tarefas e tarefa de logon' {
+    # "Jogar" (projeto proprio em D:\Apps\desktop\Jogar): menu dos servidores locais de FiveM e RedM, com icone
+    # de controle, fixado entre o Chrome e o Discord. Compila antes dos pinos, porque o LayoutModification.xml
+    # fixa pelo atalho que o compilar.ps1 cria. Sem a pasta, o pino dele e ignorado pelo Windows e segue o resto.
+    $jogar = if ($Dados) { Join-Path $Dados 'Apps\desktop\Jogar\compilar.ps1' } else { '' }
+    if ($jogar -and (Test-Path -LiteralPath $jogar)) {
+        try { & $jogar } catch { Falha "Jogar: $($_.Exception.Message)" }
+    } else { Passo 'Jogar: D:\Apps\desktop\Jogar nao existe; o pino dele fica de fora' }
     $layout = Join-Path $aqui 'taskbar\LayoutModification.xml'
     foreach ($shell in (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Shell'), 'C:\Users\Default\AppData\Local\Microsoft\Windows\Shell') {
         New-Item -ItemType Directory -Path $shell -Force | Out-Null
