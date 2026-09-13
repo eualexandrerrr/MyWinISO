@@ -62,6 +62,11 @@ foreach ($nome in $chaves.Keys) {
     }
 
     if ($Importar) {
+        # A identidade do Radmin (RID, IPv4, IPv6 em HKLM) NAO volta: o segredo que autentica esse RID nao fica
+        # no registro nem em arquivo, e nao sobrevive a formatacao. Devolver o RID antigo por cima do que a
+        # instalacao nova registrou deixou o servico em "Authorization Failed" a cada inicio (13/09/2026).
+        # Depois de formatar, o Radmin ganha IP 26.x novo e entra de novo na rede pela GUI.
+        if ($nome -eq 'radmin-hklm') { L "$nome : identidade do Radmin nao se devolve (segredo nao sobrevive a formatacao); pulado" 'DarkGray'; $pulados++; continue }
         if (-not (Test-Path -LiteralPath $arq)) { L "$nome : sem $arq; nada a devolver" 'DarkGray'; $pulados++; continue }
         $saida = cmd.exe /c "reg.exe import `"$arq`" 2>&1"
         if ($LASTEXITCODE -eq 0) { L "$nome : devolvido de $arq" 'Green'; $feitos++ }

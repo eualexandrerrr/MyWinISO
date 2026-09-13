@@ -1714,9 +1714,12 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
 }
 
 # --- 14b. Registro: o que so vive em chave, de volta de D: -------------------------------------------
-# O perfil.ps1 leva PASTA para D:. Radmin VPN, WinRAR e Lightshot nao guardam nada em pasta: a rede
-# criada do Radmin, as preferencias do WinRAR e os atalhos do Lightshot vivem so no registro, e sumiam
+# O perfil.ps1 leva PASTA para D:. Radmin VPN, WinRAR e Lightshot nao guardam nada em pasta: a janela
+# do Radmin, as preferencias do WinRAR e os atalhos do Lightshot vivem so no registro, e sumiam
 # a cada formatacao. O manutencao\registro.ps1 exporta para D:\Perfil\Registro e devolve aqui.
+# A identidade do Radmin (HKLM: RID e IP 26.x) fica de fora da volta: o segredo dela nao sobrevive a
+# formatacao, e devolve-la deu "Authorization Failed" (13/09/2026). O Radmin ganha IP novo e entra de novo
+# na rede pela GUI, com a senha de D:\Perfil\Home\.config\radmin-vpn.
 # Vem ANTES da etapa 15 de proposito: o que o repositorio tem opiniao (o Shift+PrintScreen do Lightshot)
 # e gravado depois e vence o backup. Backup so preenche o que o repo nao decide.
 Etapa 'Registro: Radmin, WinRAR e Lightshot de volta' {
