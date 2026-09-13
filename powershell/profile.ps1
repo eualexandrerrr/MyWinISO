@@ -48,18 +48,27 @@ if (Get-Command eza -ErrorAction Ignore) {
 # data e tamanho no cabeçalho). Dot-source aqui no topo do perfil, e não dentro de função, senão as
 # definições ficam no escopo da função. UTF-8 com BOM: o init do starship tem caractere fora do ASCII,
 # e sem BOM o 5.1 lê como ANSI. Um arquivo por edição (5.1 e 7).
-function Get-InitCache([string] $Nome, [string] $Exe, [string[]] $Argumentos) {
+function Get-InitCache([string] $Nome, [string] $Exe, [string[]] $Argumentos, [string] $Config = '', [scriptblock] $Ajuste = $null) {
     $bin = (Get-Command $Exe -CommandType Application -ErrorAction Ignore | Select-Object -First 1).Source
     if (-not $bin) { return $null }
     $it   = Get-Item -LiteralPath $bin
-    $selo = "# $bin|$($it.LastWriteTimeUtc.Ticks)|$($it.Length)"
+    $cfg  = if ($Config -and (Test-Path -LiteralPath $Config)) { (Get-Item -LiteralPath $Config).LastWriteTimeUtc.Ticks } else { '' }
+    $selo = "# $bin|$($it.LastWriteTimeUtc.Ticks)|$($it.Length)|$cfg"
     $arq  = Join-Path $env:LOCALAPPDATA "mywiniso-pwsh\$Nome-$($PSVersionTable.PSEdition).ps1"
-    $atual = if (Test-Path -LiteralPath $arq) { [IO.File]::ReadLines($arq) | Select-Object -First 1 } else { '' }
+    # StreamReader fechado na hora: ReadLines | Select -First 1 deixava o arquivo aberto e a gravação logo
+    # abaixo falhava com "being used by another process"
+    $atual = ''
+    if (Test-Path -LiteralPath $arq) { $sr = New-Object IO.StreamReader $arq; try { $atual = $sr.ReadLine() } finally { $sr.Dispose() } }
     if ($atual -ne $selo) {
         $corpo = (& $bin @Argumentos | Out-String)
         if (-not $corpo) { return $null }
+        if ($Ajuste) { $corpo = & $Ajuste $corpo $bin }
         New-Item -ItemType Directory -Path (Split-Path $arq) -Force | Out-Null
-        [IO.File]::WriteAllText($arq, "$selo`r`n$corpo", (New-Object Text.UTF8Encoding $true))
+        # grava ao lado e troca: dois terminais abrindo juntos não leem arquivo pela metade; se outro
+        # estiver segurando o cache, esta sessão usa a própria cópia e a próxima tenta de novo
+        $tmp = "$arq.$PID.tmp"
+        [IO.File]::WriteAllText($tmp, "$selo`r`n$corpo", (New-Object Text.UTF8Encoding $true))
+        try { Move-Item -LiteralPath $tmp -Destination $arq -Force -ErrorAction Stop } catch { return $tmp }
     }
     return $arq
 }
@@ -67,7 +76,13 @@ $zoxideInit = Get-InitCache 'zoxide' 'zoxide' @('init', 'powershell')
 if ($zoxideInit) { . $zoxideInit }
 
 # --- prompt: starship, com o starship.toml de D: (o mesmo do zsh) -----------------------------------------
-$starshipInit = Get-InitCache 'starship' 'starship' @('init', 'powershell', '--print-full-init')
+# O init do starship ainda chamava "starship prompt --continuation" ao carregar, um processo por terminal
+# (~200 ms). O texto só depende do starship.toml, que entra no selo do cache: calcula uma vez e grava pronto.
+$starshipInit = Get-InitCache 'starship' 'starship' @('init', 'powershell', '--print-full-init') $env:STARSHIP_CONFIG {
+    param($corpo, $bin)
+    $cont = (& $bin prompt --continuation | Out-String).TrimEnd("`r", "`n").Replace("'", "''").Replace('$', '$$')
+    [regex]::Replace($corpo, '(?s)Set-PSReadLineOption -ContinuationPrompt \(\s*Invoke-Native.*?"--continuation"\s*\)\s*\)', "Set-PSReadLineOption -ContinuationPrompt '$cont'")
+}
 if ($starshipInit) {
     . $starshipInit
     # O add_newline do starship.toml põe uma linha vazia antes de todo prompt, inclusive do primeiro, e todo
