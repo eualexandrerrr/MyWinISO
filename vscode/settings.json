@@ -1,6 +1,6 @@
 {
   "terminal.integrated.defaultProfile.windows": "PowerShell",
-  "terminal.integrated.fontFamily": "JetBrainsMono Nerd Font, JetBrainsMono NF, Cascadia Mono, Consolas, monospace",
+  "terminal.integrated.fontFamily": "JetBrainsMono NF, JetBrainsMono Nerd Font, Cascadia Mono, Consolas, monospace",
   "terminal.integrated.fontSize": 12.5,
   "terminal.integrated.cursorStyle": "block",
   "terminal.integrated.cursorBlinking": false,

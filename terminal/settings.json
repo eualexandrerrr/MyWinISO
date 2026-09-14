@@ -10,7 +10,7 @@
     "profiles": {
         "defaults": {
             "font": {
-                "face": "JetBrainsMono Nerd Font",
+                "face": "JetBrainsMono NF",
                 "size": 10
             },
             "colorScheme": "Catppuccin Mocha",
