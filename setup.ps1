@@ -2252,6 +2252,13 @@ Etapa 'Barra de tarefas e tarefa de logon' {
         $gatilhoRgb.Delay = 'PT15S'
         $configRgb = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
         Register-ScheduledTask -TaskName 'RGB desligado' -TaskPath '\mywiniso' -Action $acaoRgb -Trigger $gatilhoRgb -Settings $configRgb -Principal $principal -Force | Out-Null
+        # O MSI do OpenRGB 1.0 registra o serviço "OpenRGB" (automático, SYSTEM) que deixa o OpenRGB residente
+        # mexendo no I2C da placa de vídeo. Com ele no ar o FiveM caía em adhesive.dll (anticheat) ao abrir
+        # (18-19/09/2026). A tarefa acima basta: roda a linha de comando no logon e sai.
+        if (Get-Service -Name OpenRGB -ErrorAction Ignore) {
+            Set-Service -Name OpenRGB -StartupType Disabled
+            Stop-Service -Name OpenRGB -Force -ErrorAction SilentlyContinue
+        }
         Get-Process OpenRGB -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
         Passo "tarefa 'RGB desligado': OpenRGB apaga placa-mãe e placa de vídeo no logon"
     } else { Falha "OpenRGB: não achei $openrgb; RGB fica aceso" }
