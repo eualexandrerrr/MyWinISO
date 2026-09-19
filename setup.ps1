@@ -1348,6 +1348,11 @@ Etapa 'Windhawk: tema Translucent' {
             continue
         }
     }
+    # Jogos fora de qualquer mod, pelo motor: o InjectIntoGames = 0 do Windhawk não reconhece o processo do jogo
+    # do FiveM/RedM (FiveM_b3258_GTAProcess.exe), e o dark-menus e o invisible-borders (Include = *) entravam
+    # nele. Em 18/09/2026 o jogo travou na abertura, 0% de CPU e sem janela, com as duas DLLs carregadas.
+    Set-Reg 'HKLM:\SOFTWARE\Windhawk\Engine\Settings' 'Exclude' 'FiveM*.exe|RedM*.exe|GTA5*.exe|PlayGTAV.exe|RDR2.exe|FXServer.exe|D:\Jogos\*|C:\Program Files\Rockstar Games\*' 'String'
+    Passo 'Windhawk: FiveM, RedM, GTA V, RDR2, FXServer e launcher da Rockstar fora da injeção'
     # mods que saíram da lista: numa máquina que já os tinha (reinstalação por cima), ficam desligados
     foreach ($id in 'translucent-windows', 'windows-11-file-explorer-styler') {
         $k = "HKLM:\SOFTWARE\Windhawk\Engine\Mods\$id"
@@ -1422,16 +1427,21 @@ Etapa 'Energia' {
     # custo do terminal, do git status e de build no Windows. Troca aceita pelo Alexandre em 13/09/2026 por
     # desempenho. pwsh e powershell ficam de fora de propósito: é por eles que malware costuma entrar.
     # Junção entra pelos dois caminhos (o do C: e o alvo em D:).
-    $excl = foreach ($c in @('D:\Apps', 'D:\MichiganRoleplay', 'D:\Android', "$env:APPDATA\npm", "$env:LOCALAPPDATA\npm-cache",
+    $excl = foreach ($c in @('D:\Apps', 'D:\Android', "$env:APPDATA\npm", "$env:LOCALAPPDATA\npm-cache",
                              "$env:LOCALAPPDATA\pnpm", "$env:LOCALAPPDATA\pnpm-cache", "$env:USERPROFILE\.gradle",
                              "$env:USERPROFILE\.cache", "$env:LOCALAPPDATA\mywiniso-pwsh")) {
         if (Test-Path -LiteralPath $c) { $c; $it = Get-Item -LiteralPath $c -Force; if ($it.LinkType -and $it.Target) { @($it.Target)[0] } }
     }
+    # servidores FiveM/RedM: toda pasta da raiz de D: com txData\FXServer.exe (MichiganRoleplay, LoadLine,
+    # FiveMRoleplay e o que vier depois), sem lista fixa. A doc do Cfx.re cita o Defender varrendo os arquivos do
+    # FXServer como causa de start lento (16/09/2026)
+    $excl = @($excl) + @(Get-ChildItem -LiteralPath 'D:\' -Directory -ErrorAction Ignore |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'txData\FXServer.exe') } | ForEach-Object FullName)
     # jogos: o FiveM levava ~145 s do clique ate entrar (13/09/2026), boa parte com o Defender varrendo os GB do
     # GTA V/RDR2 em D:\Jogos e o cache do FiveM/RedM enquanto carregavam
     $excl = @($excl) + @(foreach ($c in 'D:\Jogos', 'C:\Program Files\Rockstar Games', "$env:LOCALAPPDATA\Rockstar Games") { if (Test-Path -LiteralPath $c) { $c } })
     $exclProc = 'node.exe', 'git.exe', 'starship.exe', 'claude.exe', 'java.exe', 'bun.exe', 'rg.exe', 'fd.exe',
-                'FiveM.exe', 'RedM.exe', 'GTA5.exe', 'GTA5_Enhanced.exe', 'RDR2.exe', 'PlayGTAV.exe', 'Launcher.exe', 'SocialClubHelper.exe', 'RockstarService.exe'
+                'FiveM.exe', 'RedM.exe', 'FXServer.exe', 'GTA5.exe', 'GTA5_Enhanced.exe', 'RDR2.exe', 'PlayGTAV.exe', 'Launcher.exe', 'SocialClubHelper.exe', 'RockstarService.exe'
     try {
         Add-MpPreference -ExclusionPath @($excl | Select-Object -Unique) -ExclusionProcess $exclProc -ErrorAction Stop
         Passo "Defender: sem varrer $(@($excl | Select-Object -Unique).Count) pastas de desenvolvimento e $($exclProc.Count) ferramentas (node, git, starship, claude...)"
@@ -1969,6 +1979,15 @@ Etapa 'Área de Trabalho Remota e contas' {
     Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' 'fDenyTSConnections' 0
     Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' 'UserAuthentication' 1
     Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28752'   # grupo "Área de Trabalho Remota", nome neutro de idioma
+    # FXServer escuta na 30120, TCP e UDP. Sem regra, o Windows pergunta no primeiro start de cada fxserver.exe, e a
+    # regra que o aviso cria vale só para o perfil Public (16/09/2026). Por porta e em todos os perfis vale para
+    # qualquer projeto FiveM/RedM, novo ou antigo, esteja o txData onde estiver.
+    Passo 'firewall: 30120 TCP e UDP de entrada para o FXServer (FiveM/RedM)'
+    foreach ($proto in 'TCP', 'UDP') {
+        $nome = "FXServer 30120 $proto"
+        Get-NetFirewallRule -DisplayName $nome -ErrorAction Ignore | Remove-NetFirewallRule
+        New-NetFirewallRule -DisplayName $nome -Direction Inbound -Action Allow -Protocol $proto -LocalPort 30120 -Profile Any | Out-Null
+    }
     if (-not $Senha) { Passo 'AVISO: conta sem senha; o RDP não aceita login até você definir uma (net user Alexandre *)' }
     Passo 'senha sem validade, sem bloqueio de conta, scripts .ps1 liberados (RemoteSigned)'
     net.exe accounts /maxpwage:unlimited | Out-Null
