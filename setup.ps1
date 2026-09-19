@@ -888,6 +888,9 @@ Etapa 'Preferências do usuário' {
     Set-Reg 'HKCU:\Control Panel\Desktop' 'CursorBlinkRate' '200' 'String'
     Set-Reg 'HKCU:\Control Panel\Desktop' 'JPEGImportQuality' 100      # o wallpaper é JPG; 100 tira o artefato de compressão
     Set-Reg $kbd 'PrintScreenKeyForSnippingEnabled' 0
+    # sem atalho de troca de idioma e de layout, pedido do Alexandre em 19/09/2026 (o padrão é Alt Esquerdo+Shift);
+    # o "Não atribuído" de Serviços de Texto > Configurações Avançadas de Tecla é o valor '3'
+    foreach ($n in 'Hotkey', 'Language Hotkey', 'Layout Hotkey') { Set-Reg 'HKCU:\Keyboard Layout\Toggle' $n '3' 'String' }
     # o registro só vale no próximo logon; SystemParametersInfo faz valer agora
     if (-not ('MyWinIsoTeclado' -as [type])) {
         Add-Type -Name MyWinIsoTeclado -Namespace Win32 -MemberDefinition '
