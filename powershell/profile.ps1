@@ -33,7 +33,13 @@ if (Get-Module PSReadLine) {
 if (Test-Path -LiteralPath 'D:\Utils\git.sh') {
     function c { & 'C:\Program Files\Git\bin\bash.exe' 'D:\Utils\git.sh' @args }
 } else { function c { Clear-Host } }
-function x { claude --dangerously-skip-permissions --model opus @args }
+# a sessão leva o nome da pasta atual (aparece no seletor, no título do terminal e no Remote Control do celular);
+# -n/--name passado na mão vence
+function x {
+    $nome = @()
+    if (-not ($args | Where-Object { $_ -in '-n', '--name' })) { $nome = '-n', (Split-Path -Leaf $PWD.Path) }
+    claude --dangerously-skip-permissions --model opus @nome @args
+}
 # deploy do Michigan Roleplay (DeployFiles\deploy.mjs), o mesmo do perfil antigo (repo powershell-profile)
 if (Test-Path -LiteralPath 'D:\MichiganRoleplay\DeployFiles\deploy.mjs') {
     function deploy {
