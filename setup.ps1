@@ -1706,6 +1706,14 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
     $cfgClaude = Join-Path $env:USERPROFILE '.claude\settings.json'
     $ligados = if (Test-Path -LiteralPath $cfgClaude) { $e = (Get-Content -LiteralPath $cfgClaude -Raw | ConvertFrom-Json).enabledPlugins; if ($e) { $e.PSObject.Properties | Where-Object { $_.Value } | ForEach-Object Name } }
     Passo "plugins ligados: $(if ($ligados) { $ligados -join ', ' } else { 'nenhum' })"
+    # Remote Control em toda sessão nova (o Alexandre controla pelo app, aba Code), 19/09/2026. O settings.json
+    # mora em D:\Perfil\Home\.claude e já volta com o perfil; isto garante a chave se ele vier sem ela.
+    $cj = if (Test-Path -LiteralPath $cfgClaude) { Get-Content -LiteralPath $cfgClaude -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
+    if ($cj.remoteControlAtStartup -ne $true) {
+        $cj | Add-Member -NotePropertyName remoteControlAtStartup -NotePropertyValue $true -Force
+        [IO.File]::WriteAllText($cfgClaude, ($cj | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
+    }
+    Passo 'Claude Code: Remote Control ligado em toda sessão nova'
 
     # 6. skills: globais em ~\.claude\skills (D:); as de projeto vivem em cada repositório
     $skills = Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.claude\skills') -Directory -ErrorAction Ignore
@@ -1784,16 +1792,18 @@ Etapa 'Lightshot: só Shift+PrintScreen' {
     }
 }
 
-# --- 16. Chrome: senhas só no Proton Pass, e as duas extensões já instaladas -----------------------
+# --- 16. Chrome: senhas só no Proton Pass, e o Proton Pass já instalado -----------------------------
 # Por política de máquina (HKLM\SOFTWARE\Policies\Google\Chrome), que o Chrome lê no início:
 #   PasswordManagerEnabled 0  desliga o cofre do Chrome inteiro: não oferece salvar, não preenche e
 #                             não sugere senha forte. É o que faz o Proton Pass ficar sendo o único.
 #   ExtensionInstallForcelist instala e mantém instaladas as extensões, sem pedir nada ao usuário.
 # Efeito colateral aceito: o Chrome passa a mostrar "Gerenciado pela sua organização" nas
 # configurações, e extensão de forcelist não pode ser desativada pela página de extensões.
+# O Enhancer for YouTube saiu em 19/09/2026: o YouTube agora é da RiceExtension (fork do YouTube
+# Enhancer, em D:\Apps\desktop\RiceExtension), carregada sem compactação a partir do dist/Chrome.
+# Extensão sem compactação não entra em forcelist, então ela não é instalada por aqui.
 $ChromeExtensoes = [ordered]@{
     'ghmbeldphafepmbegfdlkpapadhbakde' = 'Proton Pass'
-    'ponfpcnoihfmfllpaingbgckeeldkhle' = 'Enhancer for YouTube'
 }
 Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
     $pol = 'HKLM:\SOFTWARE\Policies\Google\Chrome'
@@ -1811,10 +1821,6 @@ Etapa 'Chrome e Discord: Proton Pass, extensões e Vencord' {
         # o ";https://clients2.google.com/service/update2/crx" e a URL de update da Chrome Web Store
         Set-Reg $lista "$i" "$id;https://clients2.google.com/service/update2/crx" 'String'
     }
-
-    # A configuração do Enhancer for YouTube não vem daqui: a extensão guarda tudo dentro do perfil do
-    # Chrome (chrome.storage) e não tem política de managed storage, então não há como injetar de fora.
-    # O backup fica com o Alexandre; a importação é na mão, em Opções > Importar configurações.
 
     # o winget hoje entrega o Proton Pass como MSIX (fica em WindowsApps, pacote ProtonPass); as pastas sao do instalador antigo
     $pp = @(Get-AppxPackage -Name ProtonPass -ErrorAction Ignore) + @(Get-ChildItem 'C:\Program Files\Proton\Proton Pass', "$env:LOCALAPPDATA\Programs\Proton Pass" -ErrorAction Ignore) | Select-Object -First 1
@@ -2399,6 +2405,9 @@ Etapa 'Windows Terminal como terminal único' {
     # transferencia tem imagem e nao tem texto troca o Ctrl+V por Alt+V, o colar imagem do Claude Code. Ligar o
     # Ctrl+V direto ao chat:imagePaste abria dois powershell por colagem, ~2 s cada Ctrl+V (13/09/2026).
     try { & (Join-Path $aqui 'teclado\compilar.ps1') } catch { Falha "ColarImagem: $($_.Exception.Message)" }
+    # Som mudo enquanto os monitores estao apagados (inatividade ou botao Telas do RicePanel) e de volta quando
+    # acendem; so desmuta o que ele mesmo mutou. Pedido do Alexandre em 23/09/2026.
+    try { & (Join-Path $aqui 'som\compilar.ps1') } catch { Falha "SomTelas: $($_.Exception.Message)" }
 }
 
 # --- 28. Manutenção: limpeza recorrente, espaço em disco e telemetria de fundo ---------------------
