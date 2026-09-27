@@ -37,7 +37,8 @@ if (Test-Path -LiteralPath 'D:\Utils\git.sh') {
 # -n/--name passado na mão vence
 function x {
     $nome = @()
-    if (-not ($args | Where-Object { $_ -in '-n', '--name' })) { $nome = '-n', (Split-Path -Leaf $PWD.Path) }
+    # na raiz do disco o Leaf devolve "C:\"; ali o nome vira só a letra
+    if (-not ($args | Where-Object { $_ -in '-n', '--name' })) { $nome = '-n', ((Split-Path -Leaf $PWD.Path).TrimEnd('\', ':')) }
     claude --dangerously-skip-permissions --model opus @nome @args
 }
 # deploy do Michigan Roleplay (DeployFiles\deploy.mjs), o mesmo do perfil antigo (repo powershell-profile)
