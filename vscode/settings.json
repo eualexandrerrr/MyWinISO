@@ -1,4 +1,5 @@
 {
+  "update.mode": "none",
   "terminal.integrated.defaultProfile.windows": "PowerShell",
   "terminal.integrated.fontFamily": "FiraCode Nerd Font, JetBrainsMono NF, Consolas, monospace",
   "terminal.integrated.fontSize": 12.5,

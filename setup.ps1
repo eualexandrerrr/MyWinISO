@@ -2155,6 +2155,17 @@ Etapa 'Fontes, console e VS Code' {
     foreach ($p in $novo.PSObject.Properties) { $atual | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value -Force }
     $atual | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $vsArq -Encoding UTF8
     Passo "VS Code: $vsArq"
+
+    # O VS Code não se atualiza sozinho ("update.mode": "none" no vscode\settings.json). O instalador que ele
+    # abre como filho falhava sempre com "MoveFile falhou; código 649" (30/09/2026); o mesmo instalador aberto
+    # fora do VS Code instala. Quem atualiza é o winget, no logon, antes de o VS Code abrir.
+    $acaoVs = New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot 'System32\conhost.exe') `
+        -Argument '--headless winget.exe upgrade --id Microsoft.VisualStudioCode --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity'
+    $gatVs = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+    $cfgVs = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 15)
+    $prVs  = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+    Register-ScheduledTask -TaskName 'VS Code atualizado' -TaskPath '\mywiniso' -Action $acaoVs -Trigger $gatVs -Settings $cfgVs -Principal $prVs -Force | Out-Null
+    Passo "tarefa 'VS Code atualizado': winget upgrade no logon"
 }
 
 # --- 24. Um perfil só para todo PowerShell (powershell\profile.ps1) ---------------------------------
