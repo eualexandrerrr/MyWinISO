@@ -2283,6 +2283,16 @@ Etapa 'Barra de tarefas e tarefa de logon' {
         Passo "tarefa 'RGB desligado': OpenRGB apaga placa-mãe e placa de vídeo no logon"
     } else { Falha "OpenRGB: não achei $openrgb; RGB fica aceso" }
 
+    # Jogo em segundo plano limitado a 30 fps no driver NVIDIA (perfil base). Com o FiveM aberto sem foco a
+    # RTX 3090 seguia a 71% e o cursor e o VS Code ficavam lentos (03/10/2026). Mesmo ajuste do Painel NVIDIA
+    # "Taxa máxima de quadros do aplicativo em segundo plano", gravado pelo NVIDIA Profile Inspector (apps.json).
+    $npi = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages') -Directory -Filter 'Orbmu2k.nvidiaProfileInspector*' -ErrorAction Ignore |
+        ForEach-Object { Join-Path $_.FullName 'nvidiaProfileInspector.exe' } | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($npi -and (Get-CimInstance Win32_VideoController | Where-Object Name -match 'NVIDIA')) {
+        $p = Start-Process -FilePath $npi -ArgumentList "`"$(Join-Path $aqui 'nvidia\fundo30.nip')`"", '-silentImport' -PassThru -Wait
+        if ($p.ExitCode -eq 0) { Passo 'NVIDIA: jogo em segundo plano limitado a 30 fps' } else { Falha "NVIDIA Profile Inspector saiu com $($p.ExitCode)" }
+    }
+
     # LibreHardwareMonitor (apps.json): servidor web em 127.0.0.1:8085, de onde o RicePanel lê a temperatura de
     # CPU e de SSD (no Windows sensor não é arquivo). O config vai ao lado do exe de verdade, em WinGet\Packages:
     # ele procura <exe>.config pelo caminho do próprio executável, e o alias de WinGet\Links apontaria para

@@ -35,6 +35,7 @@
         { "PackageIdentifier": "Rclone.Rclone" },
         { "PackageIdentifier": "LibreHardwareMonitor.LibreHardwareMonitor" },
         { "PackageIdentifier": "OpenRGB.OpenRGB" },
+        { "PackageIdentifier": "Orbmu2k.nvidiaProfileInspector" },
 
         { "PackageIdentifier": "Git.Git" },
         { "PackageIdentifier": "GitHub.cli" },
