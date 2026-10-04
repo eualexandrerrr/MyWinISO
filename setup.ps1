@@ -2137,6 +2137,24 @@ Etapa 'Fontes, console e VS Code' {
         $n++
     }
     Passo "$n arquivos de fonte instalados em C:\Windows\Fonts"
+
+    # Fira Code Nerd Font: a fonte do terminal do VS Code e do Windows Terminal (escolha do Alexandre em 04/10/2026).
+    # Não está no winget; vem do release do ryanoasis/nerd-fonts. Família registrada: "FiraCode Nerd Font".
+    try {
+        $relNf = Invoke-RestMethod 'https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest' -Headers @{ 'User-Agent' = 'mywiniso' }
+        $zipNf = Join-Path $env:TEMP 'FiraCode.zip'; $tmpNf = Join-Path $env:TEMP 'FiraCodeNF'
+        Baixar ($relNf.assets | Where-Object name -eq 'FiraCode.zip' | Select-Object -First 1).browser_download_url $zipNf
+        if (Test-Path -LiteralPath $tmpNf) { Remove-Item -LiteralPath $tmpNf -Recurse -Force }
+        Expand-Archive -Path $zipNf -DestinationPath $tmpNf -Force
+        $nNf = 0
+        foreach ($f in Get-ChildItem -Path $tmpNf -Filter 'FiraCodeNerdFont-*.ttf') {
+            Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $env:WINDIR "Fonts\$($f.Name)") -Force
+            $face = ($f.BaseName -split '-', 2)[1]
+            Set-ItemProperty -Path $regFontes -Name ("FiraCode Nerd Font{0} (TrueType)" -f $(if ($face -ne 'Regular') { " $face" } else { '' })) -Value $f.Name -Type String
+            $nNf++
+        }
+        Passo "Fira Code Nerd Font $($relNf.tag_name): $nNf arquivos em C:\Windows\Fonts"
+    } catch { Falha "Fira Code Nerd Font: $($_.Exception.Message)" }
     $consoles = @('HKCU:\Console', 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe', 'HKCU:\Console\Git Bash', 'HKCU:\Console\Git CMD')
     $pwsh = (Get-Command pwsh.exe -ErrorAction Ignore).Source
     if ($pwsh) { $consoles += "HKCU:\Console\$($pwsh -replace '\\', '_')" }
