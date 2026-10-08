@@ -39,7 +39,26 @@ function x {
     $nome = @()
     # na raiz do disco o Leaf devolve "C:\"; ali o nome vira só a letra
     if (-not ($args | Where-Object { $_ -in '-n', '--name' })) { $nome = '-n', ((Split-Path -Leaf $PWD.Path).TrimEnd('\', ':')) }
-    claude --dangerously-skip-permissions --model opus @nome @args
+    # uso semanal em 75% ou mais: abre no Sonnet para não estourar a semana (pedido do Alexandre, 08/10/2026).
+    # O número vem do mesmo endpoint do /usage (sem documentação, pode mudar); se falhar, fica no Opus.
+    # --model passado na mão vence
+    $modelo = 'opus'
+    if (-not ($args | Where-Object { $_ -eq '--model' })) {
+        try {
+            $cred = Get-Content -LiteralPath (Join-Path $env:USERPROFILE '.claude\.credentials.json') -Raw | ConvertFrom-Json
+            $uso = Invoke-RestMethod -Uri 'https://api.anthropic.com/api/oauth/usage' -TimeoutSec 3 -Headers @{
+                Authorization    = "Bearer $($cred.claudeAiOauth.accessToken)"
+                'anthropic-beta' = 'oauth-2025-04-20'
+            }
+            $semana = [double]$uso.seven_day.utilization
+            if ($semana -ge 75) {
+                $modelo = 'sonnet'
+                Write-Host "uso semanal em $semana%: abrindo no Sonnet" -ForegroundColor Yellow
+            }
+        } catch { }
+        $nome += '--model', $modelo
+    }
+    claude --dangerously-skip-permissions @nome @args
 }
 # deploy do Michigan Roleplay (DeployFiles\deploy.mjs), o mesmo do perfil antigo (repo powershell-profile)
 if (Test-Path -LiteralPath 'D:\MichiganRoleplay\DeployFiles\deploy.mjs') {
