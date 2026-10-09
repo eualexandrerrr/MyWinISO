@@ -1715,6 +1715,22 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
     }
     Passo 'Claude Code: Remote Control ligado em toda sessão nova'
 
+    # Status line (contexto, janela de 5h e semana, 09/10/2026). O Claude Code já reescreveu o settings.json e
+    # perdeu a chave statusLine duas vezes (28/08 e 09/10); o script vem de claude\statusline.js e a chave é refeita.
+    $slOrigem = Join-Path $aqui 'claude\statusline.js'
+    $slDestino = Join-Path $env:USERPROFILE '.claude\statusline.js'
+    if (Test-Path -LiteralPath $slOrigem) { Copy-Item -LiteralPath $slOrigem -Destination $slDestino -Force }
+    $node = (Get-Command node -ErrorAction Ignore).Source
+    if ($node -and (Test-Path -LiteralPath $slDestino)) {
+        $cj = Get-Content -LiteralPath $cfgClaude -Raw | ConvertFrom-Json
+        $cmd = "`"$node`" `"$slDestino`""
+        if ($cj.statusLine.command -ne $cmd -or $cj.statusLine.refreshInterval -ne 30) {
+            $cj | Add-Member -NotePropertyName statusLine -NotePropertyValue ([pscustomobject]@{ type = 'command'; command = $cmd; refreshInterval = 30 }) -Force
+            [IO.File]::WriteAllText($cfgClaude, ($cj | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
+        }
+        Passo 'Claude Code: status line ligada (contexto, 5h e semana)'
+    } else { Falha 'status line: node ou claude\statusline.js ausente' }
+
     # 6. skills: globais em ~\.claude\skills (D:); as de projeto vivem em cada repositório
     $skills = Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.claude\skills') -Directory -ErrorAction Ignore
     if ($skills) { Passo "skills: $($skills.Name -join ', ')" } else { Falha 'nenhuma skill em ~\.claude\skills: o D:\Perfil\Home\.claude não voltou?' }
