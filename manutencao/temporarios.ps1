@@ -1,5 +1,5 @@
 ﻿<#
-  Arquivos temporários e pastas de sobra de instalação, a cada 60 dias, pela tarefa
+  Arquivos temporários e pastas de sobra de instalação, toda semana, pela tarefa
   "\mywiniso\Arquivos temporários". Vem do TempTask do Sophia Script (farag2).
 
   %SystemDrive%\Recovery só entra se tiver ReAgentOld.xml, que é a guarda do Sophia: sem ela você

@@ -2536,7 +2536,8 @@ Etapa 'Manutenção e telemetria de fundo' {
     foreach ($t in @(
         @{ Nome = 'Limpeza do Windows';  Arq = 'limpeza.ps1';              Dias = 30 },
         @{ Nome = 'Cache do Update';     Arq = 'cache-do-update.ps1';      Dias = 90 },
-        @{ Nome = 'Arquivos temporários'; Arq = 'temporarios.ps1';         Dias = 60 })) {
+        # temporários toda semana: com 60 dias o %TEMP% chegou a 48,8 GB e encheu o C: (11/10/2026)
+        @{ Nome = 'Arquivos temporários'; Arq = 'temporarios.ps1';         Dias = 7 })) {
         $arq = Join-Path $tarefasDir $t.Arq
         if (-not (Test-Path -LiteralPath $arq)) { Falha "não achei $arq"; continue }
         # conhost --headless: a tarefa roda sem piscar janela de console
