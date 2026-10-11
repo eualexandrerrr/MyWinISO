@@ -2263,7 +2263,8 @@ Etapa 'Barra de tarefas e tarefa de logon' {
     Passo 'logon em escada: Lightshot aos 30 s, Discord aos 60 s, Spotify e Steam em seguida (fora do Run)'
     # o script fica no próprio clone: o git pull atualiza a tarefa, e não depende do Google Drive estar sincronizado
     $onlogon = Join-Path $aqui 'startup\startup-onlogon.ps1'
-    $acao      = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$onlogon`""
+    # conhost --headless: o -WindowStyle Hidden ainda pisca a janela do PowerShell no logon
+    $acao      = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$onlogon`""
     $gatilho   = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
     $gatilho.Delay = 'PT30S'
     $config    = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable
