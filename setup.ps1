@@ -1980,9 +1980,11 @@ Etapa 'git config' {
     git.exe config --global user.name  'Alexandre Rangel'
     git.exe config --global user.email 'mamutal91@gmail.com'
     git.exe config --global init.defaultBranch main
-    # desempenho: cache de sistema de arquivos, index em paralelo, cache de não rastreados e o fsmonitor
-    # nativo (um daemon por repositório). Deixam o git status e o prompt do starship rápidos em repo grande.
-    foreach ($c in 'core.fscache', 'core.preloadindex', 'core.untrackedcache', 'core.fsmonitor') { git.exe config --global $c true }
+    # desempenho: cache de sistema de arquivos, index em paralelo e cache de não rastreados. Deixam o git status
+    # e o prompt do starship rápidos em repo grande. Sem o fsmonitor global: ele deixa um daemon por repositório
+    # tocado, e em 11/10/2026 eram 445 daemons (4,4 GB de RAM) três horas depois do boot, segurando as pastas.
+    foreach ($c in 'core.fscache', 'core.preloadindex', 'core.untrackedcache') { git.exe config --global $c true }
+    git.exe config --global --unset core.fsmonitor
     Passo "user.name=$(git.exe config --global user.name) user.email=$(git.exe config --global user.email)"
 }
 
