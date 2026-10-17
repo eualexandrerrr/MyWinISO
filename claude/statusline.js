@@ -1,5 +1,5 @@
 // Status line do Alexandre.
-// ◆ Opus 5 · ▲ high · ◐ ctx 58% de 1M · ◈ 62% 03:01
+// ◆ Opus 5 · ▲ high · ◐ contexto 140k de 250k · ◈ 62% 03:01
 //
 // Node em vez de PowerShell: 70 ms por execucao contra 247 ms. Com o
 // refreshInterval de 30 s isso importa — a linha roda a vida toda da sessao.
@@ -8,6 +8,8 @@
 // SO O CONTEXTO muda de cor conforme enche. Cada outro campo tem cor propria.
 
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const E = '\x1b';
 const LARANJA  = `${E}[38;5;172m`;
@@ -81,33 +83,47 @@ if (ctx) {
     }
 }
 
-if (pct != null && !Number.isNaN(pct)) {
-    const p = Math.round(pct);
-    const janela = Number(ctx.context_window_size) || 0;
-    const tokens = Math.round((pct / 100) * janela);
+// Janela em que o auto-compact dispara, lida do settings.json (a mesma que o
+// setup.ps1 grava). O Claude manda context_window_size = 1M, mas com
+// autoCompactWindow = 250k a sessao compacta nos 250k; mostrar "de 1M" enganava.
+// Valor por modelo (modelSettings) vence o global, igual ao Claude.
+function janelaCompactacao(idModelo) {
+    try {
+        const cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude', 'settings.json'), 'utf8'));
+        const porModelo = cfg.modelSettings && cfg.modelSettings[idModelo];
+        return Number((porModelo && porModelo.autoCompactWindow) || cfg.autoCompactWindow) || 0;
+    } catch (_) { return 0; }
+}
 
-    // Em janela de 1M o alarme e por TOKEN, nao por porcentagem. Medido nas
-    // transcricoes de 14/08 a 28/08: 59% de todo o consumo veio de requisicao
-    // acima de 400k, e 30% acima de 600k. Esperar os 75% da janela (750k) e
-    // avisar quando o gasto ja aconteceu.
-    const grande = janela >= 1000000;
-    const [t1, t2, t3] = grande ? [250000, 400000, 600000] : [50, 75, 90];
-    const medida = grande ? tokens : p;
+if (pct != null && !Number.isNaN(pct)) {
+    const janela = Number(ctx.context_window_size) || 0;
+    // Token exato quando o Claude manda o uso; senao, a porcentagem (passos de 1% = 10k em 1M).
+    const u = ctx.current_usage;
+    const tokens = u
+        ? Number(u.input_tokens || 0) + Number(u.cache_creation_input_tokens || 0) + Number(u.cache_read_input_tokens || 0)
+        : Math.round((pct / 100) * janela);
+
+    // O alvo e onde a sessao compacta, nao o tamanho da janela do modelo.
+    const compacta = janelaCompactacao(m && m.id);
+    const alvo = compacta > 0 && (janela === 0 || compacta < janela) ? compacta : janela;
+    const p = alvo > 0 ? Math.round((tokens / alvo) * 100) : Math.round(pct);
 
     let nivel;
-    if      (medida >= t3) nivel = 3;   // limpa
-    else if (medida >= t2) nivel = 2;   // pesado
-    else if (medida >= t1) nivel = 1;   // atencao
-    else                   nivel = 0;   // tranquilo
+    if      (p >= 90) nivel = 3;   // vai compactar
+    else if (p >= 75) nivel = 2;   // perto de compactar
+    else if (p >= 50) nivel = 1;   // atencao
+    else              nivel = 0;   // tranquilo
 
     const cor = [VERDE, AMARELO, LARANJA, VERMELHO][nivel];
     // O circulo enche meio passo antes, para ter os cinco estagios.
-    const ico = CIRCULO[nivel === 0 ? (medida >= t1 / 2 ? 1 : 0) : nivel + 1];
+    const ico = CIRCULO[nivel === 0 ? (p >= 25 ? 1 : 0) : nivel + 1];
 
-    const texto = grande ? `contexto ${Math.round(tokens / 1000)}k de 1M` : `contexto ${p}%`;
+    const k = (n) => n >= 1000000 ? `${+(n / 1000000).toFixed(1)}M` : `${Math.round(n / 1000)}k`;
+    const texto = alvo > 0 ? `contexto ${k(tokens)} de ${k(alvo)}` : `contexto ${p}%`;
+    const aviso = compacta > 0 && compacta < janela ? ['', '', ' — perto de compactar', ' — compactando'] : ['', '', ' — pesado', ' — LIMPA A SESSAO'];
 
-    if (nivel === 3)      partes.push(`${cor}${NEGRITO}${ico} ${texto} — LIMPA A SESSAO${RESET}`);
-    else if (nivel === 2) partes.push(`${cor}${ico} ${texto} — pesado${RESET}`);
+    if (nivel === 3)      partes.push(`${cor}${NEGRITO}${ico} ${texto}${aviso[3]}${RESET}`);
+    else if (nivel === 2) partes.push(`${cor}${ico} ${texto}${aviso[2]}${RESET}`);
     else                  partes.push(`${cor}${ico} ${texto}${RESET}`);
 }
 
