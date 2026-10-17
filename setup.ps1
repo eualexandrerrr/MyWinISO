@@ -914,12 +914,17 @@ Etapa 'Preferências do usuário' {
     Set-Reg 'Registry::HKU\.DEFAULT\Keyboard Layout\Preload' '1' '00010416' 'String'
     Set-Reg 'Registry::HKU\.DEFAULT\Control Panel\Keyboard' 'KeyboardDelay' '0' 'String'
     Set-Reg 'Registry::HKU\.DEFAULT\Control Panel\Keyboard' 'KeyboardSpeed' '31' 'String'
-    Passo 'desligar sem travar em app aberto; reabrir apps ao entrar'
+    Passo 'desligar sem travar em app aberto; sem reabrir apps ao entrar'
     $desk = 'HKCU:\Control Panel\Desktop'
     Set-Reg $desk 'AutoEndTasks'         '1'    'String'
     Set-Reg $desk 'WaitToKillAppTimeout' '2000' 'String'
     Set-Reg $desk 'HungAppTimeout'       '1000' 'String'
-    Set-Reg 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' 'RestartApps' 1
+    # RestartApps 0: com 1 o Windows reabria o Windows Terminal (janelas vazias e sessões do Claude) a cada boot,
+    # e o claude.exe aparecia entre os atrasos do logon (17/10/2026). Chrome e VS Code abrem pela tarefa 'Startup OnLogon'.
+    Set-Reg 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' 'RestartApps' 0
+    # sem o RestartApps, quem devolve as abas é o próprio Chrome: 'Continuar de onde parou' como política recomendada
+    # (padrão que ele ainda pode trocar nas configurações). O --restore-last-session sozinho falhava depois do desligamento.
+    Set-Reg 'HKCU:\Software\Policies\Google\Chrome\Recommended' 'RestoreOnStartup' 1
     Passo 'atalhos de acessibilidade desligados; Game DVR desligado'
     Set-Reg 'HKCU:\Control Panel\Accessibility\StickyKeys'        'Flags' '506' 'String'
     Set-Reg 'HKCU:\Control Panel\Accessibility\ToggleKeys'        'Flags' '58'  'String'
@@ -1291,8 +1296,10 @@ Etapa 'Windhawk: tema Translucent' {
                 'controlStyles[1].target'    = 'Taskbar.TaskbarBackground#HoverFlyoutBackgroundControl > Grid > Rectangle#BackgroundFill'
                 'controlStyles[1].styles[0]' = $TaskbarFundo
             } },
-        @{ id = 'windows-11-start-menu-styler';          settings = @{ theme = 'TranslucentStartMenu' } },
-        @{ id = 'windows-11-notification-center-styler'; settings = @{ theme = 'TranslucentShell' } },
+        # Iniciar e central de notificações no escuro nativo (theme vazio): com EnableTransparency 0, os temas
+        # TranslucentStartMenu/TranslucentShell deixavam o fundo vazado e claro, com texto branco ilegível (17/10/2026).
+        @{ id = 'windows-11-start-menu-styler';          settings = @{ theme = '' } },
+        @{ id = 'windows-11-notification-center-styler'; settings = @{ theme = '' } },
         # Explorer e Configurações ficam no escuro nativo, sem Translucent: o par translucent-windows +
         # file-explorer-styler saiu em 13/09/2026, por desempenho. O translucent-windows tem Include = * e
         # injetava em TODO processo (já tinha derrubado o HeidiSQL com 0xC000041D e tirado a cor do Radmin);
@@ -1714,6 +1721,22 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
         [IO.File]::WriteAllText($cfgClaude, ($cj | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
     }
     Passo 'Claude Code: Remote Control ligado em toda sessão nova'
+    # Auto-compact em 250 mil tokens, para todo modelo (17/10/2026). Reler o contexto a cada resposta era ~90% do
+    # custo, e 68% dele vinha de respostas com mais de 400 mil tokens (o padrão compactava perto de 967 mil). Uma
+    # sessão nova já começa com ~85 mil. Nenhum modelSettings pode ter autoCompactWindow próprio, porque ele vence
+    # a chave global. Sonnet sempre em xhigh (o comando x também passa --effort xhigh).
+    $cj = Get-Content -LiteralPath $cfgClaude -Raw | ConvertFrom-Json
+    $cj | Add-Member -NotePropertyName autoCompactWindow -NotePropertyValue 250000 -Force
+    if (-not $cj.modelSettings) { $cj | Add-Member -NotePropertyName modelSettings -NotePropertyValue ([pscustomobject]@{}) -Force }
+    foreach ($m in $cj.modelSettings.PSObject.Properties) { $m.Value.PSObject.Properties.Remove('autoCompactWindow') }
+    if (-not $cj.modelSettings.'claude-sonnet-5-5') { $cj.modelSettings | Add-Member -NotePropertyName 'claude-sonnet-5-5' -NotePropertyValue ([pscustomobject]@{}) -Force }
+    $cj.modelSettings.'claude-sonnet-5-5' | Add-Member -NotePropertyName effortLevel -NotePropertyValue 'xhigh' -Force
+    # subagentes (busca, leitura, revisão) no Sonnet: contexto novo a cada um, e a entrada sem cache custa metade
+    # do Opus (17/10/2026). Os MCPs pesados entram só quando usados: isso fica no comando x (profile.ps1).
+    if (-not $cj.env) { $cj | Add-Member -NotePropertyName env -NotePropertyValue ([pscustomobject]@{}) -Force }
+    $cj.env | Add-Member -NotePropertyName CLAUDE_CODE_SUBAGENT_MODEL -NotePropertyValue 'sonnet' -Force
+    [IO.File]::WriteAllText($cfgClaude, ($cj | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
+    Passo 'Claude Code: auto-compact em 250 mil tokens; Sonnet em xhigh'
 
     # Status line (contexto, janela de 5h e semana, 09/10/2026). O Claude Code já reescreveu o settings.json e
     # perdeu a chave statusLine duas vezes (28/08 e 09/10); o script vem de claude\statusline.js e a chave é refeita.
@@ -2194,14 +2217,15 @@ Etapa 'Fontes, console e VS Code' {
 
     # O VS Code não se atualiza sozinho ("update.mode": "none" no vscode\settings.json). O instalador que ele
     # abre como filho falhava sempre com "MoveFile falhou; código 649" (30/09/2026); o mesmo instalador aberto
-    # fora do VS Code instala. Quem atualiza é o winget, no logon, antes de o VS Code abrir.
+    # fora do VS Code instala. Quem atualiza é o manutencao\vscode.ps1, no logon, antes de o VS Code abrir
+    # (pela API do VS Code; o winget reinstalava a mesma versão a cada boot, 17/10/2026).
     $acaoVs = New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot 'System32\conhost.exe') `
-        -Argument '--headless winget.exe upgrade --id Microsoft.VisualStudioCode --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity'
+        -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $aqui 'manutencao\vscode.ps1')`""
     $gatVs = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
     $cfgVs = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 15)
     $prVs  = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
     Register-ScheduledTask -TaskName 'VS Code atualizado' -TaskPath '\mywiniso' -Action $acaoVs -Trigger $gatVs -Settings $cfgVs -Principal $prVs -Force | Out-Null
-    Passo "tarefa 'VS Code atualizado': winget upgrade no logon"
+    Passo "tarefa 'VS Code atualizado': manutencao\vscode.ps1 no logon"
 }
 
 # --- 24. Um perfil só para todo PowerShell (powershell\profile.ps1) ---------------------------------
@@ -2524,11 +2548,14 @@ Etapa 'Manutenção e telemetria de fundo' {
     if (-not (Test-Path -LiteralPath $tarefasDir)) { throw "não achei $tarefasDir" }
     Passo 'marcando os caches que a limpeza de disco deve tratar'
     foreach ($c in 'BranchCache', 'Delivery Optimization Files', 'Device Driver Packages', 'Language Pack',
-                   'Previous Installations', 'Setup Log Files', 'System error memory dump files',
-                   'System error minidump files', 'Temporary Files', 'Temporary Setup Files', 'Update Cleanup',
+                   'Previous Installations', 'Setup Log Files', 'Temporary Files', 'Temporary Setup Files', 'Update Cleanup',
                    'Upgrade Discarded Files', 'Windows Defender', 'Windows ESD installation files',
                    'Windows Upgrade Log Files') {
         Set-Reg "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\$c" 'StateFlags1337' 2
+    }
+    # dumps de tela azul ficam: a limpeza apagou os de 22/09 e 12/10 (0x3B) e o driver culpado ficou sem nome (17/10/2026)
+    foreach ($c in 'System error memory dump files', 'System error minidump files') {
+        Set-Reg "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\$c" 'StateFlags1337' 0
     }
     $sid       = ([Security.Principal.NTAccount]"$env:USERDOMAIN\$env:USERNAME").Translate([Security.Principal.SecurityIdentifier]).Value
     $config    = New-ScheduledTaskSettingsSet -Compatibility Win8 -StartWhenAvailable

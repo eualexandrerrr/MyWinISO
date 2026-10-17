@@ -1,4 +1,4 @@
-﻿# O único perfil do PowerShell. Vale para o PowerShell 7 e para o Windows PowerShell 5.1, em qualquer host:
+# O único perfil do PowerShell. Vale para o PowerShell 7 e para o Windows PowerShell 5.1, em qualquer host:
 # Windows Terminal, VS Code, console solto, elevado ou não. O setup.ps1 copia este arquivo para
 # Documentos\PowerShell\profile.ps1 e faz o Documentos\WindowsPowerShell\profile.ps1 apontar para ele.
 # Mesmo desenho do zsh do Debian (wsl/zshrc): starship com o mesmo starship.toml, histórico grande e
@@ -39,11 +39,20 @@ function x {
     $nome = @()
     # na raiz do disco o Leaf devolve "C:\"; ali o nome vira só a letra
     if (-not ($args | Where-Object { $_ -in '-n', '--name' })) { $nome = '-n', ((Split-Path -Leaf $PWD.Path).TrimEnd('\', ':')) }
-    # uso semanal em 75% ou mais: abre no Sonnet para não estourar a semana (pedido do Alexandre, 08/10/2026).
-    # O número vem do mesmo endpoint do /usage (sem documentação, pode mudar); se falhar, fica no Opus.
-    # --model passado na mão vence
-    $modelo = 'opus'
-    if (-not ($args | Where-Object { $_ -eq '--model' })) {
+    # Modelo (pedido do Alexandre, 17/10/2026): abre no último modelo usado, gravado ao sair em ~\.claude\x-modelo.txt
+    # (sem gravação, Opus). Uso semanal em 60% ou mais vence e abre no Sonnet para não estourar a semana (08/10/2026;
+    # baixado de 75% em 13/10/2026). O número vem do mesmo endpoint do /usage (sem documentação, pode mudar); se
+    # falhar, fica no último modelo. --model passado na mão vence tudo.
+    $arqModelo = Join-Path $env:USERPROFILE '.claude\x-modelo.txt'
+    $modelo = $null
+    $iModel = [array]::IndexOf([string[]]$args, '--model')
+    if ($iModel -ge 0) { $modelo = $args[$iModel + 1] }
+    else {
+        $modelo = 'opus'
+        if (Test-Path -LiteralPath $arqModelo) {
+            $gravado = (Get-Content -LiteralPath $arqModelo -Raw).Trim()
+            if ($gravado) { $modelo = $gravado }
+        }
         try {
             $cred = Get-Content -LiteralPath (Join-Path $env:USERPROFILE '.claude\.credentials.json') -Raw | ConvertFrom-Json
             $uso = Invoke-RestMethod -Uri 'https://api.anthropic.com/api/oauth/usage' -TimeoutSec 3 -Headers @{
@@ -51,21 +60,80 @@ function x {
                 'anthropic-beta' = 'oauth-2025-04-20'
             }
             $semana = [double]$uso.seven_day.utilization
-            if ($semana -ge 75) {
+            if ($semana -ge 60 -and $modelo -ne 'sonnet') {
                 $modelo = 'sonnet'
                 Write-Host "uso semanal em $semana%: abrindo no Sonnet" -ForegroundColor Yellow
             }
         } catch { }
         $nome += '--model', $modelo
     }
-    claude --dangerously-skip-permissions @nome @args
-}
-# deploy do Michigan Roleplay (DeployFiles\deploy.mjs), o mesmo do perfil antigo (repo powershell-profile)
-if (Test-Path -LiteralPath 'D:\MichiganRoleplay\DeployFiles\deploy.mjs') {
-    function deploy {
-        Push-Location 'D:\MichiganRoleplay\DeployFiles'
-        try { & node deploy.mjs @args } finally { Pop-Location }
+    # Sonnet sempre em xhigh (pedido do Alexandre, 17/10/2026); --effort passado na mão vence
+    if ($modelo -match 'sonnet' -and -not ($args -contains '--effort')) { $nome += '--effort', 'xhigh' }
+    $inicio = Get-Date
+    # MCPs pesados só quando forem usados (17/10/2026). Cada MCP ativo põe instruções e a lista de ferramentas no
+    # contexto de toda resposta, mesmo sem uso. Os de baixo ficam bloqueados nesta sessão (deniedMcpServers num
+    # --settings próprio, que não mexe no settings.json nem nas outras sessões) e entram por pasta ou por atalho:
+    # "x +ads", "x +voz +google", "x +tudo". Sempre ligados: engram, obsidian, firecrawl, playwright, chrome-devtools,
+    # Claude in Chrome e Claude Docs. Para ligar um no meio do trabalho: sair e "x --continue +ads".
+    $grupos = [ordered]@{
+        ads      = 'meta-ads'
+        voz      = 'claude.ai ElevenLabs'
+        postman  = 'claude.ai Postman'
+        '3d'     = 'claude.ai Three.js 3D Viewer'
+        notion   = 'claude.ai Notion'
+        figma    = 'plugin:design:figma'
+        google   = 'claude.ai Gmail', 'claude.ai Google Calendar', 'claude.ai Google Drive'
+        whatsapp = 'whatsapp'
+        n8n      = 'n8n'
+        maestro  = 'maestro'
+        firebase = 'plugin:firebase:firebase'
+        sentry   = 'claude.ai Sentry'
+        shadcn   = 'shadcn'
     }
+    $pedidos = @($args | Where-Object { $_ -is [string] -and $_ -match '^\+\w+$' } | ForEach-Object { $_.Substring(1).ToLower() })
+    $resto   = @($args | Where-Object { -not ($_ -is [string] -and $_ -match '^\+\w+$') })
+    $pasta = $PWD.ProviderPath
+    $ligar = @(switch -Wildcard ($pasta) {
+        'D:\Apps\mobile\*' { 'maestro' }
+        'D:\Apps\*'        { 'firebase', 'sentry', 'shadcn' }
+        '*n8n*'            { 'n8n' }
+    }) + $pedidos
+    if ($ligar -contains 'tudo') { $ligar = @($grupos.Keys) }
+    foreach ($p in $pedidos) { if ($p -ne 'tudo' -and -not $grupos.Contains($p)) { Write-Host "x: +$p não existe; use $(($grupos.Keys | ForEach-Object { "+$_" }) -join ' ') ou +tudo" -ForegroundColor Red } }
+    $bloq = @(foreach ($k in $grupos.Keys) { if ($ligar -notcontains $k) { $grupos[$k] } })
+    $dirMcp = Join-Path $env:USERPROFILE '.claude\x-mcp'
+    New-Item -ItemType Directory -Path $dirMcp -Force | Out-Null
+    $hash = [BitConverter]::ToString([Security.Cryptography.MD5]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes((($bloq | Sort-Object) -join '|')))).Replace('-', '').Substring(0, 8)
+    $arqMcp = Join-Path $dirMcp "bloqueio-$hash.json"
+    @{ deniedMcpServers = @($bloq | ForEach-Object { @{ serverName = $_ } }) } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $arqMcp -Encoding utf8
+    $extras = @($grupos.Keys | Where-Object { $ligar -contains $_ })
+    Write-Host ("MCPs extras: {0}" -f $(if ($extras) { $extras -join ', ' } else { 'nenhum (x +ads, +voz, +google... ou +tudo)' })) -ForegroundColor DarkGray
+    claude --dangerously-skip-permissions --settings $arqMcp @nome @resto
+    # grava o modelo da última resposta da sessão (pega também a troca feita com /model lá dentro).
+    # A transcrição fica em ~\.claude\projects\<pasta com tudo que não é letra/número trocado por ->\<sessão>.jsonl
+    try {
+        $pasta = Join-Path $env:USERPROFILE ('.claude\projects\' + ($PWD.ProviderPath -replace '[^A-Za-z0-9]', '-'))
+        $sessao = Get-ChildItem -LiteralPath $pasta -Filter '*.jsonl' -File -ErrorAction Stop |
+            Where-Object LastWriteTime -ge $inicio | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($sessao) {
+            $ultimo = Get-Content -LiteralPath $sessao.FullName -Tail 300 | Select-String '"model":"claude-([a-z]+)' |
+                Select-Object -Last 1
+            if ($ultimo) { Set-Content -LiteralPath $arqModelo -Value $ultimo.Matches[0].Groups[1].Value -NoNewline }
+        }
+    } catch { }
+}
+# deploy do projeto onde o terminal está (Michigan ou Visão): sobe a árvore a partir da pasta atual
+# até achar um DeployFiles\deploy.mjs. Fora de um projeto não chuta: recusa, para não subir o servidor errado.
+function deploy {
+    $dir = $PWD.ProviderPath
+    while ($dir -and -not (Test-Path -LiteralPath (Join-Path $dir 'DeployFiles\deploy.mjs'))) { $dir = Split-Path -Parent $dir }
+    if (-not $dir) {
+        Write-Host 'deploy: entre na pasta do projeto (D:\MichiganRoleplay ou D:\VisaoRoleplay) antes.' -ForegroundColor Red
+        return
+    }
+    Write-Host "deploy: $(Split-Path -Leaf $dir)" -ForegroundColor Cyan
+    Push-Location (Join-Path $dir 'DeployFiles')
+    try { & node deploy.mjs @args } finally { Pop-Location }
 }
 # ls pelo eza, com ícones e pastas primeiro. Só o ls: cat continua Get-Content, que scripts usam em pipeline.
 if (Get-Command eza -ErrorAction Ignore) {

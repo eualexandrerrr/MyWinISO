@@ -1,4 +1,4 @@
-﻿# Roda 30 s depois do logon (tarefa agendada "Startup OnLogon", criada pelo setup.ps1).
+# Roda 30 s depois do logon (tarefa agendada "Startup OnLogon", criada pelo setup.ps1).
 # Maximiza o Discord, abre e fecha o Spotify, põe duas janelas do Chrome no monitor vertical
 # e faz backup do histórico do terminal em D:\Utils\TerminalHistory.
 try {
@@ -169,12 +169,19 @@ function Abrir([string] $Nome, [string] $Exe, [string] $Argumentos, [int] $Esper
     }
 }
 Abrir 'Lightshot' "${env:ProgramFiles(x86)}\Skillbrains\lightshot\Lightshot.exe" ''
+# Chrome e VS Code: o Windows reabria os dois (RestartApps), junto com terminais vazios. Agora abrem aqui.
+# --restore-last-session traz de volta as janelas da sessão anterior (o reposicionamento abaixo precisa de duas).
+Abrir 'chrome' "$env:ProgramFiles\Google\Chrome\Application\chrome.exe" '--restore-last-session' 30
 Start-Sleep -Seconds 30
 Abrir 'Discord' "$env:LOCALAPPDATA\Discord\Update.exe" '--processStart Discord.exe' 45
 Start-Sleep -Seconds 10
 Abrir 'Spotify' "$env:APPDATA\Spotify\Spotify.exe" '--autostart --minimized' 30
 Start-Sleep -Seconds 15
 Abrir 'steam' "${env:ProgramFiles(x86)}\Steam\steam.exe" '-silent'
+Start-Sleep -Seconds 10
+# a tarefa 'VS Code atualizado' pode estar baixando ou instalando: abrir no meio estraga a atualização (espera até 4 min)
+for ($i = 0; $i -lt 120 -and ((Get-ScheduledTask -TaskPath '\mywiniso\' -TaskName 'VS Code atualizado' -ErrorAction Ignore).State -eq 'Running' -or (Get-Process -Name 'VSCodeUserSetup*' -ErrorAction Ignore)); $i++) { Start-Sleep -Seconds 2 }
+Abrir 'Code' "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe" ''
 
 # icones da bandeja: Discord, Spotify, Steam e Radmin sempre visiveis e nessa ordem (taskbar\bandeja.ps1).
 # A chave de cada icone so existe depois que o programa abre, por isso roda a cada logon, e nao so no setup.
