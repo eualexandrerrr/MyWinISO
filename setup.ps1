@@ -1724,19 +1724,23 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
     # Auto-compact em 250 mil tokens, para todo modelo (17/10/2026). Reler o contexto a cada resposta era ~90% do
     # custo, e 68% dele vinha de respostas com mais de 400 mil tokens (o padrão compactava perto de 967 mil). Uma
     # sessão nova já começa com ~85 mil. Nenhum modelSettings pode ter autoCompactWindow próprio, porque ele vence
-    # a chave global. Sonnet sempre em xhigh (o comando x também passa --effort xhigh).
+    # a chave global. Esforço medium (o recomendado) em todo modelo, global e por modelo (pedido em 17/10/2026,
+    # depois de ter deixado o Sonnet em xhigh no mesmo dia); xhigh só por sessão: "x --effort xhigh".
     $cj = Get-Content -LiteralPath $cfgClaude -Raw | ConvertFrom-Json
     $cj | Add-Member -NotePropertyName autoCompactWindow -NotePropertyValue 250000 -Force
     if (-not $cj.modelSettings) { $cj | Add-Member -NotePropertyName modelSettings -NotePropertyValue ([pscustomobject]@{}) -Force }
     foreach ($m in $cj.modelSettings.PSObject.Properties) { $m.Value.PSObject.Properties.Remove('autoCompactWindow') }
     if (-not $cj.modelSettings.'claude-sonnet-5-5') { $cj.modelSettings | Add-Member -NotePropertyName 'claude-sonnet-5-5' -NotePropertyValue ([pscustomobject]@{}) -Force }
-    $cj.modelSettings.'claude-sonnet-5-5' | Add-Member -NotePropertyName effortLevel -NotePropertyValue 'xhigh' -Force
+    $cj | Add-Member -NotePropertyName effortLevel -NotePropertyValue 'medium' -Force
+    $cj.modelSettings.'claude-sonnet-5-5' | Add-Member -NotePropertyName effortLevel -NotePropertyValue 'medium' -Force
+    if (-not $cj.modelSettings.'claude-opus-5-5') { $cj.modelSettings | Add-Member -NotePropertyName 'claude-opus-5-5' -NotePropertyValue ([pscustomobject]@{}) -Force }
+    $cj.modelSettings.'claude-opus-5-5' | Add-Member -NotePropertyName effortLevel -NotePropertyValue 'medium' -Force
     # subagentes (busca, leitura, revisão) no Sonnet: contexto novo a cada um, e a entrada sem cache custa metade
     # do Opus (17/10/2026). Os MCPs pesados entram só quando usados: isso fica no comando x (profile.ps1).
     if (-not $cj.env) { $cj | Add-Member -NotePropertyName env -NotePropertyValue ([pscustomobject]@{}) -Force }
     $cj.env | Add-Member -NotePropertyName CLAUDE_CODE_SUBAGENT_MODEL -NotePropertyValue 'sonnet' -Force
     [IO.File]::WriteAllText($cfgClaude, ($cj | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
-    Passo 'Claude Code: auto-compact em 250 mil tokens; Sonnet em xhigh'
+    Passo 'Claude Code: auto-compact em 250 mil tokens; esforço medium em todo modelo'
 
     # Status line (contexto, janela de 5h e semana, 09/10/2026). O Claude Code já reescreveu o settings.json e
     # perdeu a chave statusLine duas vezes (28/08 e 09/10); o script vem de claude\statusline.js e a chave é refeita.

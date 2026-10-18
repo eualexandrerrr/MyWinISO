@@ -67,8 +67,8 @@ function x {
         } catch { }
         $nome += '--model', $modelo
     }
-    # Sonnet sempre em xhigh (pedido do Alexandre, 17/10/2026); --effort passado na mão vence
-    if ($modelo -match 'sonnet' -and -not ($args -contains '--effort')) { $nome += '--effort', 'xhigh' }
+    # Esforço: tudo abre em medium, o recomendado (pedido do Alexandre, 17/10/2026; vale no settings.json).
+    # Antes o Sonnet abria em xhigh; subir para uma sessão só: "x --effort xhigh".
     $inicio = Get-Date
     # MCPs pesados só quando forem usados (17/10/2026). Cada MCP ativo põe instruções e a lista de ferramentas no
     # contexto de toda resposta, mesmo sem uso. Os de baixo ficam bloqueados nesta sessão (deniedMcpServers num
