@@ -1412,14 +1412,17 @@ Etapa 'Energia' {
     powercfg.exe /hibernate off
     Passo ((powercfg.exe /getactivescheme) -join ' ')
 
-    # Memória, pelo hardware. 32 GB de RAM: pagefile fixo de 16 GB no C: (início = máximo, então nunca cresce
-    # nem fragmenta no meio de um jogo, e ainda cabe um dump de kernel) e compressão de memória desligada (ela
-    # gasta CPU para poupar RAM, que sobra). O que o Intelligent Standby List Cleaner faz, a limpeza da
-    # standby list quando a RAM livre cai, é a tarefa 'Standby list' da etapa 28. Pagefile e compressão só
-    # valem depois de reiniciar.
+    # Memória, pelo hardware. Pagefile no C: começando em metade da RAM (4 a 16 GB, cabe um dump de kernel) e
+    # podendo crescer até o tamanho da RAM (8 a 48 GB). Fixo em 16 GB o limite de commit ficava em RAM + 16:
+    # em 19/10/2026 o RedM chegou a 16 GB com FXServer e Chrome abertos, o commit encostou nos 80 GB e o
+    # Windows matou MariaDB, Chrome e o dwm (tela preta, 0xc00001ad). Com início fixo ele só cresce sob
+    # pressão. Compressão de memória desligada (ela gasta CPU para poupar RAM, que sobra). O que o
+    # Intelligent Standby List Cleaner faz, a limpeza da standby list quando a RAM livre cai, é a tarefa
+    # 'Standby list' da etapa 28. Pagefile e compressão só valem depois de reiniciar.
     $ramGB = [Math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
-    $pfMB  = [Math]::Max(4096, [Math]::Min(16384, [int]($ramGB * 512)))    # metade da RAM, entre 4 e 16 GB
-    Passo "memória: $ramGB GB de RAM, pagefile fixo de $($pfMB / 1024) GB no C:, sem compressão de memória"
+    $pfMB  = [Math]::Max(4096, [Math]::Min(16384, [int]($ramGB * 512)))     # início: metade da RAM, entre 4 e 16 GB
+    $pfMax = [Math]::Max(8192, [Math]::Min(49152, [int]($ramGB * 1024)))    # máximo: a RAM, entre 8 e 48 GB
+    Passo "memória: $ramGB GB de RAM, pagefile de $($pfMB / 1024) a $($pfMax / 1024) GB no C:, sem compressão de memória"
     $cs = Get-CimInstance Win32_ComputerSystem
     if ($cs.AutomaticManagedPagefile) { $cs | Set-CimInstance -Property @{ AutomaticManagedPagefile = $false } }
     Get-CimInstance Win32_PageFileSetting | Where-Object Name -notlike 'C:*' | Remove-CimInstance
@@ -1427,9 +1430,9 @@ Etapa 'Energia' {
     # Set-CimInstance com os MESMOS valores devolve "Valor fora do intervalo" (HRESULT 0x8004102b): o WMI
     # recusa reescrever um Win32_PageFileSetting que ja esta no valor pedido, ou com troca pendente de
     # reinicio. Na segunda rodada do setup isso fechava a etapa 12 em AVISO sem nada de errado.
-    if ($pf -and $pf.InitialSize -eq $pfMB -and $pf.MaximumSize -eq $pfMB) { Passo "pagefile ja esta em $($pfMB / 1024) GB fixos no C:; nada a mudar" }
-    elseif ($pf) { $pf | Set-CimInstance -Property @{ InitialSize = $pfMB; MaximumSize = $pfMB } }
-    else { New-CimInstance -ClassName Win32_PageFileSetting -Property @{ Name = 'C:\pagefile.sys'; InitialSize = $pfMB; MaximumSize = $pfMB } | Out-Null }
+    if ($pf -and $pf.InitialSize -eq $pfMB -and $pf.MaximumSize -eq $pfMax) { Passo "pagefile ja esta em $($pfMB / 1024) a $($pfMax / 1024) GB no C:; nada a mudar" }
+    elseif ($pf) { $pf | Set-CimInstance -Property @{ InitialSize = $pfMB; MaximumSize = $pfMax } }
+    else { New-CimInstance -ClassName Win32_PageFileSetting -Property @{ Name = 'C:\pagefile.sys'; InitialSize = $pfMB; MaximumSize = $pfMax } | Out-Null }
     Silencioso { Disable-MMAgent -MemoryCompression }
 
     # Defender sem varrer em tempo real o que é desenvolvimento: pastas de projeto, caches de pacote e as
