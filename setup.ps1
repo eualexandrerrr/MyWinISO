@@ -888,6 +888,8 @@ Etapa 'Preferências do usuário' {
     Set-Reg 'HKCU:\Control Panel\Desktop' 'CursorBlinkRate' '200' 'String'
     Set-Reg 'HKCU:\Control Panel\Desktop' 'JPEGImportQuality' 100      # o wallpaper é JPG; 100 tira o artefato de compressão
     Set-Reg $kbd 'PrintScreenKeyForSnippingEnabled' 0
+    # Win+H (digitação por voz do Windows) só entende bem com o reconhecimento de fala online ligado
+    Set-Reg 'HKCU:\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy' 'HasAccepted' 1
     # sem atalho de troca de idioma e de layout, pedido do Alexandre em 19/09/2026 (o padrão é Alt Esquerdo+Shift);
     # o "Não atribuído" de Serviços de Texto > Configurações Avançadas de Tecla é o valor '3'
     foreach ($n in 'Hotkey', 'Language Hotkey', 'Layout Hotkey') { Set-Reg 'HKCU:\Keyboard Layout\Toggle' $n '3' 'String' }
@@ -2571,7 +2573,9 @@ Etapa 'Manutenção e telemetria de fundo' {
         @{ Nome = 'Limpeza do Windows';  Arq = 'limpeza.ps1';              Dias = 30 },
         @{ Nome = 'Cache do Update';     Arq = 'cache-do-update.ps1';      Dias = 90 },
         # temporários toda semana: com 60 dias o %TEMP% chegou a 48,8 GB e encheu o C: (11/10/2026)
-        @{ Nome = 'Arquivos temporários'; Arq = 'temporarios.ps1';         Dias = 7 })) {
+        @{ Nome = 'Arquivos temporários'; Arq = 'temporarios.ps1';         Dias = 7 },
+        # bypass do Discord: MTU 1280 nas configs do túnel (sem ele as imagens não sobem) + versão do app, 1x por semana
+        @{ Nome = 'GoLiveBypass atualizado'; Arq = 'gobypass.ps1';         Dias = 7; Agora = $true })) {
         $arq = Join-Path $tarefasDir $t.Arq
         if (-not (Test-Path -LiteralPath $arq)) { Falha "não achei $arq"; continue }
         # conhost --headless: a tarefa roda sem piscar janela de console
@@ -2579,6 +2583,8 @@ Etapa 'Manutenção e telemetria de fundo' {
             -Trigger (New-ScheduledTaskTrigger -Daily -DaysInterval $t.Dias -At 9pm) `
             -Action  (New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$arq`"") | Out-Null
         Passo "tarefa '$($t.Nome)': a cada $($t.Dias) dias, 21h"
+        # instalação nova: roda já, para o bypass não esperar uma semana
+        if ($t.Agora) { Start-ScheduledTask -TaskName $t.Nome -TaskPath '\mywiniso' }
     }
 
     # O que o Intelligent Standby List Cleaner faz, sem instalar nada: a cada minuto, se a RAM livre caiu

@@ -214,7 +214,7 @@ Insync e Maestro não existem no winget; Google Drive oficial entra no lugar do 
 | `powershell/profile.ps1` | perfil do PowerShell 7 |
 | `taskbar/LayoutModification.xml` | pinos da barra de tarefas |
 | `explorer/WinSetView/` | WinSetView (Les Ferch, MIT) com o modo de exibição do Explorer em `AppData/Win10.ini`; ver o README da pasta |
-| `manutencao/` | os três scripts que as tarefas de limpeza rodam: limpeza de disco, cache do Update e temporários |
+| `manutencao/` | os scripts das tarefas de manutenção: limpeza de disco, cache do Update, temporários e `gobypass.ps1` (1x por semana: repõe `MTU = 1280` nas configs do GoLiveBypass e instala/atualiza o app pela release do GitHub) |
 | `monitores/` | `monitores.json` com resolução, Hz, orientação e posição de cada monitor, e o `monitores.ps1` que aplica |
 | `terminal/settings.json` | perfis do Windows Terminal: PowerShell 7 (padrão), Windows PowerShell, Prompt de Comando e Git Bash |
 | `perfil/avatar.png` | foto da conta, redimensionada pelo setup para os tamanhos que o Windows usa |
