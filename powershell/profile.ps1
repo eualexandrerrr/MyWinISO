@@ -36,6 +36,10 @@ if (Test-Path -LiteralPath 'D:\Utils\git.sh') {
 # a sessão leva o nome da pasta atual (aparece no seletor, no título do terminal e no Remote Control do celular);
 # -n/--name passado na mão vence
 function x {
+    # "x --api" abre o Claude Code pela Avello (gateway de terceiro) só nesta sessão: base e chave vêm de
+    # D:\Claude\.secrets\avello.env, entram como variável do processo e saem ao fechar. Nada fica gravado no Windows.
+    $usarApi = $args -contains '--api'
+    if ($usarApi) { $args = @($args | Where-Object { $_ -ne '--api' }) }
     $nome = @()
     # na raiz do disco o Leaf devolve "C:\"; ali o nome vira só a letra
     if (-not ($args | Where-Object { $_ -in '-n', '--name' })) { $nome = '-n', ((Split-Path -Leaf $PWD.Path).TrimEnd('\', ':')) }
@@ -43,10 +47,15 @@ function x {
     # (sem gravação, Opus). Uso semanal em 60% ou mais vence e abre no Sonnet para não estourar a semana (08/10/2026;
     # baixado de 75% em 13/10/2026). O número vem do mesmo endpoint do /usage (sem documentação, pode mudar); se
     # falhar, fica no último modelo. --model passado na mão vence tudo.
+    # Exceção API (pedido do Alexandre, 30/10/2026): com --api abre no Opus 5.5 (claude-opus-5-5).
     $arqModelo = Join-Path $env:USERPROFILE '.claude\x-modelo.txt'
     $modelo = $null
     $iModel = [array]::IndexOf([string[]]$args, '--model')
     if ($iModel -ge 0) { $modelo = $args[$iModel + 1] }
+    elseif ($usarApi) {
+        $modelo = 'claude-opus-5-5'
+        $nome += '--model', $modelo
+    }
     else {
         $modelo = 'opus'
         if (Test-Path -LiteralPath $arqModelo) {
@@ -69,6 +78,14 @@ function x {
     }
     # Esforço: tudo abre em medium, o recomendado (pedido do Alexandre, 17/10/2026; vale no settings.json).
     # Antes o Sonnet abria em xhigh; subir para uma sessão só: "x --effort xhigh".
+    # Exceção (pedido do Alexandre, 26/10/2026): sessão aberta no Sonnet sobe para high; no Opus continua o medium do
+    # settings.json.
+    # Exceção API (pedido do Alexandre, 30/10/2026): sessão aberta com --api sobe para xhigh. --effort na mão vence.
+    $esforco = @()
+    if (-not ($args | Where-Object { $_ -eq '--effort' })) {
+        if ($usarApi) { $esforco = '--effort', 'xhigh' }
+        elseif ($modelo -match 'sonnet') { $esforco = '--effort', 'high' }
+    }
     $inicio = Get-Date
     # MCPs pesados só quando forem usados (17/10/2026). Cada MCP ativo põe instruções e a lista de ferramentas no
     # contexto de toda resposta, mesmo sem uso. Os de baixo ficam bloqueados nesta sessão (deniedMcpServers num
@@ -108,7 +125,30 @@ function x {
     @{ deniedMcpServers = @($bloq | ForEach-Object { @{ serverName = $_ } }) } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $arqMcp -Encoding utf8
     $extras = @($grupos.Keys | Where-Object { $ligar -contains $_ })
     Write-Host ("MCPs extras: {0}" -f $(if ($extras) { $extras -join ', ' } else { 'nenhum (x +ads, +voz, +google... ou +tudo)' })) -ForegroundColor DarkGray
-    claude --dangerously-skip-permissions --settings $arqMcp @nome @resto
+    $antes = @{}
+    if ($usarApi) {
+        $arqApi = 'D:\Claude\.secrets\avello.env'
+        $api = @{}
+        if (Test-Path -LiteralPath $arqApi) {
+            foreach ($linha in Get-Content -LiteralPath $arqApi) { if ($linha -match '^\s*([A-Z_]+)=(.+)$') { $api[$Matches[1]] = $Matches[2].Trim() } }
+        }
+        if (-not $api['AVELLO_BASE_URL'] -or -not $api['AVELLO_KEY']) {
+            Write-Host 'x --api: faltam AVELLO_BASE_URL e AVELLO_KEY em D:\Claude\.secrets\avello.env' -ForegroundColor Red
+            return
+        }
+        foreach ($v in 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY') { $antes[$v] = [Environment]::GetEnvironmentVariable($v, 'Process') }
+        $env:ANTHROPIC_BASE_URL = $api['AVELLO_BASE_URL']
+        $env:ANTHROPIC_AUTH_TOKEN = $api['AVELLO_KEY']
+        $env:ANTHROPIC_API_KEY = $null
+        Write-Host "API: $($api['AVELLO_BASE_URL']) (só esta sessão)" -ForegroundColor Yellow
+    }
+    # Remote Control sempre ligado (pedido do Alexandre, 28/10/2026), com a sessão acessível do celular.
+    # Vai antes das outras flags para não engolir o prompt como nome da sessão.
+    # Pela API (x --api) não há login do claude.ai, e o Remote Control depende dele: nessa sessão fica desligado.
+    $remoto = if ($usarApi -or $resto -contains '--remote-control') { @() } else { @('--remote-control') }
+    if ($usarApi) { Write-Host 'Remote Control desligado: precisa do login da conta, não funciona pela API' -ForegroundColor Yellow }
+    try { claude @remoto --dangerously-skip-permissions --settings $arqMcp @nome @esforco @resto }
+    finally { foreach ($v in $antes.Keys) { [Environment]::SetEnvironmentVariable($v, $antes[$v], 'Process') } }
     # grava o modelo da última resposta da sessão (pega também a troca feita com /model lá dentro).
     # A transcrição fica em ~\.claude\projects\<pasta com tudo que não é letra/número trocado por ->\<sessão>.jsonl
     try {
@@ -121,6 +161,28 @@ function x {
             if ($ultimo) { Set-Content -LiteralPath $arqModelo -Value $ultimo.Matches[0].Groups[1].Value -NoNewline }
         }
     } catch { }
+}
+# OpenCode (open source, MIT) pela Avello: "oc" abre no terminal, "oc --web" abre a interface no navegador e deixa o
+# celular entrar pelo Wi-Fi de casa (http://IP-do-PC:4096, usuário opencode, senha em avello.env). Config em
+# ~\.config\opencode\opencode.json. A chave vem de D:\Claude\.secrets\avello.env e só vive neste processo.
+function oc {
+    $api = @{}
+    foreach ($linha in Get-Content -LiteralPath 'D:\Claude\.secrets\avello.env') { if ($linha -match '^\s*([A-Z_]+)=(.+)$') { $api[$Matches[1]] = $Matches[2].Trim() } }
+    $web = $args -contains '--web'
+    $resto = @($args | Where-Object { $_ -ne '--web' })
+    $env:AVELLO_KEY = $api['AVELLO_KEY']
+    try {
+        if ($web -and (Get-NetTCPConnection -LocalPort 4096 -State Listen -ErrorAction Ignore)) {
+            $tsIp = & 'C:\Program Files\Tailscale\tailscale.exe' ip -4 2>$null | Select-Object -First 1
+            Write-Host "OpenCode web já está rodando (tarefa 'OpenCode servidor'): http://${tsIp}:4096, usuário opencode" -ForegroundColor Yellow
+        } elseif ($web) {
+            $env:OPENCODE_SERVER_PASSWORD = $api['OPENCODE_SERVER_PASSWORD']
+            $env:OPENCODE_SERVER_USERNAME = $api['OPENCODE_SERVER_USERNAME']
+            $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Ignore | Where-Object { $_.IPAddress -match '^(192\.168|10\.)' } | Select-Object -First 1).IPAddress
+            Write-Host "OpenCode web: http://${ip}:4096 (usuário opencode)" -ForegroundColor Yellow
+            opencode web --hostname 0.0.0.0 --port 4096 @resto
+        } else { opencode @resto }
+    } finally { $env:AVELLO_KEY = $null; $env:OPENCODE_SERVER_PASSWORD = $null }
 }
 # deploy do projeto onde o terminal está (Michigan ou Visão): sobe a árvore a partir da pasta atual
 # até achar um DeployFiles\deploy.mjs. Fora de um projeto não chuta: recusa, para não subir o servidor errado.
