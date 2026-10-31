@@ -162,28 +162,6 @@ function x {
         }
     } catch { }
 }
-# OpenCode (open source, MIT) pela Avello: "oc" abre no terminal, "oc --web" abre a interface no navegador e deixa o
-# celular entrar pelo Wi-Fi de casa (http://IP-do-PC:4096, usuário opencode, senha em avello.env). Config em
-# ~\.config\opencode\opencode.json. A chave vem de D:\Claude\.secrets\avello.env e só vive neste processo.
-function oc {
-    $api = @{}
-    foreach ($linha in Get-Content -LiteralPath 'D:\Claude\.secrets\avello.env') { if ($linha -match '^\s*([A-Z_]+)=(.+)$') { $api[$Matches[1]] = $Matches[2].Trim() } }
-    $web = $args -contains '--web'
-    $resto = @($args | Where-Object { $_ -ne '--web' })
-    $env:AVELLO_KEY = $api['AVELLO_KEY']
-    try {
-        if ($web -and (Get-NetTCPConnection -LocalPort 4096 -State Listen -ErrorAction Ignore)) {
-            $tsIp = & 'C:\Program Files\Tailscale\tailscale.exe' ip -4 2>$null | Select-Object -First 1
-            Write-Host "OpenCode web já está rodando (tarefa 'OpenCode servidor'): http://${tsIp}:4096, usuário opencode" -ForegroundColor Yellow
-        } elseif ($web) {
-            $env:OPENCODE_SERVER_PASSWORD = $api['OPENCODE_SERVER_PASSWORD']
-            $env:OPENCODE_SERVER_USERNAME = $api['OPENCODE_SERVER_USERNAME']
-            $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Ignore | Where-Object { $_.IPAddress -match '^(192\.168|10\.)' } | Select-Object -First 1).IPAddress
-            Write-Host "OpenCode web: http://${ip}:4096 (usuário opencode)" -ForegroundColor Yellow
-            opencode web --hostname 0.0.0.0 --port 4096 @resto
-        } else { opencode @resto }
-    } finally { $env:AVELLO_KEY = $null; $env:OPENCODE_SERVER_PASSWORD = $null }
-}
 # deploy do projeto onde o terminal está (Michigan ou Visão): sobe a árvore a partir da pasta atual
 # até achar um DeployFiles\deploy.mjs. Fora de um projeto não chuta: recusa, para não subir o servidor errado.
 function deploy {
