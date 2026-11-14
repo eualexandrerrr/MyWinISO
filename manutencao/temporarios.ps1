@@ -7,9 +7,20 @@
 #>
 $ErrorActionPreference = 'Continue'
 
-Get-ChildItem -Path $env:TEMP -Recurse -Force -ErrorAction Ignore |
+# Em 14/11/2026 o %TEMP% tinha 20 GB (15 GB em %TEMP%\claude, com arquivos de 14/10) mesmo com esta tarefa
+# rodando toda semana com resultado 0. A causa não ficou clara; o log abaixo mostra na próxima execução
+# quanto havia, quanto sobrou e quantos erros, em vez de engolir tudo calado.
+$log = Join-Path $env:LOCALAPPDATA 'mywiniso-temporarios.log'
+function Tamanho { [math]::Round((Get-ChildItem -LiteralPath $env:TEMP -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1GB, 2) }
+$antes = Tamanho
+$erros = @()
+Get-ChildItem -Path $env:TEMP -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable +erros |
     Where-Object { $_.CreationTime -lt (Get-Date).AddDays(-1) } |
-    Remove-Item -Recurse -Force -ErrorAction Ignore
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable +erros
+$depois = Tamanho
+$linha = '{0:yyyy-MM-dd HH:mm} | PS {1} | {2} | antes {3} GB | depois {4} GB | {5} erros' -f (Get-Date), $PSVersionTable.PSVersion, $env:TEMP, $antes, $depois, $erros.Count
+Add-Content -LiteralPath $log -Value $linha
+$erros | Select-Object -First 5 | ForEach-Object { Add-Content -LiteralPath $log -Value "    $($_.Exception.Message)" }
 
 $pastas = @(
     "$env:SystemDrive\`$WinREAgent"

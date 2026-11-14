@@ -976,6 +976,9 @@ Etapa 'Preferências do usuário' {
     Set-Reg 'HKCU:\Software\Policies\Microsoft\Windows\Explorer' 'NoUseStoreOpenWith' 1                      # UseStoreOpenWith -Hide
     Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds\DSB' 'ShowDynamicContent' 0              # SearchHighlights -Hide
     Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\SearchSettings' 'IsDynamicSearchBoxEnabled' 0
+    # Bing fora da busca do Iniciar. Em 14/11/2026 este, o de cima e o DisableSearchBoxSuggestions estavam
+    # de volta ao padrão (1, 1, 0) sem ninguém mexer: o Windows reverte, então vale rodar o setup de novo.
+    Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Search' 'BingSearchEnabled' 0
     Set-Reg 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows' 'LegacyDefaultPrinterMode' 1        # WindowsManageDefaultPrinter -Disable
     Set-Reg $adv 'ShowSyncProviderNotifications' 0                                                            # OneDriveFileExplorerAd -Hide
     # NetworkAdaptersSavePower -Disable: a placa de rede não dorme para economizar energia (latência em jogo)
