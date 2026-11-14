@@ -1748,10 +1748,9 @@ Etapa 'Claude Code: MCPs, plugins e skills' {
     Passo 'Claude Code: auto-compact em 250 mil tokens; esforço medium em todo modelo'
 
     # Status line (contexto, janela de 5h e semana, 09/10/2026). O Claude Code já reescreveu o settings.json e
-    # perdeu a chave statusLine duas vezes (28/08 e 09/10); o script vem de claude\statusline.js e a chave é refeita.
-    $slOrigem = Join-Path $aqui 'claude\statusline.js'
-    $slDestino = Join-Path $env:USERPROFILE '.claude\statusline.js'
-    if (Test-Path -LiteralPath $slOrigem) { Copy-Item -LiteralPath $slOrigem -Destination $slDestino -Force }
+    # perdeu a chave statusLine duas vezes (28/08 e 09/10); a chave é refeita e aponta direto para o
+    # claude\statusline.js do repo (sem cópia em ~\.claude desde 02/11/2026: o MyWinISO manda).
+    $slDestino = Join-Path $aqui 'claude\statusline.js'
     $node = (Get-Command node -ErrorAction Ignore).Source
     if ($node -and (Test-Path -LiteralPath $slDestino)) {
         $cj = Get-Content -LiteralPath $cfgClaude -Raw | ConvertFrom-Json
@@ -2239,21 +2238,24 @@ Etapa 'Fontes, console e VS Code' {
 
 # --- 24. Um perfil só para todo PowerShell (powershell\profile.ps1) ---------------------------------
 # O 5.1 e o 7, em qualquer host (Windows Terminal, VS Code, console solto, elevado ou não), carregam o mesmo
-# arquivo: o do 7 é a cópia do repo, e o do Windows PowerShell só aponta para ele -- pelo $PSScriptRoot, porque
-# Documentos está em D: e "$HOME\Documents" não existe (era assim, e o 5.1 abria sem perfil nenhum). O
-# starship.toml, o mesmo do zsh do Debian, vai para D:\Perfil\Home\.config, onde o profile.ps1 e o zshrc o
-# procuram; o histórico do PSReadLine também fica em D:\Perfil\Home, um arquivo para todos os hosts.
+# arquivo: o powershell\profile.ps1 DESTE repositório, lido no lugar. O do 7 só aponta para ele, e o do Windows
+# PowerShell aponta para o do 7 -- pelo $PSScriptRoot, porque Documentos está em D: e "$HOME\Documents" não
+# existe (era assim, e o 5.1 abria sem perfil nenhum). Antes o do 7 era uma cópia: editar o repo não valia até
+# rodar o setup de novo, e o "x --api" seguiu no modelo antigo (02/11/2026). O MyWinISO manda: nada é cópia.
+# O starship.toml é lido do repo pelo próprio profile.ps1; a cópia em D:\Perfil\Home\.config fica só para o
+# zsh do Debian. O histórico do PSReadLine fica em D:\Perfil\Home, um arquivo para todos os hosts.
 Etapa 'Um perfil só para todo PowerShell' {
     $docs = [Environment]::GetFolderPath('MyDocuments')
     New-Item -ItemType Directory -Path (Join-Path $docs 'PowerShell'), (Join-Path $docs 'WindowsPowerShell') -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $aqui 'powershell\profile.ps1') -Destination (Join-Path $docs 'PowerShell\profile.ps1') -Force
+    $perfilRepo = Join-Path $aqui 'powershell\profile.ps1'
+    Set-Content -LiteralPath (Join-Path $docs 'PowerShell\profile.ps1') -Value ". '$perfilRepo'" -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $docs 'WindowsPowerShell\profile.ps1') -Value '. "$PSScriptRoot\..\PowerShell\profile.ps1"' -Encoding UTF8
-    Passo "$docs\PowerShell\profile.ps1; o do Windows PowerShell aponta para ele"
+    Passo "$docs\PowerShell\profile.ps1 lê $perfilRepo; o do Windows PowerShell aponta para ele"
     if ($Dados) {
         $cfg = Join-Path $Dados 'Perfil\Home\.config'
         New-Item -ItemType Directory -Path $cfg -Force | Out-Null
         Copy-Item -LiteralPath (Join-Path $aqui 'terminal\starship.toml') -Destination (Join-Path $cfg 'starship.toml') -Force
-        Passo "$cfg\starship.toml: o prompt do PowerShell 5.1 e do 7"
+        Passo "$cfg\starship.toml: o prompt do zsh do Debian (o PowerShell lê o do repo)"
         Passo "histórico: $(Join-Path $Dados 'Perfil\Home\.ps_history'), um só para todos os hosts"
     } else { Passo 'sem a partição Dados: starship com o prompt padrão dele e histórico por host' }
     if (-not (Get-Command starship -ErrorAction Ignore)) { Falha 'starship não está no PATH (vem do apps.json, etapa 13); o perfil cai no prompt simples' }
@@ -2483,8 +2485,15 @@ Etapa 'Windows Terminal como terminal único' {
 
     $estado = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState'
     New-Item -ItemType Directory -Path $estado -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $aqui 'terminal\settings.json') -Destination (Join-Path $estado 'settings.json') -Force
-    Passo "perfis: PowerShell 7 (padrão), Windows PowerShell, Prompt de Comando e Git Bash"
+    # Symlink para o terminal\settings.json do repo (02/11/2026: o MyWinISO manda, nada é cópia). O Windows
+    # Terminal grava através do link, então mudança feita na tela dele cai no repo. Sem symlink (falha rara),
+    # volta para a cópia.
+    $wtArq = Join-Path $estado 'settings.json'
+    $wtRepo = Join-Path $aqui 'terminal\settings.json'
+    Remove-Item -LiteralPath $wtArq -Force -ErrorAction Ignore
+    try { New-Item -ItemType SymbolicLink -Path $wtArq -Target $wtRepo -ErrorAction Stop | Out-Null; Passo "settings.json do Windows Terminal -> $wtRepo" }
+    catch { Copy-Item -LiteralPath $wtRepo -Destination $wtArq -Force; Falha "Windows Terminal: symlink recusado ($($_.Exception.Message)); ficou cópia" }
+    Passo "perfis: TerminalCode, PowerShell 7 (padrão), Windows PowerShell, Prompt de Comando e Git Bash"
 
     # console padrão do Windows: os dois CLSIDs são do Windows Terminal
     $inicio = 'HKCU:\Console\%%Startup'

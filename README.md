@@ -113,7 +113,7 @@ perde a imagem dele; com ela, sobrevive. Medido nesta máquina, não suposto.
 | 22 | NVIDIA App com instalador silencioso (a URL atual vem da página da NVIDIA) |
 | 23 | MariaDB como serviço com os bancos em `D:\Perfil\MariaDB\data` (sobrevivem à formatação; na reinstalação o serviço é registrado em cima deles), root com a senha da conta e acesso remoto; HeidiSQL em modo portátil com as sessões em `D:\Perfil\HeidiSQL` |
 | 24 | fontes: Cascadia Mono no console; JetBrainsMono Nerd Font (do `apps.json`) no Windows Terminal e no VS Code, que passa a abrir o PowerShell 7 com o mesmo perfil de todo mundo (`vscode/settings.json`) |
-| 25 | **um perfil só para todo PowerShell** (`powershell/profile.ps1`): o 5.1 e o 7, em qualquer host (Windows Terminal, VS Code, console solto, elevado ou não) carregam o mesmo arquivo — starship com o `terminal/starship.toml` copiado para `D:\Perfil\Home\.config`, histórico único em `D:\Perfil\Home\.ps_history` para todos os hosts, eza, zoxide, atalhos `c` e `x`. O do Windows PowerShell aponta para ele pelo `$PSScriptRoot` (Documentos está em D:) |
+| 25 | **um perfil só para todo PowerShell** (`powershell/profile.ps1`): o 5.1 e o 7, em qualquer host (Windows Terminal, VS Code, console solto, elevado ou não) carregam o mesmo arquivo, lido direto do repo (nada é cópia: editou, vale no próximo terminal) — starship com o `terminal/starship.toml` do repo, histórico único em `D:\Perfil\Home\.ps_history` para todos os hosts, eza, zoxide, atalhos `c` e `x`. O do Windows PowerShell aponta para ele pelo `$PSScriptRoot` (Documentos está em D:) |
 | 26 | barra de tarefas, nesta ordem: **Explorer, Chrome, Discord, VS Code**; bandeja com **Discord, Spotify, Steam e Radmin VPN** sempre visíveis e nessa ordem (`taskbar/bandeja.ps1`, repetido a cada logon, porque o ícone só existe depois que o programa abre); tarefa "Startup OnLogon" que arruma as janelas 30 s após entrar; **RicePanel** (`eualexandrerrr/RicePanel`, clonado em `D:\Apps\desktop` se faltar) na página Mirante, no monitor em pé, por tarefa de logon como usuário normal que roda o `iniciar.ps1` (ele baixa o Electron do Windows na primeira vez; nada de `npm install`); e o **LibreHardwareMonitor** elevado no logon, com o servidor web em `127.0.0.1:8085`, de onde o RicePanel lê a temperatura de CPU e SSD. Depois dos programas, porque os pinos precisam dos atalhos existindo (o do VS Code fica em `%AppData%`, porque o winget o instala por usuário) |
 | 27 | resto dos drivers e as atualizações, pelo Windows Update (o de vídeo já veio na etapa 5), com uma linha por atualização a cada fase; e o `slmgr /ato` pela licença digital gravada no hardware |
 | 28 | **ativação**, só do que ainda não estiver ativado: o Windows pelo `get.activated.win /HWID` quando a licença digital não voltou sozinha, e o **Office pelo `/Ohook`** do mesmo script, porque a GVLK de volume do `Configuracao.xml` só ativa contra KMS de organização (sem isso ficava 30 dias em carência) |
@@ -128,10 +128,10 @@ o PowerShell 7; o VS Code abre o PowerShell 7; o que ainda abrir o Windows Power
 
 | Peça | Onde mora | Vale para |
 |:--|:--|:--|
-| `powershell/profile.ps1` | `Documentos\PowerShell\profile.ps1` (Documentos está em D:); o de `WindowsPowerShell` só aponta para ele | PowerShell 5.1 e 7, qualquer host |
-| `terminal/starship.toml` | `D:\Perfil\Home\.config\starship.toml` | prompt do 5.1 e do 7 |
+| `powershell/profile.ps1` | lido no lugar: `Documentos\PowerShell\profile.ps1` (Documentos está em D:) é só uma linha que o carrega; o de `WindowsPowerShell` aponta para essa | PowerShell 5.1 e 7, qualquer host |
+| `terminal/starship.toml` | lido no lugar pelo `profile.ps1`; cópia em `D:\Perfil\Home\.config\starship.toml` só para o zsh do Debian | prompt do 5.1, do 7 e do zsh |
 | histórico | `D:\Perfil\Home\.ps_history` (PSReadLine, todos os hosts) | sobrevive à formatação |
-| `terminal/settings.json` | Windows Terminal | fonte, cores, atalhos |
+| `terminal/settings.json` | Windows Terminal, por symlink (mudança feita na tela dele cai no repo) | fonte, cores, atalhos, perfis |
 | `vscode/settings.json` | VS Code | terminal integrado com o PowerShell 7 e a mesma fonte |
 
 Mesmo desenho do dotfiles do Arch (`eualexandrerrr/dotfiles`): starship sem oh-my-zsh, Catppuccin Mocha,
@@ -216,7 +216,7 @@ Insync e Maestro não existem no winget; Google Drive oficial entra no lugar do 
 | `explorer/WinSetView/` | WinSetView (Les Ferch, MIT) com o modo de exibição do Explorer em `AppData/Win10.ini`; ver o README da pasta |
 | `manutencao/` | os scripts das tarefas de manutenção: limpeza de disco, cache do Update, temporários e `gobypass.ps1` (1x por semana: repõe `MTU = 1280` nas configs do GoLiveBypass e instala/atualiza o app pela release do GitHub) |
 | `monitores/` | `monitores.json` com resolução, Hz, orientação e posição de cada monitor, e o `monitores.ps1` que aplica |
-| `terminal/settings.json` | perfis do Windows Terminal: PowerShell 7 (padrão), Windows PowerShell, Prompt de Comando e Git Bash |
+| `terminal/settings.json` | perfis do Windows Terminal: TerminalCode, PowerShell 7 (padrão), Windows PowerShell, Prompt de Comando e Git Bash (symlink) |
 | `perfil/avatar.png` | foto da conta, redimensionada pelo setup para os tamanhos que o Windows usa |
 | `startup/startup-onlogon.ps1` | tarefa de logon: maximiza o Discord, posiciona duas janelas do Chrome no monitor vertical, backup do histórico do terminal |
 | `vscode/settings.json` | o que o `setup.ps1` mescla no `settings.json` do VS Code |

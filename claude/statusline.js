@@ -1,5 +1,5 @@
 // Status line do Alexandre.
-// ◆ Opus 5 · ▲ high · ◐ contexto 140k de 250k · ◈ 62% 03:01
+// ◇ 20x · ◆ Opus 5 · ▲ high · ◐ contexto 140k de 250k · ◈ 62% 03:01
 //
 // Node em vez de PowerShell: 70 ms por execucao contra 247 ms. Com o
 // refreshInterval de 30 s isso importa — a linha roda a vida toda da sessao.
@@ -21,6 +21,7 @@ const VERMELHO = `${E}[38;5;167m`;
 const NEGRITO  = `${E}[1m`;
 const RESET    = `${E}[0m`;
 
+const ICO_PLANO   = '◇'; // losango vazio (API ou plano da conta)
 const ICO_MODELO  = '◆'; // losango cheio
 const ICO_ESFORCO = '▲'; // triangulo
 const ICO_RAPIDO  = '▸'; // seta pequena
@@ -40,6 +41,25 @@ try {
 
 const partes = [];
 const limpa = (t) => String(t == null ? '' : t).replace(/[\x00-\x1F]/g, '');
+
+// ---------- plano: API (paga por token) ou o plano da conta (20x) ----------
+// A status line herda o ambiente do claude. O "x --api" poe ANTHROPIC_BASE_URL e
+// ANTHROPIC_AUTH_TOKEN so no processo; com eles, a sessao esta na API. Sem eles,
+// o plano vem do rateLimitTier do .credentials.json ("default_claude_max_20x").
+// Do arquivo so sai esse campo; o token nao e lido para nada.
+function plano() {
+    if (process.env.ANTHROPIC_BASE_URL || process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY) return 'API';
+    try {
+        const cred = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude', '.credentials.json'), 'utf8'));
+        const o = cred.claudeAiOauth || {};
+        const mult = /(\d+)x/i.exec(String(o.rateLimitTier || ''));
+        return mult ? `${mult[1]}x` : (o.subscriptionType ? String(o.subscriptionType) : '');
+    } catch (_) { return ''; }
+}
+const tipo = plano();
+// API em laranja e negrito: cada resposta custa dinheiro, tem que saltar aos olhos.
+if (tipo === 'API') partes.push(`${LARANJA}${NEGRITO}${ICO_PLANO} API${RESET}`);
+else if (tipo) partes.push(`${CINZA}${ICO_PLANO} ${limpa(tipo)}${RESET}`);
 
 // ---------- modelo: cada familia com a sua cor ----------
 // Opus e Fable sao os que ele usa; ganham as cores mais fortes, para dar pra

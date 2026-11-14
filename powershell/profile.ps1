@@ -1,6 +1,7 @@
 # O único perfil do PowerShell. Vale para o PowerShell 7 e para o Windows PowerShell 5.1, em qualquer host:
-# Windows Terminal, VS Code, console solto, elevado ou não. O setup.ps1 copia este arquivo para
-# Documentos\PowerShell\profile.ps1 e faz o Documentos\WindowsPowerShell\profile.ps1 apontar para ele.
+# Windows Terminal, VS Code, console solto, elevado ou não. Este arquivo é lido no lugar, direto do repo: o
+# setup.ps1 grava em Documentos\PowerShell\profile.ps1 só uma linha que o carrega, e o
+# Documentos\WindowsPowerShell\profile.ps1 aponta para essa. Editou aqui, vale no próximo terminal.
 # Mesmo desenho do zsh do Debian (wsl/zshrc): starship com o mesmo starship.toml, histórico grande e
 # compartilhado, eza, zoxide, e os atalhos c e x. Tudo que é de máquina (histórico, tema) mora em D:\Perfil\Home.
 # Nada aqui pode custar tempo: o perfil roda a cada terminal aberto.
@@ -12,7 +13,10 @@ $OutputEncoding = [Text.Encoding]::UTF8
 
 $HomeD = 'D:\Perfil\Home'                                      # o "home" que sobrevive à formatação
 $env:EDITOR = 'nano'
-if (Test-Path -LiteralPath "$HomeD\.config\starship.toml") { $env:STARSHIP_CONFIG = "$HomeD\.config\starship.toml" }
+# starship.toml do repo (o MyWinISO manda); a cópia em D:\Perfil\Home\.config é só para o zsh do Debian
+$starshipRepo = Join-Path $PSScriptRoot '..\terminal\starship.toml'
+if (Test-Path -LiteralPath $starshipRepo) { $env:STARSHIP_CONFIG = (Resolve-Path -LiteralPath $starshipRepo).ProviderPath }
+elseif (Test-Path -LiteralPath "$HomeD\.config\starship.toml") { $env:STARSHIP_CONFIG = "$HomeD\.config\starship.toml" }
 foreach ($p in "$HOME\.local\bin", "$HOME\.maestro\bin") {      # engram e maestro (o setup também põe no Path do usuário)
     if ((Test-Path -LiteralPath $p) -and ($env:Path -split ';') -notcontains $p) { $env:Path = "$p;$env:Path" }
 }
@@ -33,29 +37,37 @@ if (Get-Module PSReadLine) {
 if (Test-Path -LiteralPath 'D:\Utils\git.sh') {
     function c { & 'C:\Program Files\Git\bin\bash.exe' 'D:\Utils\git.sh' @args }
 } else { function c { Clear-Host } }
-# a sessão leva o nome da pasta atual (aparece no seletor, no título do terminal e no Remote Control do celular);
-# -n/--name passado na mão vence
+# Sem -n a sessão não leva nome fixo (02/11/2026): o Claude Code dá o título pelo assunto da conversa, e cada aba do
+# terminal mostra o seu em vez de todas "LigaFootApp". Para fixar um nome: "x -n nome" ou /rename dentro da sessão.
 function x {
     # "x --api" abre o Claude Code pela Avello (gateway de terceiro) só nesta sessão: base e chave vêm de
     # D:\Claude\.secrets\avello.env, entram como variável do processo e saem ao fechar. Nada fica gravado no Windows.
     $usarApi = $args -contains '--api'
-    if ($usarApi) { $args = @($args | Where-Object { $_ -ne '--api' }) }
+    if ($usarApi) {
+        # Pedido do Alexandre (01/11/2026): com --api é sempre Fable 5.1 em effort max, mesmo com --model ou
+        # --effort na mão; os dois são tirados daqui junto com o valor.
+        $limpo = @()
+        for ($i = 0; $i -lt $args.Count; $i++) {
+            if ($args[$i] -eq '--api') { continue }
+            if ($args[$i] -in '--model', '--effort') { $i++; continue }
+            $limpo += $args[$i]
+        }
+        $args = $limpo
+    }
     $nome = @()
-    # na raiz do disco o Leaf devolve "C:\"; ali o nome vira só a letra
-    if (-not ($args | Where-Object { $_ -in '-n', '--name' })) { $nome = '-n', ((Split-Path -Leaf $PWD.Path).TrimEnd('\', ':')) }
     # Modelo (pedido do Alexandre, 17/10/2026): abre no último modelo usado, gravado ao sair em ~\.claude\x-modelo.txt
     # (sem gravação, Opus). Uso semanal em 60% ou mais vence e abre no Sonnet para não estourar a semana (08/10/2026;
     # baixado de 75% em 13/10/2026). O número vem do mesmo endpoint do /usage (sem documentação, pode mudar); se
     # falhar, fica no último modelo. --model passado na mão vence tudo.
-    # Exceção API (pedido do Alexandre, 30/10/2026): com --api abre no Opus 5.5 (claude-opus-5-5).
+    # Exceção API (pedido do Alexandre, 01/11/2026): com --api abre sempre no Fable 5.1 (claude-fable-5-1).
     $arqModelo = Join-Path $env:USERPROFILE '.claude\x-modelo.txt'
     $modelo = $null
     $iModel = [array]::IndexOf([string[]]$args, '--model')
-    if ($iModel -ge 0) { $modelo = $args[$iModel + 1] }
-    elseif ($usarApi) {
-        $modelo = 'claude-opus-5-5'
+    if ($usarApi) {
+        $modelo = 'claude-fable-5-1'
         $nome += '--model', $modelo
     }
+    elseif ($iModel -ge 0) { $modelo = $args[$iModel + 1] }
     else {
         $modelo = 'opus'
         if (Test-Path -LiteralPath $arqModelo) {
@@ -78,13 +90,16 @@ function x {
     }
     # Esforço: tudo abre em medium, o recomendado (pedido do Alexandre, 17/10/2026; vale no settings.json).
     # Antes o Sonnet abria em xhigh; subir para uma sessão só: "x --effort xhigh".
-    # Exceção (pedido do Alexandre, 26/10/2026): sessão aberta no Sonnet sobe para high; no Opus continua o medium do
-    # settings.json.
-    # Exceção API (pedido do Alexandre, 30/10/2026): sessão aberta com --api sobe para xhigh. --effort na mão vence.
+    # Exceção (pedido do Alexandre, 26/10/2026): sessão aberta no Sonnet sobe para high.
+    # O resto abre em medium pela flag (pedido do Alexandre, 08/11/2026): o valor por modelo no settings.json estava em
+    # xhigh no Opus e consumia demais; com a flag, o que estiver gravado lá não decide mais a abertura.
+    # Exceção API (pedido do Alexandre, 01/11/2026): sessão aberta com --api é sempre max, sem exceção.
+    # Fora da API, --effort na mão vence.
     $esforco = @()
-    if (-not ($args | Where-Object { $_ -eq '--effort' })) {
-        if ($usarApi) { $esforco = '--effort', 'xhigh' }
-        elseif ($modelo -match 'sonnet') { $esforco = '--effort', 'high' }
+    if ($usarApi) { $esforco = '--effort', 'max' }
+    elseif (-not ($args | Where-Object { $_ -eq '--effort' })) {
+        if ($modelo -match 'sonnet') { $esforco = '--effort', 'high' }
+        else { $esforco = '--effort', 'medium' }
     }
     $inicio = Get-Date
     # MCPs pesados só quando forem usados (17/10/2026). Cada MCP ativo põe instruções e a lista de ferramentas no
@@ -145,13 +160,16 @@ function x {
     # Remote Control sempre ligado (pedido do Alexandre, 28/10/2026), com a sessão acessível do celular.
     # Vai antes das outras flags para não engolir o prompt como nome da sessão.
     # Pela API (x --api) não há login do claude.ai, e o Remote Control depende dele: nessa sessão fica desligado.
-    $remoto = if ($usarApi -or $resto -contains '--remote-control') { @() } else { @('--remote-control') }
+    # O @(...) por fora é obrigatório: num if/else solto o PowerShell desembrulha o array de um item, o @remoto espalha a
+    # string letra por letra e o primeiro "-" vira o prompt da sessão, gastando um turno a cada abertura.
+    $remoto = @(if (-not $usarApi -and $resto -notcontains '--remote-control') { '--remote-control' })
     if ($usarApi) { Write-Host 'Remote Control desligado: precisa do login da conta, não funciona pela API' -ForegroundColor Yellow }
     try { claude @remoto --dangerously-skip-permissions --settings $arqMcp @nome @esforco @resto }
     finally { foreach ($v in $antes.Keys) { [Environment]::SetEnvironmentVariable($v, $antes[$v], 'Process') } }
     # grava o modelo da última resposta da sessão (pega também a troca feita com /model lá dentro).
     # A transcrição fica em ~\.claude\projects\<pasta com tudo que não é letra/número trocado por ->\<sessão>.jsonl
-    try {
+    # Sessão --api não grava: o Fable dela não pode virar o modelo do próximo "x" na conta.
+    if (-not $usarApi) { try {
         $pasta = Join-Path $env:USERPROFILE ('.claude\projects\' + ($PWD.ProviderPath -replace '[^A-Za-z0-9]', '-'))
         $sessao = Get-ChildItem -LiteralPath $pasta -Filter '*.jsonl' -File -ErrorAction Stop |
             Where-Object LastWriteTime -ge $inicio | Sort-Object LastWriteTime -Descending | Select-Object -First 1
@@ -160,7 +178,7 @@ function x {
                 Select-Object -Last 1
             if ($ultimo) { Set-Content -LiteralPath $arqModelo -Value $ultimo.Matches[0].Groups[1].Value -NoNewline }
         }
-    } catch { }
+    } catch { } }
 }
 # deploy do projeto onde o terminal está (Michigan ou Visão): sobe a árvore a partir da pasta atual
 # até achar um DeployFiles\deploy.mjs. Fora de um projeto não chuta: recusa, para não subir o servidor errado.
