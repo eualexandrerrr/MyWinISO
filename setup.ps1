@@ -1011,7 +1011,9 @@ Etapa 'Preferências do usuário' {
         'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
         'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps', 'MicrosoftWindows.Client.WebExperience',
         'Microsoft.WidgetsPlatformRuntime', 'Microsoft.SecureAssessmentBrowser',
-        'Microsoft.Windows.Ai.Copilot.Provider'
+        'Microsoft.Windows.Ai.Copilot.Provider',
+        # Link para o Celular: chega por update da Loja mesmo com o YourPhone fora (removido em 14/11/2026)
+        'MicrosoftWindows.CrossDevice'
     )
     foreach ($app in Get-AppxPackage | Where-Object { $bloat -contains $_.Name }) {
         Passo "removendo $($app.Name)"
@@ -2563,6 +2565,18 @@ Etapa 'Manutenção e telemetria de fundo' {
 
     Passo 'miniaturas não são apagadas pela limpeza de disco'
     Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Thumbnail Cache' 'Autorun' 0
+
+    # A placa-mãe ASUS TUF injeta o AsusUpdateCheck pelo BIOS (WPBT, opção "Download Armoury Crate app") em toda
+    # instalação: o serviço sobe no boot para baixar o Armoury Crate. DisableWpbtExecution faz o Windows ignorar
+    # binário vindo do firmware; o que já foi injetado sai aqui. Achado em 14/11/2026, serviço órfão em Automático.
+    Passo 'sem binário injetado pelo firmware (AsusUpdateCheck do BIOS da ASUS)'
+    Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' 'DisableWpbtExecution' 1
+    if (Get-Service -Name AsusUpdateCheck -ErrorAction Ignore) {
+        Stop-Service -Name AsusUpdateCheck -Force -ErrorAction Ignore
+        & sc.exe delete AsusUpdateCheck | Out-Null
+        if ($LASTEXITCODE) { Falha "sc.exe delete AsusUpdateCheck: código $LASTEXITCODE" } else { Passo 'serviço AsusUpdateCheck apagado' }
+    }
+    Remove-Item -LiteralPath "$env:SystemRoot\System32\AsusUpdateCheck.exe" -Force -ErrorAction Ignore
 
     # As três tarefas de limpeza. Os scripts ficam no clone, então o git pull atualiza o que elas fazem.
     $tarefasDir = Join-Path $aqui 'manutencao'

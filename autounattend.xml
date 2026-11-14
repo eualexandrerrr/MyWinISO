@@ -799,7 +799,7 @@ Faz 'Bloatware: pacotes provisionados' {
         'Microsoft.XboxGamingOverlay', 'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.YourPhone', 'MicrosoftCorporationII.MicrosoftFamily', 'MicrosoftCorporationII.QuickAssist',
         'MicrosoftTeams', 'MSTeams', 'microsoft.windowscommunicationsapps',
         'MicrosoftWindows.Client.WebExperience', 'Microsoft.WidgetsPlatformRuntime',
-        'Microsoft.SecureAssessmentBrowser'
+        'Microsoft.SecureAssessmentBrowser', 'MicrosoftWindows.CrossDevice'
     )
     $n = 0
     foreach ($pkg in Get-AppxProvisionedPackage -Online | Where-Object { $bloat -contains $_.DisplayName }) {
