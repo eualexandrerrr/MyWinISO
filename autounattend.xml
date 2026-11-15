@@ -905,13 +905,6 @@ Faz 'Políticas: telemetria, sugestões, Copilot, widgets, anúncios, Edge, Wind
     Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'                           'HubsSidebarEnabled'             0   # sem Copilot na barra lateral do Edge
 }
 
-Faz 'Edge desinstalável (política regional que a Microsoft aplica na Europa)' {
-    $arq = 'C:\Windows\System32\IntegratedServicesRegionPolicySet.json'
-    $o = Get-Content -LiteralPath $arq -Encoding UTF8 | ConvertFrom-Json
-    $o.policies | Where-Object { $_.guid -eq '{1bca278a-5d11-4acf-ad2f-f9ab6d7f93a6}' } | ForEach-Object { $_.defaultState = 'enabled' }
-    $o | ConvertTo-Json -Depth 9 | Out-File -LiteralPath $arq -Encoding UTF8
-}
-
 Faz 'Menu Iniciar sem nada fixado' {
     Set-Reg 'HKLM:\SOFTWARE\Microsoft\PolicyManager\current\device\Start' 'ConfigureStartPins' '{"pinnedList":[]}' 'String'
 }

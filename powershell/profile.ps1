@@ -94,11 +94,12 @@ function x {
     # O resto abre em medium pela flag (pedido do Alexandre, 08/11/2026): o valor por modelo no settings.json estava em
     # xhigh no Opus e consumia demais; com a flag, o que estiver gravado lá não decide mais a abertura.
     # Exceção API (pedido do Alexandre, 01/11/2026): sessão aberta com --api é sempre max, sem exceção.
+    # Opus passou de medium para high (pedido do Alexandre, 15/11/2026).
     # Fora da API, --effort na mão vence.
     $esforco = @()
     if ($usarApi) { $esforco = '--effort', 'max' }
     elseif (-not ($args | Where-Object { $_ -eq '--effort' })) {
-        if ($modelo -match 'sonnet') { $esforco = '--effort', 'high' }
+        if ($modelo -match 'sonnet|opus') { $esforco = '--effort', 'high' }
         else { $esforco = '--effort', 'medium' }
     }
     $inicio = Get-Date

@@ -362,8 +362,8 @@ de qualquer usuário existir, e a lista está legível no `especializar.ps1` den
 | Recursos removidos | PowerShell 2.0, cliente de Área de Trabalho Remota (`mstsc`), Recall, Captura |
 | Ficam | Loja e App Installer (o winget depende deles), Bloco de Notas (sem o banner da Loja), Calculadora, Fotos, Terminal, Xbox Identity Provider, MediaPlayback (jogos e apps usam para vídeo) |
 | Também sai | OneDrive (desinstalado e proibido de voltar por política), agendamento pós-OOBE do Outlook, Dev Home e Teams, ícone do Edge, sons do sistema |
-| Políticas | telemetria no mínimo, sem sugestões e apps promovidos, sem Copilot (app, provider, política e barra lateral do Edge), sem widgets, sem ID de anúncio, Edge sem tela inicial e sem startup boost, Edge desinstalável, busca sem Bing, Iniciar sem nada fixado |
-| Fica de fora de propósito | o Edge em si: o Windows usa o WebView2 dele em várias telas e o Windows Update o traz de volta; ele fica desinstalável para você decidir |
+| Políticas | telemetria no mínimo, sem sugestões e apps promovidos, sem Copilot (app, provider, política e barra lateral do Edge), sem widgets, sem ID de anúncio, Edge sem tela inicial e sem startup boost, busca sem Bing, Iniciar sem nada fixado |
+| Fica de fora de propósito | o Edge em si: o Windows usa o WebView2 dele em várias telas e o Windows Update o traz de volta. O `IntegratedServicesRegionPolicySet.json` não é editado: mexer nele quebra o Windows Update (erro 0x80070302) |
 | Segurança que atrapalha | UAC sem perguntar (o LUA fica ligado, senão apps da Loja não abrem), Smart App Control e SmartScreen desligados, ícone da Segurança do Windows escondido |
 | Sistema | inicialização rápida desligada, caminhos longos, som de inicialização desligado, senha sem validade, sem bloqueio de conta |
 | Perfil padrão | a conta já nasce com tema escuro, barra centralizada e só no monitor principal, sem busca, extensões visíveis, teclado rápido, sem OneDrive: a primeira tela não aparece clara |
