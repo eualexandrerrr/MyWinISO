@@ -5,6 +5,11 @@
 // RicePanel, que manda SC_MONITORPOWER. Tela apagou: muta a saida de audio padrao. Tela voltou: desmuta, mas
 // so se foi este programa que mutou (quem ja estava mudo continua mudo). Sem janela visivel; roda do logon
 // ate desligar, pela tarefa "Som mudo com a tela apagada". Registro em somtelas.log ao lado do exe.
+//
+// Desligar o ASUS XG27ACS no botao dele o Windows nao percebe: no DisplayPort o monitor some por 1 s e volta
+// como se estivesse ligado. Quem sabe e o proprio monitor, pelo DDC/CI: o codigo VCP D6 (modo de energia)
+// responde 1 ligado e 5 desligado no botao (medido em 17/11/2026). A cada 2 s o programa pergunta; com
+// duas respostas seguidas diferentes de 1, muta; com duas iguais a 1, desmuta. Falha de leitura nao muda nada.
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -85,8 +90,51 @@ namespace MyWinIso
         }
     }
 
+    // Pergunta ao monitor pelo DDC/CI se ele esta ligado.
+    static class Ddc
+    {
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        struct PHYSICAL_MONITOR { public IntPtr h; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string desc; }
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        struct MONITORINFOEX { public int cb; public int l, t, r, b, wl, wt, wr, wb; public int flags; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dev; }
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        struct DISPLAY_DEVICE { public int cb; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string name; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string str; public int flags; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string id; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string key; }
+        delegate bool MonitorEnumProc(IntPtr h, IntPtr dc, IntPtr r, IntPtr p);
+
+        [DllImport("user32.dll")] static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorEnumProc cb, IntPtr p);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool GetMonitorInfo(IntPtr h, ref MONITORINFOEX mi);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool EnumDisplayDevices(string dev, int i, ref DISPLAY_DEVICE dd, int f);
+        [DllImport("dxva2.dll")] static extern bool GetNumberOfPhysicalMonitorsFromHMONITOR(IntPtr h, out int n);
+        [DllImport("dxva2.dll")] static extern bool GetPhysicalMonitorsFromHMONITOR(IntPtr h, int n, [Out] PHYSICAL_MONITOR[] a);
+        [DllImport("dxva2.dll")] static extern bool GetVCPFeatureAndVCPFeatureReply(IntPtr h, byte codigo, IntPtr tipo, out uint atual, out uint maximo);
+        [DllImport("dxva2.dll")] static extern bool DestroyPhysicalMonitors(int n, PHYSICAL_MONITOR[] a);
+
+        // modo de energia (VCP D6) do monitor cujo id de hardware contem o modelo; -1 se nao achou ou nao respondeu
+        public static int Energia(string modelo)
+        {
+            int resultado = -1;
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (h, dc, rc, p) =>
+            {
+                MONITORINFOEX mi = new MONITORINFOEX(); mi.cb = Marshal.SizeOf(mi);
+                if (!GetMonitorInfo(h, ref mi)) return true;
+                DISPLAY_DEVICE dd = new DISPLAY_DEVICE(); dd.cb = Marshal.SizeOf(dd);
+                if (!EnumDisplayDevices(mi.dev, 0, ref dd, 0) || dd.id == null || dd.id.IndexOf(modelo, StringComparison.OrdinalIgnoreCase) < 0) return true;
+                int n;
+                if (!GetNumberOfPhysicalMonitorsFromHMONITOR(h, out n) || n < 1) return true;
+                PHYSICAL_MONITOR[] fisicos = new PHYSICAL_MONITOR[n];
+                if (!GetPhysicalMonitorsFromHMONITOR(h, n, fisicos)) return true;
+                uint atual, maximo;
+                if (GetVCPFeatureAndVCPFeatureReply(fisicos[0].h, 0xD6, IntPtr.Zero, out atual, out maximo)) resultado = (int)atual;
+                DestroyPhysicalMonitors(n, fisicos);
+                return false;
+            }, IntPtr.Zero);
+            return resultado;
+        }
+    }
+
     class Janela : Form
     {
+        const string MONITOR_VIGIADO = "AUS27FE";   // ASUS XG27ACS
         [DllImport("user32.dll")] static extern IntPtr RegisterPowerSettingNotification(IntPtr h, ref Guid g, int flags);
         [StructLayout(LayoutKind.Sequential, Pack = 4)]
         struct POWERBROADCAST_SETTING { public Guid PowerSetting; public uint DataLength; public uint Data; }
@@ -95,6 +143,10 @@ namespace MyWinIso
         const int WM_POWERBROADCAST = 0x0218, PBT_POWERSETTINGCHANGE = 0x8013;
 
         string mutadoPorMim;   // id do dispositivo que este programa mutou
+        bool telaApagada;      // o Windows apagou a tela
+        bool asusDesligado;    // o ASUS respondeu desligado duas vezes seguidas
+        int leituraAnterior = 1;
+        readonly System.Windows.Forms.Timer relogio = new System.Windows.Forms.Timer();
         readonly string log = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "somtelas.log");
 
         public Janela()
@@ -114,7 +166,43 @@ namespace MyWinIso
         {
             base.OnHandleCreated(e);
             RegisterPowerSettingNotification(Handle, ref GUID_CONSOLE_DISPLAY_STATE, 0); // DEVICE_NOTIFY_WINDOW_HANDLE
-            Anotar("vigiando o estado da tela");
+            relogio.Interval = 2000;
+            relogio.Tick += delegate { LerAsus(); };
+            relogio.Start();
+            Anotar("vigiando o estado da tela e o ASUS (" + MONITOR_VIGIADO + ")");
+        }
+
+        void LerAsus()
+        {
+            if (telaApagada) return; // com a tela apagada pelo Windows o som ja esta mudo; nao cutuca o monitor
+            int energia = Ddc.Energia(MONITOR_VIGIADO);
+            if (energia < 0) return; // nao respondeu: fica como esta
+            bool desligado = energia != 1 && leituraAnterior != 1;
+            bool ligado = energia == 1 && leituraAnterior == 1;
+            leituraAnterior = energia;
+            if (desligado && !asusDesligado) { asusDesligado = true; Aplicar("ASUS desligou (D6=" + energia + ")"); }
+            else if (ligado && asusDesligado) { asusDesligado = false; Aplicar("ASUS ligou"); }
+        }
+
+        // som mudo se a tela esta apagada ou o ASUS desligado; de volta quando nenhum dos dois
+        void Aplicar(string motivo)
+        {
+            try
+            {
+                if ((telaApagada || asusDesligado) && mutadoPorMim == null)
+                {
+                    mutadoPorMim = Audio.Mutar();
+                    Anotar(motivo + (mutadoPorMim != null ? ": som mudo" : ": som ja estava mudo, nada a fazer"));
+                }
+                else if (!telaApagada && !asusDesligado && mutadoPorMim != null)
+                {
+                    Audio.Desmutar(mutadoPorMim);
+                    mutadoPorMim = null;
+                    Anotar(motivo + ": som de volta");
+                }
+                else Anotar(motivo);
+            }
+            catch (Exception ex) { Anotar("falhou: " + ex.Message); }
         }
 
         void Anotar(string m)
@@ -129,21 +217,14 @@ namespace MyWinIso
                 POWERBROADCAST_SETTING s = (POWERBROADCAST_SETTING)Marshal.PtrToStructure(m.LParam, typeof(POWERBROADCAST_SETTING));
                 if (s.PowerSetting == GUID_CONSOLE_DISPLAY_STATE)
                 {
-                    try
+                    if (s.Data == 0 && !telaApagada) { telaApagada = true; Aplicar("tela apagou"); }      // 0 = apagada
+                    else if (s.Data == 1 && telaApagada)                                                    // 1 = acesa (2 = esmaecida, ignora)
                     {
-                        if (s.Data == 0 && mutadoPorMim == null)            // 0 = apagada
-                        {
-                            mutadoPorMim = Audio.Mutar();
-                            Anotar(mutadoPorMim != null ? "tela apagou: som mudo" : "tela apagou: som ja estava mudo, nada a fazer");
-                        }
-                        else if (s.Data == 1 && mutadoPorMim != null)       // 1 = acesa (2 = esmaecida, ignora)
-                        {
-                            Audio.Desmutar(mutadoPorMim);
-                            mutadoPorMim = null;
-                            Anotar("tela voltou: som de volta");
-                        }
+                        // o ASUS fica com o ultimo estado lido: se ainda estiver desligado o som segue mudo, e se
+                        // ligou nesse meio-tempo as duas proximas leituras (4 s) devolvem o som
+                        telaApagada = false;
+                        Aplicar("tela voltou");
                     }
-                    catch (Exception ex) { Anotar("falhou: " + ex.Message); }
                 }
             }
             base.WndProc(ref m);
